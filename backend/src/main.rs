@@ -1,5 +1,11 @@
-mod domain;
-mod store;
+
+mod db;
+mod routes;
+mod models;
+mod errors;
+mod utils;
+mod app;
+mod services;
 
 use axum::{routing::get, Router};
 use std::net::SocketAddr;
@@ -25,11 +31,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app = Router::new()
-        .route("/health", get(health_check))
-        .route("/", get(root));
+    let app = app::create_app(pool);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+/*    let app = Router::new()
+        .route("/health", get(health_check))
+        .route("/", get(root));*/
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     let listener = TcpListener::bind(&addr).await.unwrap();
     tracing::info!("🚀 Rustfolio backend running at http://{}/", addr);
     axum::serve(listener, app)
