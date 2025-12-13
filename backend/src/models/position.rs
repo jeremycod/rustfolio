@@ -2,6 +2,19 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
 // Represents the current holdings of a particular stock within a portfolio.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreatePosition {
+    pub ticker: String,
+    pub shares: f32,
+    pub avg_buy_price: f32
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdatePosition {
+    pub shares: f64,
+    pub avg_buy_price: f64
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Position {
     id: uuid::Uuid,

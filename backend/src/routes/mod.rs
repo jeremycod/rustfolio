@@ -1,6 +1,6 @@
-pub(crate) mod portfolios;
-pub(crate) mod positions;
-pub(crate) mod analytics;
-pub(crate) mod prices;
+pub mod portfolios;
+pub mod positions;
+pub mod analytics;
+pub mod prices;
 
 pub use portfolios::*;

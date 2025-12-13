@@ -1,2 +1,2 @@
 pub mod portfolio_queries;
-mod position_queries;
+pub(crate) mod position_queries;

@@ -6,4 +6,4 @@ mod price_point;
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
 pub use portfolio::UpdatePortfolio;
-pub use position::Position;
+pub use position::{Position, CreatePosition, UpdatePosition};

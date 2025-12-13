@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{db, services};
 
 use crate::errors::AppError;
-use crate::models::{CreatePortfolio, Portfolio, UpdatePortfolio};
+use crate::models::{CreatePortfolio, CreatePosition, Portfolio, Position, UpdatePortfolio};
 
 pub fn router() -> Router<PgPool> {
     Router::new()
@@ -14,6 +14,8 @@ pub fn router() -> Router<PgPool> {
         .route("/:id", get(get_portfolio))
         .route("/:id", put(update_portfolio))
         .route("/:id", delete(delete_portfolio))
+        .route("/:id/positions", post(create_position))
+        .route("/:id/positions", get(fetch_positions))
 }
 
 #[axum::debug_handler]
@@ -60,4 +62,21 @@ pub async fn delete_portfolio(
         Ok(_) => Ok(Json(())),            // Success
         Err(e) => Err(e),                 // Propagate other AppErrors
     }
+}
+
+pub async fn create_position(
+    State(pool): State<PgPool>,
+    Path(portfolio_id): Path<Uuid>,
+    Json(data): Json<CreatePosition>
+) -> Result<Json<Position>, AppError> {
+    let pos = services::position_service::create(&pool, portfolio_id, data).await?;
+    Ok(Json(pos))
+
+}
+
+pub async fn fetch_positions(
+    State(pool): State<PgPool>,
+    Path(portfolio_id): Path<Uuid>,
+) -> Result<Json<Vec<Portfolio>>, AppError> {
+    todo!()
 }

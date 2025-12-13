@@ -58,3 +58,10 @@ pub async fn delete(pool: &PgPool, id: Uuid)
         .await?;
     Ok(result.rows_affected())
 }
+
+pub async fn exists(pool: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!("SELECT EXISTS(SELECT 1 FROM portfolios WHERE id = $1)", id)
+        .fetch_one(pool)
+        .await?;
+    Ok(result.exists.unwrap_or(false))
+}
