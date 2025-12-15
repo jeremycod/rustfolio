@@ -1,3 +1,4 @@
+extern crate core;
 
 mod db;
 mod routes;
@@ -6,12 +7,17 @@ mod errors;
 mod utils;
 mod app;
 mod services;
+mod external;
+mod state;
 
 use axum::{routing::get, Router};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use crate::external::yahoo::YahooProvider;
+use crate::state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,14 +30,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&database_url)
         .await?;
 
-    
+    let provider = Arc::new(YahooProvider::new());
     // Initialize logging
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new("info"))
         .with(tracing_subscriber::fmt::layer())
         .init();
-
-    let app = app::create_app(pool);
+    let state = AppState {
+        pool,
+        price_provider: provider,
+    };
+    let app = app::create_app(state);
 
 /*    let app = Router::new()
         .route("/health", get(health_check))

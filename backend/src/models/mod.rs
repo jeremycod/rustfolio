@@ -7,3 +7,4 @@ pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
 pub use portfolio::UpdatePortfolio;
 pub use position::{Position, CreatePosition, UpdatePosition};
+pub use price_point::PricePoint;

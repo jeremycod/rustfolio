@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use tracing::error;
 use uuid::Uuid;
 use crate::db;
 use crate::errors::AppError;
@@ -26,15 +27,22 @@ pub async fn create(
     }
     match db::position_queries::create(pool, portfolio_id, input).await {
         Ok(position) => Ok(position),
-        Err(e) => Err(AppError::Db(e)),
+        Err(e) => {
+            if let sqlx::Error::ColumnDecode { index, source } = &e {
+                error!("ColumnDecode error at index {}: {:?}", index, source);
+            }
+            error!("Failed to create position for portfolio {}: {:?}", portfolio_id, e);
+            Err(AppError::Db(e))
+        }
     }
 
 }
-pub async fn list(
-    pool: &PgPool,
-    portfolio_id: Uuid,
-) -> Result<Vec<Position>, AppError> {
-    todo!()
+pub async fn list(pool: &PgPool, portfolio_id: Uuid)
+                  -> Result<Vec<Position>, AppError> {
+    match db::position_queries::fetch_all(pool, portfolio_id).await {
+        Ok(positions) => Ok(positions),
+        Err(e) => Err(AppError::Db(e)),
+    }
 }
 
 pub(crate) async fn fetch_one(pool: &PgPool, id: Uuid) -> Result<Position, AppError> {

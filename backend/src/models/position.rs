@@ -5,8 +5,8 @@ use sqlx::FromRow;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreatePosition {
     pub ticker: String,
-    pub shares: f32,
-    pub avg_buy_price: f32
+    pub shares: f64,
+    pub avg_buy_price: f64
 }
 
 #[derive(Debug, Deserialize)]
@@ -20,13 +20,13 @@ pub struct Position {
     id: uuid::Uuid,
     portfolio_id: uuid::Uuid,
     ticker: String,
-    shares: i32,
-    avg_buy_price: f32,
+    shares: f64,
+    avg_buy_price: f64,
     created_at: chrono::DateTime<chrono::Utc>
 }
 
 impl Position {
-    fn new(portfolio_id: uuid::Uuid, ticker: String, shares: i32, avg_buy_price: f32) -> Self {
+    fn new(portfolio_id: uuid::Uuid, ticker: String, shares: f64, avg_buy_price: f64) -> Self {
         Self {
             id: uuid::Uuid::new_v4(),
             portfolio_id,
