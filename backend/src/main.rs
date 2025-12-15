@@ -16,6 +16,7 @@ use std::sync::Arc;
 use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use crate::external::alphavantagge::AlphaVantageProvider;
 use crate::external::yahoo::YahooProvider;
 use crate::state::AppState;
 
@@ -30,7 +31,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&database_url)
         .await?;
 
-    let provider = Arc::new(YahooProvider::new());
+    let provider = Arc::new(
+        AlphaVantageProvider::from_env()
+            .expect("Failed to create AlphaVantageProvider (check ALPHAVANTAGE_API_KEY)"));
     // Initialize logging
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new("info"))

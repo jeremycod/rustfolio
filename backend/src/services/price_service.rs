@@ -1,7 +1,8 @@
 use std::thread::sleep;
 
 use sqlx::PgPool;
-use tracing::error;
+use tracing::{error, warn};
+use tokio::time::{sleep as async_sleep, Duration};
 use crate::{db, external};
 use crate::errors::AppError;
 use crate::external::price_provider::{ExternalPricePoint, PriceProvider, PriceProviderError};
@@ -68,25 +69,40 @@ pub async fn refresh_from_api(
     if let Some(latest) = db::price_queries::fetch_latest(pool, ticker).await? {
         let today = Utc::now().date_naive();
 
-        // If we already have a price for today (or yesterday), skip fetching.
-        if latest.date >= today - ChronoDuration::days(1) {
+        // If we already have recent data, skip fetching to avoid rate limits
+        if latest.date >= today - ChronoDuration::hours(6) {
+            warn!("Skipping API call for {} - data is recent ({})", ticker, latest.date);
             return Ok(());
         }
     }
 
-    let external_points = provider.fetch_daily_history(ticker, 60).await
-        .map_err(|e| match e {
-            PriceProviderError::RateLimited => AppError::RateLimited,
-            _ => AppError::External(e.to_string()),
-        })?;
-
-
-    // Convert ExternalPricePoint -> DB upsert input
-    db::price_queries::upsert_external_points(pool, ticker, &external_points).await
-        .map_err(|e| {
-            error!("Failed to refresh prices from API for ticker {}: {}", ticker, e);
-            AppError::Db(e)
-        })?;
-
-    Ok(())
+    // Retry logic with exponential backoff
+    let mut retry_count = 0;
+    let max_retries = 3;
+    
+    loop {
+        match provider.fetch_daily_history(ticker, 60).await {
+            Ok(external_points) => {
+                db::price_queries::upsert_external_points(pool, ticker, &external_points).await
+                    .map_err(|e| {
+                        error!("Failed to refresh prices from API for ticker {}: {}", ticker, e);
+                        AppError::Db(e)
+                    })?;
+                return Ok(());
+            },
+            Err(PriceProviderError::RateLimited) if retry_count < max_retries => {
+                retry_count += 1;
+                let delay = Duration::from_secs(5 * retry_count as u64); // 5, 10, 15 seconds
+                warn!("Rate limited for ticker {}, retrying in {}s (attempt {}/{})", 
+                      ticker, delay.as_secs(), retry_count, max_retries);
+                async_sleep(delay).await;
+            },
+            Err(e) => {
+                return Err(match e {
+                    PriceProviderError::RateLimited => AppError::RateLimited,
+                    _ => AppError::External(e.to_string()),
+                });
+            }
+        }
+    }
 }
