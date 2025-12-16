@@ -38,3 +38,15 @@ export async function getLatestPrice(ticker: string): Promise<PricePoint> {
     const res = await api.get(`/api/prices/${ticker}/latest`);
     return res.data;
 }
+
+export async function deletePosition(positionId: string): Promise<void> {
+    await api.delete(`/api/positions/${positionId}`);
+}
+
+export async function updatePosition(positionId: string, payload: {
+    shares: number;
+    avg_buy_price: number;
+}): Promise<Position> {
+    const res = await api.put(`/api/positions/${positionId}`, payload);
+    return res.data;
+}

@@ -5,7 +5,7 @@ use tracing::{error, warn};
 use tokio::time::{sleep as async_sleep, Duration};
 use crate::{db, external};
 use crate::errors::AppError;
-use crate::external::price_provider::{ExternalPricePoint, PriceProvider, PriceProviderError};
+use crate::external::price_provider::{ExternalPricePoint, ExternalTickerMatch, PriceProvider, PriceProviderError};
 use crate::models::PricePoint;
 use chrono::{Utc, Duration as ChronoDuration};
 
@@ -60,6 +60,18 @@ pub async fn generate_mock(pool: &PgPool, ticker: &str) -> Result<(), AppError> 
             AppError::Db(e)
         })?;
     Ok(())
+}
+
+pub async fn search_for_ticker_from_api(
+    provider: &dyn PriceProvider,
+    keyword: &str) -> Result<Vec<ExternalTickerMatch>, AppError> {
+    match provider.search_ticker_by_keyword(keyword).await {
+        Ok(matches) => Ok(matches),
+        Err(PriceProviderError::RateLimited) => Err(AppError::RateLimited),
+        Err(e) => {
+            Err(AppError::External(e.to_string()))
+        },
+    }
 }
 pub async fn refresh_from_api(
     pool: &PgPool,

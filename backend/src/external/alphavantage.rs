@@ -1,4 +1,4 @@
-use crate::external::price_provider::{ExternalPricePoint, PriceProvider, PriceProviderError};
+use crate::external::price_provider::{ExternalPricePoint, ExternalTickerMatch, PriceProvider, PriceProviderError};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use serde::Deserialize;
@@ -19,6 +19,34 @@ impl AlphaVantageProvider {
             api_key,
         })
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct TickerSearchWrapper {
+    #[serde(rename = "bestMatches")]
+    best_matches: Vec<ExternalTickerSearchResponse>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ExternalTickerSearchResponse {
+    #[serde(rename = "1. symbol")]
+    pub symbol: String,
+    #[serde(rename = "2. name")]
+    pub name: String,
+    #[serde(rename = "3. type")]
+    pub _type: String,
+    #[serde(rename = "4. region")]
+    pub region: String,
+    #[serde(rename = "5. marketOpen")]
+    pub marketOpen: String,
+    #[serde(rename = "6. marketClose")]
+    pub marketClose: String,
+    #[serde(rename = "7. timezone")]
+    pub timezone: String,
+    #[serde(rename = "8. currency")]
+    pub currency: String,
+    #[serde(rename = "9. matchScore")]
+    pub matchScore: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +73,50 @@ struct AvDailyBar {
 
 #[async_trait]
 impl PriceProvider for AlphaVantageProvider {
+
+    async fn search_ticker_by_keyword(
+        &self,
+        keyword: &str
+    ) -> Result<Vec<ExternalTickerMatch>, PriceProviderError> {
+    let url = "https://www.alphavantage.co/query";
+    let resp = self
+    .client
+    .get(url)
+    .query(&[
+    ("function", "SYMBOL_SEARCH"),
+    ("keywords", keyword),
+
+    ("apikey", self.api_key.as_str()),
+    ])
+    .send()
+    .await
+    .map_err(|e| PriceProviderError::Network(e.to_string()))?;
+
+    let text = resp.text().await
+        .map_err(|e| PriceProviderError::Network(e.to_string()))?;
+    println!("{}", text);
+
+    let responseWrapper: TickerSearchWrapper = serde_json::from_str(&text)
+        .map_err(|e| PriceProviderError::Parse(format!("JSON parse error: {} | Response: {}", e, text)))?;
+
+    let out: Vec<ExternalTickerMatch> = responseWrapper
+        .best_matches
+        .into_iter()
+        .map(|ticker_match| -> Result<ExternalTickerMatch, PriceProviderError>{
+            Ok(ExternalTickerMatch {
+                symbol: ticker_match.symbol,
+                name: ticker_match.name,
+                _type: ticker_match._type,
+                region: ticker_match.region,
+                currency: ticker_match.currency,
+                matchScore: ticker_match.matchScore.parse::<f64>()
+                    .map_err(|e| PriceProviderError::Parse(e.to_string()))?,
+            })
+            
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(out)
+    }
     async fn fetch_daily_history(
         &self,
         ticker: &str,
@@ -89,27 +161,19 @@ impl PriceProvider for AlphaVantageProvider {
             .ok_or_else(|| PriceProviderError::BadResponse("missing time series".into()))?;
 
         // series is keyed by "YYYY-MM-DD" strings; BTreeMap sorts ascending
-        let mut out: Vec<ExternalPricePoint> = Vec::new();
+        let mut out: Vec<ExternalPricePoint> = series
+            .into_iter()
+            .map(|(date_str, bar)| -> Result<ExternalPricePoint, PriceProviderError> {
+                let date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
+                    .map_err(|e| PriceProviderError::Parse(e.to_string()))?;
+                let close = bar.close.parse::<f64>()
+                    .map_err(|e| PriceProviderError::Parse(e.to_string()))?;
+                Ok(ExternalPricePoint { date, close })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-        // Keep only the latest N days if outputsize=full or compact has more than requested.
-        // We iterate ascending, then trim from the end.
-        for (date_str, bar) in series {
-            let date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
-                .map_err(|e| PriceProviderError::Parse(e.to_string()))?;
-
-            let close = bar
-                .close
-                .parse::<f64>()
-                .map_err(|e| PriceProviderError::Parse(e.to_string()))?;
-
-            out.push(ExternalPricePoint { date, close });
-        }
-
-        // out is already ascending because BTreeMap iterates in order
-        if days > 0 && (out.len() as u32) > days {
-            let keep = days as usize;
-            out = out.into_iter().rev().take(keep).collect::<Vec<_>>();
-            out.reverse();
+        if days > 0 && out.len() > days as usize {
+            out.drain(..out.len() - days as usize);
         }
 
         Ok(out)

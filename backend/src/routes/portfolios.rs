@@ -1,6 +1,7 @@
 use axum::extract::{Path, State};
 use axum::{Json, Router};
 use axum::routing::{delete, get, post, put};
+use http::StatusCode;
 use sqlx::PgPool;
 use tracing::{info, error};
 use uuid::Uuid;
@@ -18,7 +19,7 @@ pub fn router() -> Router<AppState> {
         .route("/:id", put(update_portfolio))
         .route("/:id", delete(delete_portfolio))
         .route("/:id/positions", post(create_position))
-        .route("/:id/positions", get(fetch_positions))
+        .route("/:id/positions", get(list_positions))
 }
 
 #[axum::debug_handler]
@@ -109,10 +110,17 @@ pub async fn create_position(
 
 }
 
-pub async fn fetch_positions(
-    State(state): State<AppState>,
+pub async fn list_positions(
     Path(portfolio_id): Path<Uuid>,
-) -> Result<Json<Vec<Portfolio>>, AppError> {
-    info!("GET /portfolios/{}/positions - Fetching positions", portfolio_id);
-    todo!()
+    State(state): State<AppState>
+) -> Result<Json<Vec<Position>>, AppError> {
+    info!("GET /positions - Listing positions for portfolio {}", portfolio_id);
+    let positions = services::position_service::list(&state.pool, portfolio_id).await
+        .map_err(|e| {
+            error!("Failed to list positions for portfolio {}: {}", portfolio_id, e);
+            e
+        })?;
+    Ok(Json(positions))
 }
+
+

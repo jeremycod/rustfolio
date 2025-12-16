@@ -6,6 +6,7 @@ use axum::routing::{get, post};
 use tracing::{info, error, warn};
 
 use crate::errors::AppError;
+use crate::external::price_provider::ExternalTickerMatch;
 use crate::models::PricePoint;
 use crate::services;
 use crate::state::AppState;
@@ -16,6 +17,23 @@ pub fn router() -> Router<AppState> {
         .route("/:ticker/latest", get(get_latest_price))
         .route("/:ticker/update", post(update_prices))
         .route("/:ticker/mock", post(generate_mock_prices))
+        .route("/search/:keyword", get(search_for_ticker_by_keyword))
+}
+
+#[axum::debug_handler]
+pub async fn search_for_ticker_by_keyword(
+    Path(keyword): Path<String>,
+    State(state): State<AppState>
+) -> Result<Json<Vec<ExternalTickerMatch>>, AppError> {
+    info!("GET /prices/search/{} - Searching for ticker by keyword", keyword);
+    let tickers = services::price_service::search_for_ticker_from_api(
+        state.price_provider.as_ref(),
+        &keyword).await
+        .map_err(|e| {
+            error!("Failed to search for ticker by keyword {}: {}", keyword, e);
+            e
+        })?;
+    Ok(Json(tickers))
 }
 
 pub async fn get_prices(

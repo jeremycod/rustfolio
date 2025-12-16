@@ -56,8 +56,9 @@ pub(crate) async fn delete(pool: &PgPool, id: Uuid) -> Result<u64, AppError>{
         Ok(_) => Ok(1),
         Err(e) => Err(AppError::from(e)),
     }
-
 }
+
+
 
 pub async fn update(
     pool: &PgPool,

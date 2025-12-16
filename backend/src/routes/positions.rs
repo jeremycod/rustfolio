@@ -14,23 +14,11 @@ pub fn router() -> Router<AppState> {
     Router::new()
 
         .route("/:id", get(get_position))
-        .route("/:id", put(create_position))
         .route("/:id", delete(delete_position))
+        .route("/:id", put(update_position))
 }
 
-pub async fn create_position(
-    Path(portfolio_id): Path<Uuid>,
-    State(state): State<AppState>,
-    Json(payload): Json<CreatePosition>
-) -> Result<Json<Position>, AppError>{
-    info!("PUT /positions/{} - Creating position", portfolio_id);
-    let position = services::position_service::create(&state.pool, portfolio_id, payload).await
-        .map_err(|e| {
-            error!("Failed to create position for portfolio {}: {}", portfolio_id, e);
-            e
-        })?;
-    Ok(Json(position))
-}
+
 
 pub async fn get_position(
     State(state): State<AppState>,
@@ -72,16 +60,5 @@ pub async fn update_position(
     Ok(Json(updated))
 }
 
-pub async fn list_positions(
-    Path(portfolio_id): Path<Uuid>,
-    State(state): State<AppState>
-) -> Result<Json<Vec<Position>>, AppError> {
-    info!("GET /positions - Listing positions for portfolio {}", portfolio_id);
-    let positions = services::position_service::list(&state.pool, portfolio_id).await
-        .map_err(|e| {
-            error!("Failed to list positions for portfolio {}: {}", portfolio_id, e);
-            e
-        })?;
-    Ok(Json(positions))
-}
+
 
