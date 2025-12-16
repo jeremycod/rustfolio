@@ -16,7 +16,7 @@ use std::sync::Arc;
 use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use crate::external::alphavantagge::AlphaVantageProvider;
+use crate::external::alphavantage::AlphaVantageProvider;
 use crate::external::yahoo::YahooProvider;
 use crate::state::AppState;
 
