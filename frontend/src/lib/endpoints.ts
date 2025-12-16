@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { AnalyticsResponse, Portfolio, Position, PricePoint } from "../types";
+import type { AnalyticsResponse, Portfolio, Position, PricePoint, TickerMatch } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
     const res = await api.get("/api/portfolios");
@@ -48,5 +48,10 @@ export async function updatePosition(positionId: string, payload: {
     avg_buy_price: number;
 }): Promise<Position> {
     const res = await api.put(`/api/positions/${positionId}`, payload);
+    return res.data;
+}
+
+export async function searchTickers(keyword: string): Promise<TickerMatch[]> {
+    const res = await api.get(`/api/prices/search/${encodeURIComponent(keyword)}`);
     return res.data;
 }

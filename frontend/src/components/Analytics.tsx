@@ -12,17 +12,21 @@ import {
   Switch,
   Card,
   CardContent,
-  Divider,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { getAnalytics, listPositions } from '../lib/endpoints';
+import { getAnalytics, listPositions, listPortfolios } from '../lib/endpoints';
 import { PortfolioChart } from './PortfolioChart';
 
 interface AnalyticsProps {
   selectedPortfolioId: string | null;
+  onPortfolioChange: (id: string) => void;
 }
 
-export function Analytics({ selectedPortfolioId }: AnalyticsProps) {
+export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsProps) {
   const [dateRange, setDateRange] = useState('3m');
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [overlays, setOverlays] = useState({
@@ -36,6 +40,11 @@ export function Analytics({ selectedPortfolioId }: AnalyticsProps) {
     queryKey: ['analytics', selectedPortfolioId],
     queryFn: () => getAnalytics(selectedPortfolioId!),
     enabled: !!selectedPortfolioId,
+  });
+
+  const portfoliosQ = useQuery({
+    queryKey: ['portfolios'],
+    queryFn: listPortfolios,
   });
 
   const positionsQ = useQuery({
@@ -56,6 +65,24 @@ export function Analytics({ selectedPortfolioId }: AnalyticsProps) {
       <Typography variant="h4" gutterBottom>
         Analytics
       </Typography>
+
+      {/* Portfolio Selector */}
+      <Box sx={{ mb: 3 }}>
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel>Portfolio</InputLabel>
+          <Select
+            value={selectedPortfolioId ?? ''}
+            onChange={(e) => onPortfolioChange(e.target.value)}
+            label="Portfolio"
+          >
+            {(portfoliosQ.data ?? []).map((p) => (
+              <MenuItem key={p.id} value={p.id}>
+                {p.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
 
       {/* View Toggle */}
       <Box sx={{ mb: 3 }}>

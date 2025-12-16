@@ -40,7 +40,12 @@ export default function App() {
                     />
                 );
             case 'analytics':
-                return <Analytics selectedPortfolioId={selectedPortfolioId} />;
+                return (
+                    <Analytics 
+                        selectedPortfolioId={selectedPortfolioId}
+                        onPortfolioChange={setSelectedPortfolioId}
+                    />
+                );
             case 'settings':
                 return <Settings />;
             default:

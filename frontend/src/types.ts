@@ -45,3 +45,12 @@ export type AnalyticsResponse = {
         end: string | null;
     };
 };
+
+export type TickerMatch = {
+    symbol: string;
+    name: string;
+    _type: string;
+    region: string;
+    currency: string;
+    matchScore: number;
+};

@@ -24,7 +24,7 @@ import {
   TextField,
   Grid,
 } from '@mui/material';
-import { Add, Refresh, Edit, Delete, Analytics } from '@mui/icons-material';
+import { Add, Refresh, Edit, Delete, Analytics, Search } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createPosition,
@@ -34,6 +34,7 @@ import {
   updatePosition,
   updatePrices,
 } from '../lib/endpoints';
+import { TickerSearchModal } from './TickerSearchModal';
 
 interface HoldingsProps {
   selectedPortfolioId: string | null;
@@ -44,6 +45,7 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
   const qc = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isTickerSearchOpen, setIsTickerSearchOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<any>(null);
   const [formData, setFormData] = useState({
     ticker: '',
@@ -102,6 +104,10 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
 
   const handleEditInputChange = (field: keyof typeof editFormData) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditFormData(prev => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleTickerSelect = (ticker: string) => {
+    setFormData(prev => ({ ...prev, ticker }));
   };
 
   const handleEditPosition = (position: any) => {
@@ -298,15 +304,25 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
-              <TextField
-                autoFocus
-                label="Ticker Symbol"
-                fullWidth
-                variant="outlined"
-                value={formData.ticker}
-                onChange={handleInputChange('ticker')}
-                placeholder="e.g. AAPL"
-              />
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <TextField
+                  autoFocus
+                  label="Ticker Symbol"
+                  fullWidth
+                  variant="outlined"
+                  value={formData.ticker}
+                  onChange={handleInputChange('ticker')}
+                  placeholder="e.g. AAPL"
+                />
+                <Button
+                  variant="outlined"
+                  startIcon={<Search />}
+                  onClick={() => setIsTickerSearchOpen(true)}
+                  sx={{ minWidth: 'auto', px: 2 }}
+                >
+                  Search
+                </Button>
+              </Box>
             </Grid>
             <Grid item xs={6}>
               <TextField
@@ -385,6 +401,13 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Ticker Search Modal */}
+      <TickerSearchModal
+        open={isTickerSearchOpen}
+        onClose={() => setIsTickerSearchOpen(false)}
+        onSelect={handleTickerSelect}
+      />
     </Box>
   );
 }
