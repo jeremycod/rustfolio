@@ -113,8 +113,8 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
   const handleEditPosition = (position: any) => {
     setEditingPosition(position);
     setEditFormData({
-      shares: position.shares.toString(),
-      avg_buy_price: position.avg_buy_price.toString(),
+      shares: typeof position.shares === 'string' ? position.shares : position.shares.toString(),
+      avg_buy_price: typeof position.avg_buy_price === 'string' ? position.avg_buy_price : position.avg_buy_price.toString(),
     });
     setIsEditModalOpen(true);
   };
@@ -156,8 +156,14 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
     },
   });
 
-  const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
-  const formatPercent = (value: number) => `${value.toFixed(2)}%`;
+  const formatCurrency = (value: number | string) => {
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    return `$${num.toFixed(2)}`;
+  };
+  const formatPercent = (value: number | string) => {
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    return `${num.toFixed(2)}%`;
+  };
 
   return (
     <Box>
@@ -225,10 +231,12 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
               </TableHead>
               <TableBody>
                 {positionsQ.data.map((pos) => {
-                  const currentPrice = pos.avg_buy_price * 1.05; // Mock 5% gain
-                  const marketValue = pos.shares * currentPrice;
-                  const unrealizedPL = pos.shares * (currentPrice - pos.avg_buy_price);
-                  const unrealizedPercent = ((currentPrice - pos.avg_buy_price) / pos.avg_buy_price) * 100;
+                  const shares = parseFloat(pos.shares);
+                  const avgBuyPrice = parseFloat(pos.avg_buy_price);
+                  const currentPrice = avgBuyPrice * 1.05; // Mock 5% gain
+                  const marketValue = shares * currentPrice;
+                  const unrealizedPL = shares * (currentPrice - avgBuyPrice);
+                  const unrealizedPercent = ((currentPrice - avgBuyPrice) / avgBuyPrice) * 100;
                   const isPositive = unrealizedPL >= 0;
 
                   return (

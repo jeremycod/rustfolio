@@ -74,14 +74,14 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange }: DashboardP
 
   const portfolioValue = useMemo(() => {
     if (!positionsQ.data) return 0;
-    return positionsQ.data.reduce((sum, pos) => sum + (pos.shares * pos.avg_buy_price), 0);
+    return positionsQ.data.reduce((sum, pos) => sum + (parseFloat(pos.shares) * parseFloat(pos.avg_buy_price)), 0);
   }, [positionsQ.data]);
 
   const allocationData = useMemo(() => {
     if (!positionsQ.data) return [];
     return positionsQ.data.map((pos) => ({
       name: pos.ticker,
-      value: pos.shares * pos.avg_buy_price,
+      value: parseFloat(pos.shares) * parseFloat(pos.avg_buy_price),
     }));
   }, [positionsQ.data]);
 

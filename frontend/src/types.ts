@@ -8,8 +8,8 @@ export type Position = {
     id: string;
     portfolio_id: string;
     ticker: string;
-    shares: number;
-    avg_buy_price: number;
+    shares: string; // BigDecimal from backend
+    avg_buy_price: string; // BigDecimal from backend
     created_at: string;
 };
 
@@ -17,7 +17,7 @@ export type PricePoint = {
     id: string;
     ticker: string;
     date: string; // YYYY-MM-DD
-    close_price: number;
+    close_price: string; // BigDecimal from backend
     created_at: string;
 };
 

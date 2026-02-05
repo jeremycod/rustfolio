@@ -2,15 +2,18 @@ use axum::Router;
 
 use crate::routes::{portfolios, positions, prices, analytics, health};
 use crate::state::AppState;
-use tower_http::cors::{Any, CorsLayer};
-use http::header::{AUTHORIZATION, CONTENT_TYPE};
+use tower_http::cors::{Any, AllowOrigin, CorsLayer};
+use http::header::{AUTHORIZATION, CONTENT_TYPE, HeaderValue};
 use http::Method;
 
 
 
 pub fn create_app(state: AppState) -> Router {
     let cors = CorsLayer::new()
-        .allow_origin("http://localhost:5173".parse::<http::HeaderValue>().unwrap())
+        .allow_origin(AllowOrigin::predicate(|origin: &HeaderValue, _| {
+            origin.as_bytes().starts_with(b"http://localhost:")
+                || origin.as_bytes().starts_with(b"http://127.0.0.1:")
+        }))
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
         .allow_headers([CONTENT_TYPE, AUTHORIZATION]);
     Router::<AppState>::new()
