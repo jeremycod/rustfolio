@@ -1,5 +1,6 @@
 use std::thread::sleep;
 
+use bigdecimal::BigDecimal;
 use sqlx::PgPool;
 use tracing::{error, warn};
 use tokio::time::{sleep as async_sleep, Duration};
@@ -50,7 +51,7 @@ pub async fn generate_mock(pool: &PgPool, ticker: &str) -> Result<(), AppError> 
 
         points.push(ExternalPricePoint {
             date: today - ChronoDuration::days(i),
-            close: current,
+            close: current.to_string().parse::<BigDecimal>().unwrap(),
         });
     }
 

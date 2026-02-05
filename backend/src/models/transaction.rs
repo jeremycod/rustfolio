@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
@@ -13,14 +14,14 @@ struct Transaction {
     id: uuid::Uuid,
     portfolio_id: uuid::Uuid,
     ticker: String,
-    quantity: i32,
-    price: f32,
+    quantity: BigDecimal,
+    price: BigDecimal,
     side: Side,
     executed_at: chrono::DateTime<chrono::Utc>,
     created_at: chrono::DateTime<chrono::Utc>
 }
 impl Transaction {
-    fn new(portfolio_id: uuid::Uuid, ticker: String, quantity: i32, price: f32, side: Side) -> Self {
+    fn new(portfolio_id: uuid::Uuid, ticker: String, quantity: BigDecimal, price: BigDecimal, side: Side) -> Self {
         Self {
             id: uuid::Uuid::new_v4(),
             portfolio_id,

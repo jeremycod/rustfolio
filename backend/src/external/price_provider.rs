@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -6,7 +7,7 @@ use thiserror::Error;
 #[derive(Debug, Clone)]
 pub struct ExternalPricePoint {
     pub date: NaiveDate,
-    pub close: f64,
+    pub close: BigDecimal,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

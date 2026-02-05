@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use sqlx::PgPool;
 use tracing::error;
 use uuid::Uuid;
@@ -13,10 +14,10 @@ pub async fn create(
     if input.ticker.trim().is_empty() {
         return Err(AppError::Validation("Ticker cannot be empty".into()));
     }
-    if input.shares <= 0.0 {
+    if input.shares <= BigDecimal::from(0) {
         return Err(AppError::Validation("Shares must be > 0".into()));
     }
-    if input.avg_buy_price <= 0.0 {
+    if input.avg_buy_price <= BigDecimal::from(0) {
         return Err(AppError::Validation("Average price must be > 0".into()));
     }
 
@@ -66,7 +67,7 @@ pub async fn update(
     input: UpdatePosition,
 ) -> Result<Position, AppError> {
 
-    if input.shares < 0.0 {
+    if input.shares < BigDecimal::from(0) {
         return Err(AppError::Validation("Shares cannot be negative".into()));
     }
 

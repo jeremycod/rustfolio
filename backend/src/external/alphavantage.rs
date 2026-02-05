@@ -1,5 +1,6 @@
 use crate::external::price_provider::{ExternalPricePoint, ExternalTickerMatch, PriceProvider, PriceProviderError};
 use async_trait::async_trait;
+use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -166,7 +167,7 @@ impl PriceProvider for AlphaVantageProvider {
             .map(|(date_str, bar)| -> Result<ExternalPricePoint, PriceProviderError> {
                 let date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
                     .map_err(|e| PriceProviderError::Parse(e.to_string()))?;
-                let close = bar.close.parse::<f64>()
+                let close = bar.close.parse::<BigDecimal>()
                     .map_err(|e| PriceProviderError::Parse(e.to_string()))?;
                 Ok(ExternalPricePoint { date, close })
             })

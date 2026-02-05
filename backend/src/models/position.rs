@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
@@ -5,14 +6,14 @@ use sqlx::FromRow;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreatePosition {
     pub ticker: String,
-    pub shares: f64,
-    pub avg_buy_price: f64
+    pub shares: BigDecimal,
+    pub avg_buy_price: BigDecimal
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePosition {
-    pub shares: f64,
-    pub avg_buy_price: f64
+    pub shares: BigDecimal,
+    pub avg_buy_price: BigDecimal
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -20,13 +21,13 @@ pub struct Position {
     id: uuid::Uuid,
     portfolio_id: uuid::Uuid,
     ticker: String,
-    shares: f64,
-    avg_buy_price: f64,
+    shares: BigDecimal,
+    avg_buy_price: BigDecimal,
     created_at: chrono::DateTime<chrono::Utc>
 }
 
 impl Position {
-    fn new(portfolio_id: uuid::Uuid, ticker: String, shares: f64, avg_buy_price: f64) -> Self {
+    fn new(portfolio_id: uuid::Uuid, ticker: String, shares: BigDecimal, avg_buy_price: BigDecimal) -> Self {
         Self {
             id: uuid::Uuid::new_v4(),
             portfolio_id,

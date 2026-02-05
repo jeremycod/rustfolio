@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -9,12 +10,12 @@ pub struct PricePoint {
     pub id: Uuid,
     pub ticker: String,
     pub date: NaiveDate,        // ✅ DATE
-    pub close_price: f64,       // see section 4 below
+    pub close_price: BigDecimal,
     pub created_at: DateTime<Utc>, // ✅ TIMESTAMPTZ
 }
 
 impl PricePoint {
-    fn new(ticker: String, date: NaiveDate, close_price: f64) -> Self {
+    fn new(ticker: String, date: NaiveDate, close_price: BigDecimal) -> Self {
         Self {
             id: uuid::Uuid::new_v4(),
             ticker,
