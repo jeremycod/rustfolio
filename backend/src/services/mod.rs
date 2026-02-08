@@ -3,4 +3,5 @@ pub mod price_service;
 pub mod portfolio_service;
 pub mod position_service;
 pub mod csv_import_service;
+pub mod transaction_detection_service;
 mod indicators;

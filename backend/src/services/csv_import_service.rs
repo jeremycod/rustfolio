@@ -4,12 +4,14 @@ use chrono::NaiveDate;
 use csv::ReaderBuilder;
 use serde::Deserialize;
 use sqlx::PgPool;
+use std::collections::HashSet;
 use std::path::Path;
 use std::str::FromStr;
 use uuid::Uuid;
 
 use crate::db::{account_queries, holding_snapshot_queries};
 use crate::models::{CreateAccount, CreateHoldingSnapshot};
+use crate::services::transaction_detection_service;
 
 #[derive(Debug, Deserialize)]
 struct CsvRow {
@@ -105,17 +107,21 @@ pub async fn import_csv_file(
     let mut accounts_created = 0;
     let mut holdings_created = 0;
     let mut errors = Vec::new();
+    let mut accounts_with_holdings = HashSet::new();
 
     for (line_num, result) in reader.deserialize::<CsvRow>().enumerate() {
         match result {
             Ok(row) => {
                 match process_row(pool, portfolio_id, snapshot_date, row).await {
-                    Ok((account_new, holding_new)) => {
+                    Ok((account_new, holding_new, account_id)) => {
                         if account_new {
                             accounts_created += 1;
                         }
                         if holding_new {
                             holdings_created += 1;
+                        }
+                        if let Some(acc_id) = account_id {
+                            accounts_with_holdings.insert(acc_id);
                         }
                     }
                     Err(e) => {
@@ -129,9 +135,27 @@ pub async fn import_csv_file(
         }
     }
 
+    // Detect transactions for all accounts that received holdings in this snapshot
+    let mut transactions_detected = 0;
+    for account_id in accounts_with_holdings {
+        match transaction_detection_service::detect_transactions_for_new_snapshot(
+            pool,
+            account_id,
+            snapshot_date,
+        )
+        .await
+        {
+            Ok(count) => transactions_detected += count,
+            Err(e) => {
+                errors.push(format!("Transaction detection failed for account {}: {}", account_id, e));
+            }
+        }
+    }
+
     Ok(ImportResult {
         accounts_created,
         holdings_created,
+        transactions_detected,
         errors,
         snapshot_date,
     })
@@ -142,10 +166,9 @@ async fn process_row(
     portfolio_id: Uuid,
     snapshot_date: NaiveDate,
     row: CsvRow,
-) -> Result<(bool, bool)> {
-    // Skip "Cash" entries without a ticker symbol
+) -> Result<(bool, bool, Option<Uuid>)> {
+    // Handle "Cash" entries - store them with empty ticker for tracking
     if row.symbol.trim().is_empty() && row.holding.to_lowercase().contains("cash") {
-        // Still create/update account but don't create holding
         let account_data = CreateAccount {
             account_number: row.account_number.clone(),
             account_nickname: row.account_nickname.clone(),
@@ -153,22 +176,54 @@ async fn process_row(
             client_name: Some(row.client_name.clone()),
         };
 
-        let existing = account_queries::find_by_account_number(
+        let existing_account = account_queries::find_by_account_number(
             pool,
             portfolio_id,
             &row.account_number,
         ).await?;
 
-        let account_new = existing.is_none();
+        let account_new = existing_account.is_none();
+        let account = account_queries::upsert(pool, portfolio_id, account_data).await?;
 
-        account_queries::upsert(pool, portfolio_id, account_data).await?;
+        // Create holding snapshot for cash with empty ticker
+        let quantity = parse_money_string(&row.quantity)?;
+        let price = parse_money_string(&row.price)?;
+        let market_value = parse_money_string(&row.market_value)?;
 
-        return Ok((account_new, false));
+        let holding_data = CreateHoldingSnapshot {
+            ticker: String::new(), // Empty ticker for cash
+            holding_name: Some("Cash".to_string()),
+            asset_category: Some(row.asset_category.clone()),
+            industry: Some("Cash".to_string()),
+            quantity,
+            price: price.clone(),
+            average_cost: price.clone(),
+            book_value: market_value.clone(),
+            market_value,
+            fund: None,
+            accrued_interest: None,
+            gain_loss: None,
+            gain_loss_pct: None,
+            percentage_of_assets: None,
+        };
+
+        // Check if cash holding already exists for this snapshot
+        let existing_holdings = holding_snapshot_queries::fetch_by_account_and_date(
+            pool,
+            account.id,
+            snapshot_date,
+        ).await?;
+
+        let holding_new = !existing_holdings.iter().any(|h| h.ticker.is_empty());
+
+        holding_snapshot_queries::upsert(pool, account.id, snapshot_date, holding_data).await?;
+
+        return Ok((account_new, holding_new, Some(account.id)));
     }
 
     // Skip rows without a ticker
     if row.symbol.trim().is_empty() {
-        return Ok((false, false));
+        return Ok((false, false, None));
     }
 
     // Create or get account
@@ -272,13 +327,14 @@ async fn process_row(
 
     holding_snapshot_queries::upsert(pool, account.id, snapshot_date, holding_data).await?;
 
-    Ok((account_new, holding_new))
+    Ok((account_new, holding_new, Some(account.id)))
 }
 
 #[derive(Debug)]
 pub struct ImportResult {
     pub accounts_created: usize,
     pub holdings_created: usize,
+    pub transactions_detected: usize,
     pub errors: Vec<String>,
     pub snapshot_date: NaiveDate,
 }

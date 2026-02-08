@@ -2,8 +2,12 @@
 /backend/.env
 /frontend/.env
 
+# Data files
+/backend/data/
+
 # Rust build artifacts
 /backend/target/
+/target/
 
 # Node.js dependencies and build artifacts
 /frontend/node_modules/

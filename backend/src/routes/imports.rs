@@ -25,6 +25,7 @@ pub struct ImportRequest {
 pub struct ImportResponse {
     pub accounts_created: usize,
     pub holdings_created: usize,
+    pub transactions_detected: usize,
     pub errors: Vec<String>,
     pub snapshot_date: String,
 }
@@ -122,15 +123,17 @@ pub async fn import_csv(
         })?;
 
     info!(
-        "Import completed: {} accounts created, {} holdings created, {} errors",
+        "Import completed: {} accounts created, {} holdings created, {} transactions detected, {} errors",
         result.accounts_created,
         result.holdings_created,
+        result.transactions_detected,
         result.errors.len()
     );
 
     Ok(Json(ImportResponse {
         accounts_created: result.accounts_created,
         holdings_created: result.holdings_created,
+        transactions_detected: result.transactions_detected,
         errors: result.errors,
         snapshot_date: result.snapshot_date.to_string(),
     }))

@@ -114,6 +114,7 @@ export type AccountValueHistory = {
 export type ImportResponse = {
     accounts_created: number;
     holdings_created: number;
+    transactions_detected: number;
     errors: string[];
     snapshot_date: string;
 };
@@ -122,4 +123,53 @@ export type CsvFileInfo = {
     name: string;
     path: string;
     date: string | null;
+};
+
+export type DetectedTransaction = {
+    id: string;
+    account_id: string;
+    transaction_type: 'BUY' | 'SELL' | 'DIVIDEND' | 'SPLIT' | 'OTHER';
+    ticker: string;
+    quantity: string | null; // BigDecimal
+    price: string | null; // BigDecimal
+    amount: string | null; // BigDecimal
+    transaction_date: string; // Date
+    from_snapshot_date: string | null; // Date
+    to_snapshot_date: string | null; // Date
+    description: string | null;
+    created_at: string;
+};
+
+export type CashFlow = {
+    id: string;
+    account_id: string;
+    flow_type: 'DEPOSIT' | 'WITHDRAWAL';
+    amount: string; // BigDecimal
+    flow_date: string; // Date
+    description: string | null;
+    created_at: string;
+};
+
+export type AccountActivity = {
+    account_id: string;
+    activity_type: 'TRANSACTION' | 'CASH_FLOW';
+    type_detail: string;
+    ticker: string | null;
+    quantity: string | null; // BigDecimal
+    amount: string | null; // BigDecimal
+    activity_date: string; // Date
+    description: string | null;
+};
+
+export type AccountTruePerformance = {
+    account_id: string;
+    account_nickname: string;
+    account_number: string;
+    total_deposits: string; // BigDecimal
+    total_withdrawals: string; // BigDecimal
+    current_value: string; // BigDecimal
+    book_value: string; // BigDecimal
+    true_gain_loss: string; // BigDecimal
+    true_gain_loss_pct: string; // BigDecimal
+    as_of_date: string | null; // Date
 };

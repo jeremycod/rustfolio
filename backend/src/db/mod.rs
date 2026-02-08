@@ -4,3 +4,5 @@ pub(crate) mod price_queries;
 pub mod analytics_queries;
 pub mod account_queries;
 pub mod holding_snapshot_queries;
+pub mod cash_flow_queries;
+pub mod detected_transaction_queries;

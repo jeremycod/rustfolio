@@ -5,5 +5,8 @@ pub mod prices;
 pub mod health;
 pub mod accounts;
 pub mod imports;
+pub mod cash_flows;
+pub mod transactions;
+pub mod admin;
 
 pub use portfolios::*;

@@ -9,7 +9,11 @@ import type {
     LatestAccountHolding,
     AccountValueHistory,
     ImportResponse,
-    CsvFileInfo
+    CsvFileInfo,
+    DetectedTransaction,
+    CashFlow,
+    AccountActivity,
+    AccountTruePerformance
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -101,5 +105,48 @@ export async function listCsvFiles(): Promise<CsvFileInfo[]> {
 
 export async function importCSV(portfolioId: string, filePath: string): Promise<ImportResponse> {
     const res = await api.post(`/api/portfolios/${portfolioId}/import`, { file_path: filePath });
+    return res.data;
+}
+
+// Transaction endpoints
+export async function getAccountTransactions(accountId: string): Promise<DetectedTransaction[]> {
+    const res = await api.get(`/api/accounts/${accountId}/transactions`);
+    return res.data;
+}
+
+export async function getAccountActivity(accountId: string): Promise<AccountActivity[]> {
+    const res = await api.get(`/api/accounts/${accountId}/activity`);
+    return res.data;
+}
+
+export async function getAccountTruePerformance(accountId: string): Promise<AccountTruePerformance> {
+    const res = await api.get(`/api/accounts/${accountId}/true-performance`);
+    return res.data;
+}
+
+export async function getPortfolioTruePerformance(portfolioId: string): Promise<AccountTruePerformance[]> {
+    const res = await api.get(`/api/portfolios/${portfolioId}/true-performance`);
+    return res.data;
+}
+
+// Cash flow endpoints
+export async function createCashFlow(accountId: string, payload: {
+    flow_type: 'DEPOSIT' | 'WITHDRAWAL';
+    amount: number;
+    flow_date: string; // YYYY-MM-DD
+    description?: string;
+}): Promise<CashFlow> {
+    const res = await api.post(`/api/accounts/${accountId}/cash-flows`, payload);
+    return res.data;
+}
+
+export async function listCashFlows(accountId: string): Promise<CashFlow[]> {
+    const res = await api.get(`/api/accounts/${accountId}/cash-flows`);
+    return res.data;
+}
+
+// Admin endpoints
+export async function resetAllData(): Promise<{ message: string; tables_cleared: string[] }> {
+    const res = await api.post('/api/admin/reset-all-data');
     return res.data;
 }
