@@ -1,8 +1,8 @@
 use axum::Router;
 
-use crate::routes::{portfolios, positions, prices, analytics, health};
+use crate::routes::{portfolios, positions, prices, analytics, health, accounts, imports};
 use crate::state::AppState;
-use tower_http::cors::{Any, AllowOrigin, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use http::header::{AUTHORIZATION, CONTENT_TYPE, HeaderValue};
 use http::Method;
 
@@ -19,6 +19,8 @@ pub fn create_app(state: AppState) -> Router {
     Router::<AppState>::new()
         .nest("/health", health::router())
         .nest("/api/portfolios", portfolios::router())
+        .nest("/api", accounts::router())
+        .nest("/api", imports::router())
         .nest("/api/positions", positions::router())
         .nest("/api/prices", prices::router())
         .nest("/api/analytics", analytics::router())
