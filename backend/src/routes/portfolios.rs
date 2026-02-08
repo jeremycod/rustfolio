@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{db, services};
 
 use crate::errors::AppError;
-use crate::models::{CreatePortfolio, CreatePosition, Portfolio, Position, UpdatePortfolio};
+use crate::models::{CreatePortfolio, Portfolio, UpdatePortfolio};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -18,8 +18,6 @@ pub fn router() -> Router<AppState> {
         .route("/:id", get(get_portfolio))
         .route("/:id", put(update_portfolio))
         .route("/:id", delete(delete_portfolio))
-        .route("/:id/positions", post(create_position))
-        .route("/:id/positions", get(list_positions))
 }
 
 #[axum::debug_handler]
@@ -94,33 +92,4 @@ pub async fn delete_portfolio(
         }
     }
 }
-
-pub async fn create_position(
-    State(state): State<AppState>,
-    Path(portfolio_id): Path<Uuid>,
-    Json(data): Json<CreatePosition>
-) -> Result<Json<Position>, AppError> {
-    info!("POST /portfolios/{}/positions - Creating new position", portfolio_id);
-    let pos = services::position_service::create(&state.pool, portfolio_id, data).await
-        .map_err(|e| {
-            error!("Failed to create position for portfolio {}: {}", portfolio_id, e);
-            e
-        })?;
-    Ok(Json(pos))
-
-}
-
-pub async fn list_positions(
-    Path(portfolio_id): Path<Uuid>,
-    State(state): State<AppState>
-) -> Result<Json<Vec<Position>>, AppError> {
-    info!("GET /positions - Listing positions for portfolio {}", portfolio_id);
-    let positions = services::position_service::list(&state.pool, portfolio_id).await
-        .map_err(|e| {
-            error!("Failed to list positions for portfolio {}: {}", portfolio_id, e);
-            e
-        })?;
-    Ok(Json(positions))
-}
-
 

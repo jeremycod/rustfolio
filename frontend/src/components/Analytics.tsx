@@ -18,7 +18,7 @@ import {
   MenuItem,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { getAnalytics, listPositions, listPortfolios } from '../lib/endpoints';
+import { getAnalytics, listPortfolios } from '../lib/endpoints';
 import { PortfolioChart } from './PortfolioChart';
 
 interface AnalyticsProps {
@@ -45,12 +45,6 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
   const portfoliosQ = useQuery({
     queryKey: ['portfolios'],
     queryFn: listPortfolios,
-  });
-
-  const positionsQ = useQuery({
-    queryKey: ['positions', selectedPortfolioId],
-    queryFn: () => listPositions(selectedPortfolioId!),
-    enabled: !!selectedPortfolioId,
   });
 
   const handleOverlayChange = (overlay: keyof typeof overlays) => {
@@ -84,21 +78,6 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
         </FormControl>
       </Box>
 
-      {/* View Toggle */}
-      <Box sx={{ mb: 3 }}>
-        <ToggleButtonGroup
-          value={selectedTicker || 'portfolio'}
-          exclusive
-          onChange={(_, value) => setSelectedTicker(value === 'portfolio' ? null : value)}
-        >
-          <ToggleButton value="portfolio">Portfolio View</ToggleButton>
-          {(positionsQ.data ?? []).map((pos) => (
-            <ToggleButton key={pos.ticker} value={pos.ticker}>
-              {pos.ticker}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      </Box>
 
       <Grid container spacing={3}>
         {/* Main Chart */}
@@ -261,17 +240,17 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
             </Card>
 
             {/* Allocation Summary */}
-            {!selectedTicker && (
+            {!selectedTicker && analyticsQ.data?.allocations && (
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
                     Allocation
                   </Typography>
-                  {(positionsQ.data ?? []).map((pos) => {
-                    const weight = (pos.shares * pos.avg_buy_price) / 15000 * 100;
+                  {analyticsQ.data.allocations.map((alloc) => {
+                    const weight = alloc.weight * 100;
                     return (
-                      <Box key={pos.ticker} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="body2">{pos.ticker}:</Typography>
+                      <Box key={alloc.ticker} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="body2">{alloc.ticker}:</Typography>
                         <Typography variant="body2">{formatPercent(weight)}</Typography>
                       </Box>
                     );

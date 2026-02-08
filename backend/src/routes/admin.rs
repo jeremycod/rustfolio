@@ -28,8 +28,6 @@ pub async fn reset_all_data(
         "cash_flows",
         "holdings_snapshots",
         "accounts",
-        "transactions",
-        "positions",
         "price_points",
         "portfolios",
     ];

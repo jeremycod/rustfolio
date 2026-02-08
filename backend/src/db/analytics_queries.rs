@@ -12,18 +12,17 @@ pub async fn fetch_portfolio_value_series(
     pool: &PgPool,
     portfolio_id: Uuid,
 ) -> Result<Vec<PortfolioValueRow>, sqlx::Error> {
-    // Key idea: join positions -> price_points by ticker, sum(shares * close_price) grouped by date
+    // Aggregate holdings_snapshots across all accounts in a portfolio
     let rows = sqlx::query!(
         r#"
         SELECT
-          pp.date as "date!",
-          SUM(p.shares * pp.close_price)::double precision as "value!"
-        FROM positions p
-        JOIN price_points pp
-          ON pp.ticker = p.ticker
-        WHERE p.portfolio_id = $1
-        GROUP BY pp.date
-        ORDER BY pp.date ASC
+          h.snapshot_date as "date!",
+          SUM(h.market_value)::double precision as "value!"
+        FROM holdings_snapshots h
+        JOIN accounts a ON h.account_id = a.id
+        WHERE a.portfolio_id = $1
+        GROUP BY h.snapshot_date
+        ORDER BY h.snapshot_date ASC
         "#,
         portfolio_id
     )
@@ -51,22 +50,22 @@ pub async fn fetch_allocations_at_latest_date(
 ) -> Result<Vec<AllocationRow>, sqlx::Error> {
     let rows = sqlx::query!(
         r#"
-        WITH latest AS (
-          SELECT MAX(pp.date) AS date
-          FROM positions p
-          JOIN price_points pp ON pp.ticker = p.ticker
-          WHERE p.portfolio_id = $1
+        WITH latest_snapshot AS (
+          SELECT MAX(h.snapshot_date) AS snapshot_date
+          FROM holdings_snapshots h
+          JOIN accounts a ON h.account_id = a.id
+          WHERE a.portfolio_id = $1
         )
         SELECT
-          p.ticker as "ticker!",
-          (p.shares * pp.close_price)::double precision as "value!"
-        FROM positions p
-        JOIN latest l ON TRUE
-        JOIN price_points pp
-          ON pp.ticker = p.ticker
-         AND pp.date = l.date
-        WHERE p.portfolio_id = $1
-        ORDER BY p.ticker ASC
+          h.ticker as "ticker!",
+          SUM(h.market_value)::double precision as "value!"
+        FROM holdings_snapshots h
+        JOIN accounts a ON h.account_id = a.id
+        JOIN latest_snapshot l ON h.snapshot_date = l.snapshot_date
+        WHERE a.portfolio_id = $1
+          AND h.ticker != ''
+        GROUP BY h.ticker
+        ORDER BY h.ticker ASC
         "#,
         portfolio_id
     )

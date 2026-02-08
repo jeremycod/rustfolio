@@ -24,8 +24,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createPortfolio,
   listPortfolios,
-  listPositions,
   getAnalytics,
+  listAccounts,
+  getPortfolioTruePerformance,
 } from '../lib/endpoints';
 
 interface DashboardProps {
@@ -45,9 +46,15 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange }: DashboardP
     queryFn: listPortfolios,
   });
 
-  const positionsQ = useQuery({
-    queryKey: ['positions', selectedPortfolioId],
-    queryFn: () => listPositions(selectedPortfolioId!),
+  const accountsQ = useQuery({
+    queryKey: ['accounts', selectedPortfolioId],
+    queryFn: () => listAccounts(selectedPortfolioId!),
+    enabled: !!selectedPortfolioId,
+  });
+
+  const performanceQ = useQuery({
+    queryKey: ['portfolioPerformance', selectedPortfolioId],
+    queryFn: () => getPortfolioTruePerformance(selectedPortfolioId!),
     enabled: !!selectedPortfolioId,
   });
 
@@ -73,17 +80,22 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange }: DashboardP
   };
 
   const portfolioValue = useMemo(() => {
-    if (!positionsQ.data) return 0;
-    return positionsQ.data.reduce((sum, pos) => sum + (parseFloat(pos.shares) * parseFloat(pos.avg_buy_price)), 0);
-  }, [positionsQ.data]);
+    if (!performanceQ.data) return 0;
+    return performanceQ.data.reduce((sum, acc) => sum + parseFloat(acc.current_value), 0);
+  }, [performanceQ.data]);
+
+  const totalGainLoss = useMemo(() => {
+    if (!performanceQ.data) return 0;
+    return performanceQ.data.reduce((sum, acc) => sum + parseFloat(acc.true_gain_loss), 0);
+  }, [performanceQ.data]);
 
   const allocationData = useMemo(() => {
-    if (!positionsQ.data) return [];
-    return positionsQ.data.map((pos) => ({
-      name: pos.ticker,
-      value: parseFloat(pos.shares) * parseFloat(pos.avg_buy_price),
+    if (!analyticsQ.data?.allocations) return [];
+    return analyticsQ.data.allocations.map((alloc) => ({
+      name: alloc.ticker,
+      value: alloc.value,
     }));
-  }, [positionsQ.data]);
+  }, [analyticsQ.data]);
 
   return (
     <Box>
@@ -144,36 +156,36 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange }: DashboardP
           <Card>
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                Daily Change
-              </Typography>
-              <Typography variant="h5" color="success.main">
-                +$0.00 (0.00%)
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                All-Time P/L
-              </Typography>
-              <Typography variant="h5" color="success.main">
-                +$0.00 (0.00%)
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Positions
+                Total Deposits
               </Typography>
               <Typography variant="h5">
-                {positionsQ.data?.length ?? 0}
+                ${performanceQ.data ? performanceQ.data.reduce((sum, acc) => sum + parseFloat(acc.total_deposits), 0).toFixed(2) : '0.00'}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                True Gain/Loss
+              </Typography>
+              <Typography variant="h5" color={totalGainLoss >= 0 ? 'success.main' : 'error.main'}>
+                ${totalGainLoss >= 0 ? '+' : ''}{totalGainLoss.toFixed(2)}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Accounts
+              </Typography>
+              <Typography variant="h5">
+                {accountsQ.data?.length ?? 0}
               </Typography>
             </CardContent>
           </Card>
@@ -247,12 +259,9 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange }: DashboardP
       </Grid>
 
       {/* Alerts */}
-      {(!positionsQ.data || positionsQ.data.length === 0) && (
+      {(!accountsQ.data || accountsQ.data.length === 0) && (
         <Alert severity="info" sx={{ mt: 3 }}>
-          Add at least one position, then generate prices using backend: 
-          <Box component="code" sx={{ ml: 1, fontFamily: 'monospace' }}>
-            POST /api/prices/AAPL/mock
-          </Box>
+          No accounts found. Go to the Accounts tab to import CSV data and get started.
         </Alert>
       )}
 

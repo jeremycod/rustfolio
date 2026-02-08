@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { listPortfolios } from "./lib/endpoints";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./components/Dashboard";
-import { Holdings } from "./components/Holdings";
+import { PortfolioOverview } from "./components/PortfolioOverview";
 import { Analytics } from "./components/Analytics";
 import { Settings } from "./components/Settings";
 import { Accounts } from "./components/Accounts";
@@ -53,7 +53,7 @@ export default function App() {
                 );
             case 'holdings':
                 return (
-                    <Holdings
+                    <PortfolioOverview
                         selectedPortfolioId={selectedPortfolioId}
                         onPortfolioChange={setSelectedPortfolioId}
                     />
