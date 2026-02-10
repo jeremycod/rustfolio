@@ -38,13 +38,15 @@ import {
   getAccountActivity,
 } from '../lib/endpoints';
 import { formatCurrency, formatNumber, formatPercentage } from '../lib/formatters';
+import { TickerChip } from './TickerChip';
 
 interface AccountDetailProps {
   accountId: string;
   onBack: () => void;
+  onTickerNavigate: (ticker: string) => void;
 }
 
-export function AccountDetail({ accountId, onBack }: AccountDetailProps) {
+export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDetailProps) {
   const [activeTab, setActiveTab] = useState(0);
 
   const accountQ = useQuery({
@@ -229,9 +231,7 @@ export function AccountDetail({ accountId, onBack }: AccountDetailProps) {
                 return (
                   <TableRow key={holding.id}>
                     <TableCell>
-                      <Typography variant="body2" fontWeight="bold">
-                        {holding.ticker}
-                      </Typography>
+                      <TickerChip ticker={holding.ticker} onNavigate={onTickerNavigate} />
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">{holding.holding_name || '—'}</Typography>

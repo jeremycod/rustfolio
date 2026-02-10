@@ -7,5 +7,6 @@ pub mod imports;
 pub mod cash_flows;
 pub mod transactions;
 pub mod admin;
+pub mod risk;
 
 pub use portfolios::*;

@@ -8,11 +8,13 @@ import { Analytics } from "./components/Analytics";
 import { Settings } from "./components/Settings";
 import { Accounts } from "./components/Accounts";
 import { AccountDetail } from "./components/AccountDetail";
+import { RiskAnalysis } from "./components/RiskAnalysis";
 
 export default function App() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState('dashboard');
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+    const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
 
     const portfoliosQ = useQuery({
         queryKey: ["portfolios"],
@@ -33,6 +35,7 @@ export default function App() {
                     <Dashboard
                         selectedPortfolioId={selectedPortfolioId}
                         onPortfolioChange={setSelectedPortfolioId}
+                        onTickerNavigate={handleTickerNavigate}
                     />
                 );
             case 'accounts':
@@ -41,6 +44,7 @@ export default function App() {
                         <AccountDetail
                             accountId={selectedAccountId}
                             onBack={() => setSelectedAccountId(null)}
+                            onTickerNavigate={handleTickerNavigate}
                         />
                     );
                 }
@@ -56,6 +60,7 @@ export default function App() {
                     <PortfolioOverview
                         selectedPortfolioId={selectedPortfolioId}
                         onPortfolioChange={setSelectedPortfolioId}
+                        onTickerNavigate={handleTickerNavigate}
                     />
                 );
             case 'analytics':
@@ -65,6 +70,8 @@ export default function App() {
                         onPortfolioChange={setSelectedPortfolioId}
                     />
                 );
+            case 'risk':
+                return <RiskAnalysis selectedTicker={selectedTicker} />;
             case 'settings':
                 return <Settings />;
             default:
@@ -83,6 +90,15 @@ export default function App() {
         if (page !== 'accounts') {
             setSelectedAccountId(null);
         }
+        // Clear ticker selection when navigating away from risk page
+        if (page !== 'risk') {
+            setSelectedTicker(null);
+        }
+    };
+
+    const handleTickerNavigate = (ticker: string) => {
+        setSelectedTicker(ticker);
+        setCurrentPage('risk');
     };
 
     return (

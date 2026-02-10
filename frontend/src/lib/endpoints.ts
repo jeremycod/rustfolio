@@ -12,7 +12,9 @@ import type {
     DetectedTransaction,
     CashFlow,
     AccountActivity,
-    AccountTruePerformance
+    AccountTruePerformance,
+    RiskAssessment,
+    RiskThresholds
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -122,4 +124,30 @@ export async function listCashFlows(accountId: string): Promise<CashFlow[]> {
 export async function resetAllData(): Promise<{ message: string; tables_cleared: string[] }> {
     const res = await api.post('/api/admin/reset-all-data');
     return res.data;
+}
+
+// Risk endpoints
+export async function getPositionRisk(
+    ticker: string,
+    days?: number,
+    benchmark?: string
+): Promise<RiskAssessment> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+    if (benchmark) params.append('benchmark', benchmark);
+
+    const queryString = params.toString();
+    const url = `/api/risk/positions/${ticker}${queryString ? `?${queryString}` : ''}`;
+
+    const res = await api.get(url);
+    return res.data;
+}
+
+export async function getRiskThresholds(): Promise<RiskThresholds> {
+    const res = await api.get('/api/risk/thresholds');
+    return res.data;
+}
+
+export async function setRiskThresholds(thresholds: RiskThresholds): Promise<void> {
+    await api.post('/api/risk/thresholds', { thresholds });
 }

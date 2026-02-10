@@ -35,6 +35,7 @@ import {
   updatePrices,
 } from '../lib/endpoints';
 import { TickerSearchModal } from './TickerSearchModal';
+import { RiskBadge } from './RiskBadge';
 
 interface HoldingsProps {
   selectedPortfolioId: string | null;
@@ -226,6 +227,7 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
                   <TableCell align="right">Current Price</TableCell>
                   <TableCell align="right">Market Value</TableCell>
                   <TableCell align="right">Unrealized P/L</TableCell>
+                  <TableCell align="center">Risk</TableCell>
                   <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -259,6 +261,9 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
                             ({formatPercent(unrealizedPercent)})
                           </Typography>
                         </Box>
+                      </TableCell>
+                      <TableCell align="center">
+                        <RiskBadge ticker={pos.ticker} />
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', gap: 0.5 }}>

@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 use uuid::Uuid;
-use tracing::{error, warn};
+use tracing::error;
 use crate::models::PricePoint;
 use crate::external::price_provider::ExternalPricePoint;
 
@@ -98,4 +98,33 @@ pub async fn upsert_external_points(
         e
     })?;
     Ok(())
+}
+
+/// Fetch the most recent N days of price history for a ticker.
+///
+/// Returns price points ordered by date in ascending order (oldest first).
+pub async fn fetch_window(
+    pool: &PgPool,
+    ticker: &str,
+    days: i64,
+) -> Result<Vec<PricePoint>, sqlx::Error> {
+    sqlx::query_as!(
+        PricePoint,
+        r#"
+        SELECT id, ticker, date, close_price, created_at
+        FROM price_points
+        WHERE ticker = $1
+        ORDER BY date DESC
+        LIMIT $2
+        "#,
+        ticker,
+        days
+    )
+    .fetch_all(pool)
+    .await
+    .map(|mut points| {
+        // Reverse to get ascending order (oldest first)
+        points.reverse();
+        points
+    })
 }

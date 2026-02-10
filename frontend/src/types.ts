@@ -173,3 +173,29 @@ export type AccountTruePerformance = {
     true_gain_loss_pct: string; // BigDecimal
     as_of_date: string | null; // Date
 };
+
+// Risk Management Types
+export type RiskLevel = 'low' | 'moderate' | 'high';
+
+export type PositionRisk = {
+    volatility: number; // Annualized volatility as percentage
+    max_drawdown: number; // Maximum drawdown as negative percentage
+    beta: number | null; // Beta coefficient relative to benchmark
+    sharpe: number | null; // Sharpe ratio (risk-adjusted return)
+    value_at_risk: number | null; // 5% VaR as negative percentage
+};
+
+export type RiskAssessment = {
+    ticker: string;
+    metrics: PositionRisk;
+    risk_score: number; // 0-100 risk score
+    risk_level: RiskLevel; // low/moderate/high classification
+};
+
+export type RiskThresholds = {
+    volatility_threshold: number | null;
+    drawdown_threshold: number | null;
+    beta_threshold: number | null;
+    var_threshold: number | null;
+    risk_score_threshold: number | null;
+};

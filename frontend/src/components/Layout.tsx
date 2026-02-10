@@ -17,6 +17,7 @@ import {
   Analytics,
   Settings,
   AccountBalanceWallet,
+  Assessment,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -26,6 +27,7 @@ const menuItems = [
   { text: 'Accounts', icon: <AccountBalanceWallet />, path: 'accounts' },
   { text: 'Portfolio', icon: <AccountBalance />, path: 'holdings' },
   { text: 'Analytics', icon: <Analytics />, path: 'analytics' },
+  { text: 'Risk Analysis', icon: <Assessment />, path: 'risk' },
   { text: 'Settings', icon: <Settings />, path: 'settings' },
 ];
 

@@ -203,7 +203,38 @@ pub async fn detect_transactions_for_new_snapshot(
         detect_transactions_between_snapshots(pool, account_id, previous_date, new_snapshot_date).await
     } else {
         // No previous snapshot - this is the first import
-        // Don't create any transactions, just starting point
-        Ok(0)
+        // Create an initial deposit for the total account value
+        let first_snapshot_holdings = holding_snapshot_queries::fetch_by_account_and_date(
+            pool,
+            account_id,
+            new_snapshot_date
+        ).await?;
+
+        // Calculate total value (all holdings including cash)
+        let total_value: f64 = first_snapshot_holdings
+            .iter()
+            .map(|h| {
+                let qty = h.quantity.to_f64().unwrap_or(0.0);
+                let price = h.price.to_f64().unwrap_or(1.0);
+                qty * price
+            })
+            .sum();
+
+        // Only create deposit if total value is significant (more than $1)
+        if total_value > 1.0 {
+            let cash_flow = CreateCashFlow {
+                flow_type: FlowType::Deposit,
+                amount: BigDecimal::from_f64(total_value).unwrap_or_else(|| BigDecimal::from(0)),
+                flow_date: new_snapshot_date,
+                description: Some(format!("Initial account value: ${:.2}", total_value)),
+            };
+
+            cash_flow_queries::create(pool, account_id, cash_flow).await?;
+            cash_flow_queries::update_account_totals(pool, account_id).await?;
+
+            Ok(1)
+        } else {
+            Ok(0)
+        }
     }
 }

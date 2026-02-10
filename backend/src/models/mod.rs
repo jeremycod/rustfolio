@@ -7,6 +7,7 @@ mod account;
 mod holding_snapshot;
 mod cash_flow;
 mod detected_transaction;
+pub mod risk;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -18,3 +19,4 @@ pub use account::{Account, CreateAccount};
 pub use holding_snapshot::{HoldingSnapshot, CreateHoldingSnapshot, LatestAccountHolding, AccountValueHistory};
 pub use cash_flow::{CashFlow, CreateCashFlow, FlowType};
 pub use detected_transaction::{DetectedTransaction, CreateDetectedTransaction, TransactionType, AccountActivity, AccountTruePerformance};
+pub use risk::{PositionRisk, RiskAssessment, RiskLevel, RiskThresholds, PortfolioRisk, SetThresholdsRequest};

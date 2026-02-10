@@ -29,13 +29,15 @@ import {
   getLatestHoldings,
 } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
+import { TickerChip } from './TickerChip';
 
 interface PortfolioOverviewProps {
   selectedPortfolioId: string | null;
   onPortfolioChange: (id: string) => void;
+  onTickerNavigate: (ticker: string) => void;
 }
 
-export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange }: PortfolioOverviewProps) {
+export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTickerNavigate }: PortfolioOverviewProps) {
   const portfoliosQ = useQuery({
     queryKey: ['portfolios'],
     queryFn: listPortfolios,
@@ -82,6 +84,7 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange }: Po
     const tickerMap = new Map<string, {
       ticker: string;
       holding_name: string | null;
+      asset_category: string | null;
       total_quantity: number;
       total_market_value: number;
       total_gain_loss: number;
@@ -104,6 +107,7 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange }: Po
         tickerMap.set(holding.ticker, {
           ticker: holding.ticker,
           holding_name: holding.holding_name,
+          asset_category: holding.asset_category,
           total_quantity: quantity,
           total_market_value: marketValue,
           total_gain_loss: gainLoss,
@@ -249,6 +253,7 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange }: Po
                 <TableRow>
                   <TableCell>Ticker</TableCell>
                   <TableCell>Name</TableCell>
+                  <TableCell>Asset Type</TableCell>
                   <TableCell align="right">Total Quantity</TableCell>
                   <TableCell align="right">Market Value</TableCell>
                   <TableCell align="right">Gain/Loss</TableCell>
@@ -262,15 +267,38 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange }: Po
                     ? (holding.total_gain_loss / (holding.total_market_value - holding.total_gain_loss)) * 100
                     : 0;
 
+                  const getAssetTypeColor = (assetType: string | null): 'default' | 'primary' | 'secondary' | 'info' => {
+                    if (!assetType) return 'default';
+                    const type = assetType.toLowerCase();
+                    if (type.includes('stock') || type.includes('equity')) return 'primary';
+                    if (type.includes('mutual fund') || type.includes('fund')) return 'secondary';
+                    if (type.includes('bond') || type.includes('fixed')) return 'info';
+                    return 'default';
+                  };
+
                   return (
                     <TableRow key={holding.ticker}>
                       <TableCell>
-                        <Chip label={holding.ticker} size="small" variant="outlined" />
+                        <TickerChip ticker={holding.ticker} onNavigate={onTickerNavigate} />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
                           {holding.holding_name || '—'}
                         </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {holding.asset_category ? (
+                          <Chip
+                            label={holding.asset_category}
+                            size="small"
+                            color={getAssetTypeColor(holding.asset_category)}
+                            variant="outlined"
+                          />
+                        ) : (
+                          <Typography variant="body2" color="textSecondary">
+                            —
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         {holding.total_quantity.toFixed(2)}
