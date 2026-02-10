@@ -2,12 +2,13 @@ use std::thread::sleep;
 
 use bigdecimal::BigDecimal;
 use sqlx::PgPool;
-use tracing::{error, warn};
+use tracing::{error, warn, info};
 use tokio::time::{sleep as async_sleep, Duration};
 use crate::{db, external};
 use crate::errors::AppError;
 use crate::external::price_provider::{ExternalPricePoint, ExternalTickerMatch, PriceProvider, PriceProviderError};
 use crate::models::PricePoint;
+use crate::services::failure_cache::{FailureCache, FailureType};
 use chrono::{Utc, Duration as ChronoDuration};
 
 pub async fn get_history(pool: &PgPool, ticker: &str)
@@ -78,7 +79,23 @@ pub async fn refresh_from_api(
     pool: &PgPool,
     provider: &dyn PriceProvider,
     ticker: &str,
+    failure_cache: &FailureCache,
 ) -> Result<(), AppError> {
+    // Check failure cache first - avoid repeated calls for known-bad tickers
+    if let Some(failure_info) = failure_cache.is_failed(ticker) {
+        info!("⚠️ Skipping API call for {} - ticker is in failure cache ({}). Cached until {:?}",
+              ticker,
+              match failure_info.error_type {
+                  FailureType::NotFound => "not found",
+                  FailureType::RateLimited => "rate limited",
+                  FailureType::ApiError => "API error",
+              },
+              failure_info.failed_at + chrono::Duration::hours(failure_info.ttl_hours));
+        return Err(AppError::External(
+            format!("Ticker {} is in failure cache. Will retry after cache expiry.", ticker)
+        ));
+    }
+
     if let Some(latest) = db::price_queries::fetch_latest(pool, ticker).await? {
         let today = Utc::now().date_naive();
 
@@ -92,7 +109,7 @@ pub async fn refresh_from_api(
     // Retry logic with exponential backoff
     let mut retry_count = 0;
     let max_retries = 3;
-    
+
     loop {
         match provider.fetch_daily_history(ticker, 60).await {
             Ok(external_points) => {
@@ -101,16 +118,27 @@ pub async fn refresh_from_api(
                         error!("Failed to refresh prices from API for ticker {}: {}", ticker, e);
                         AppError::Db(e)
                     })?;
+
+                // Clear from failure cache on success
+                failure_cache.clear(ticker);
                 return Ok(());
             },
             Err(PriceProviderError::RateLimited) if retry_count < max_retries => {
                 retry_count += 1;
                 let delay = Duration::from_secs(5 * retry_count as u64); // 5, 10, 15 seconds
-                warn!("Rate limited for ticker {}, retrying in {}s (attempt {}/{})", 
+                warn!("Rate limited for ticker {}, retrying in {}s (attempt {}/{})",
                       ticker, delay.as_secs(), retry_count, max_retries);
                 async_sleep(delay).await;
             },
             Err(e) => {
+                // Record failure in cache to avoid retrying
+                let failure_type = match &e {
+                    PriceProviderError::RateLimited => FailureType::RateLimited,
+                    PriceProviderError::NotFound => FailureType::NotFound,
+                    _ => FailureType::ApiError,
+                };
+                failure_cache.record_failure(ticker, failure_type);
+
                 return Err(match e {
                     PriceProviderError::RateLimited => AppError::RateLimited,
                     _ => AppError::External(e.to_string()),

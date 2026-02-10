@@ -128,3 +128,49 @@ pub async fn fetch_window(
         points
     })
 }
+
+/// Fetch the most recent N days of price history for multiple tickers in one query.
+///
+/// Returns a map of ticker -> price points ordered by date ascending (oldest first).
+pub async fn fetch_window_batch(
+    pool: &PgPool,
+    tickers: &[String],
+    days: i64,
+) -> Result<std::collections::HashMap<String, Vec<PricePoint>>, sqlx::Error> {
+    use std::collections::HashMap;
+
+    if tickers.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    // Use query_as instead of query_as! to avoid compile-time verification issues with arrays
+    let points = sqlx::query_as::<_, PricePoint>(
+        r#"
+        SELECT id, ticker, date, close_price, created_at
+        FROM price_points
+        WHERE ticker = ANY($1)
+        ORDER BY ticker, date DESC
+        "#,
+    )
+    .bind(tickers)
+    .fetch_all(pool)
+    .await?;
+
+    // Group by ticker and take only the most recent N days for each
+    let mut result: HashMap<String, Vec<PricePoint>> = HashMap::new();
+
+    for point in points {
+        result
+            .entry(point.ticker.clone())
+            .or_insert_with(Vec::new)
+            .push(point);
+    }
+
+    // Limit each ticker to N days and reverse to ascending order
+    for (_, points) in result.iter_mut() {
+        points.truncate(days as usize);
+        points.reverse();
+    }
+
+    Ok(result)
+}

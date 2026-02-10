@@ -20,6 +20,7 @@ use crate::external::alphavantage::AlphaVantageProvider;
 use crate::external::twelvedata::TwelveDataProvider;
 use crate::external::multi_provider::MultiProvider;
 use crate::state::AppState;
+use crate::services::failure_cache::FailureCache;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -68,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState {
         pool,
         price_provider: provider,
+        failure_cache: FailureCache::new(),
     };
     let app = app::create_app(state);
 

@@ -94,6 +94,7 @@ export type LatestAccountHolding = {
     ticker: string;
     holding_name: string | null;
     asset_category: string | null;
+    industry: string | null;
     quantity: string; // BigDecimal
     price: string; // BigDecimal
     market_value: string; // BigDecimal
@@ -198,4 +199,35 @@ export type RiskThresholds = {
     beta_threshold: number | null;
     var_threshold: number | null;
     risk_score_threshold: number | null;
+};
+
+export type PositionRiskContribution = {
+    ticker: string;
+    market_value: number;
+    weight: number; // 0-1 (position weight in portfolio)
+    risk_assessment: RiskAssessment;
+};
+
+export type PortfolioRisk = {
+    portfolio_id: string;
+    total_value: number;
+    portfolio_volatility: number;
+    portfolio_max_drawdown: number;
+    portfolio_beta: number | null;
+    portfolio_sharpe: number | null;
+    portfolio_risk_score: number;
+    risk_level: RiskLevel;
+    position_risks: PositionRiskContribution[];
+};
+
+export type CorrelationPair = {
+    ticker1: string;
+    ticker2: string;
+    correlation: number; // -1.0 to 1.0
+};
+
+export type CorrelationMatrix = {
+    portfolio_id: string;
+    tickers: string[];
+    correlations: CorrelationPair[];
 };

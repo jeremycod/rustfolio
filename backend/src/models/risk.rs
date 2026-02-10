@@ -91,11 +91,20 @@ impl Default for RiskThresholds {
 pub struct PortfolioRisk {
     pub portfolio_id: String,
 
+    /// Total portfolio market value
+    pub total_value: f64,
+
     /// Weighted average volatility across positions
     pub portfolio_volatility: f64,
 
+    /// Maximum drawdown across portfolio
+    pub portfolio_max_drawdown: f64,
+
     /// Portfolio beta (weighted average)
     pub portfolio_beta: Option<f64>,
+
+    /// Portfolio Sharpe ratio (weighted average)
+    pub portfolio_sharpe: Option<f64>,
 
     /// Overall portfolio risk score
     pub portfolio_risk_score: f64,
@@ -103,12 +112,43 @@ pub struct PortfolioRisk {
     /// Risk level classification
     pub risk_level: RiskLevel,
 
-    /// Individual position risk assessments
-    pub position_risks: Vec<PositionRisk>,
+    /// Individual position risk contributions
+    pub position_risks: Vec<PositionRiskContribution>,
+}
+
+/// Individual position's contribution to portfolio risk.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PositionRiskContribution {
+    pub ticker: String,
+    pub market_value: f64,
+    pub weight: f64, // Position weight in portfolio (0-1)
+    pub risk_assessment: RiskAssessment,
 }
 
 /// Request body for setting custom risk thresholds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetThresholdsRequest {
     pub thresholds: RiskThresholds,
+}
+
+/// Correlation pair between two tickers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrelationPair {
+    pub ticker1: String,
+    pub ticker2: String,
+    /// Correlation coefficient (-1.0 to 1.0)
+    /// +1.0 = perfect positive correlation
+    ///  0.0 = no correlation
+    /// -1.0 = perfect negative correlation
+    pub correlation: f64,
+}
+
+/// Complete correlation matrix for a portfolio.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrelationMatrix {
+    pub portfolio_id: String,
+    /// List of all tickers in the portfolio
+    pub tickers: Vec<String>,
+    /// Correlation pairs (only upper triangle, excluding diagonal)
+    pub correlations: Vec<CorrelationPair>,
 }

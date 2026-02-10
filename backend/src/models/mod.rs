@@ -19,4 +19,4 @@ pub use account::{Account, CreateAccount};
 pub use holding_snapshot::{HoldingSnapshot, CreateHoldingSnapshot, LatestAccountHolding, AccountValueHistory};
 pub use cash_flow::{CashFlow, CreateCashFlow, FlowType};
 pub use detected_transaction::{DetectedTransaction, CreateDetectedTransaction, TransactionType, AccountActivity, AccountTruePerformance};
-pub use risk::{PositionRisk, RiskAssessment, RiskLevel, RiskThresholds, PortfolioRisk, SetThresholdsRequest};
+pub use risk::{PositionRisk, RiskAssessment, RiskLevel, RiskThresholds, PortfolioRisk, PositionRiskContribution, SetThresholdsRequest, CorrelationPair, CorrelationMatrix};

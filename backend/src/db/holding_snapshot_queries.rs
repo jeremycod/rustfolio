@@ -143,6 +143,22 @@ pub async fn fetch_latest_holdings(
     .await
 }
 
+pub async fn fetch_portfolio_latest_holdings(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+) -> Result<Vec<LatestAccountHolding>, sqlx::Error> {
+    sqlx::query_as::<_, LatestAccountHolding>(
+        "SELECT lah.*
+         FROM latest_account_holdings lah
+         JOIN accounts a ON lah.account_id = a.id
+         WHERE a.portfolio_id = $1
+         ORDER BY lah.ticker"
+    )
+    .bind(portfolio_id)
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn fetch_account_value_history(
     pool: &PgPool,
     account_id: Uuid,

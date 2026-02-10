@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{db, services};
 
 use crate::errors::AppError;
-use crate::models::{CreatePortfolio, Portfolio, UpdatePortfolio};
+use crate::models::{CreatePortfolio, Portfolio, UpdatePortfolio, LatestAccountHolding};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -18,6 +18,7 @@ pub fn router() -> Router<AppState> {
         .route("/:id", get(get_portfolio))
         .route("/:id", put(update_portfolio))
         .route("/:id", delete(delete_portfolio))
+        .route("/:id/latest-holdings", get(get_portfolio_latest_holdings))
 }
 
 #[axum::debug_handler]
@@ -91,5 +92,21 @@ pub async fn delete_portfolio(
             Err(e)
         }
     }
+}
+
+pub async fn get_portfolio_latest_holdings(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>
+) -> Result<Json<Vec<LatestAccountHolding>>, AppError> {
+    use crate::db::holding_snapshot_queries;
+
+    info!("GET /portfolios/{}/latest-holdings - Fetching latest holdings", id);
+    let holdings = holding_snapshot_queries::fetch_portfolio_latest_holdings(&state.pool, id)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch holdings for portfolio {}: {}", id, e);
+            AppError::Db(e)
+        })?;
+    Ok(Json(holdings))
 }
 

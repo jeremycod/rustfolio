@@ -33,6 +33,9 @@ pub enum PriceProviderError {
 
     #[error("rate limited")]
     RateLimited,
+
+    #[error("ticker not found")]
+    NotFound,
 }
 
 #[async_trait]

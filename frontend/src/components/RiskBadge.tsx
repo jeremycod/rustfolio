@@ -9,9 +9,12 @@ interface RiskBadgeProps {
   days?: number;
   benchmark?: string;
   assetCategory?: string | null;
+  industry?: string | null;
+  showLabel?: boolean;
+  onNavigate?: (ticker: string) => void;
 }
 
-export function RiskBadge({ ticker, days = 90, benchmark = 'SPY', assetCategory }: RiskBadgeProps) {
+export function RiskBadge({ ticker, days = 90, benchmark = 'SPY', assetCategory, industry, showLabel = true, onNavigate }: RiskBadgeProps) {
   const { data: risk, isLoading, error } = useQuery({
     queryKey: ['risk', ticker, days, benchmark],
     queryFn: () => getPositionRisk(ticker, days, benchmark),
@@ -34,6 +37,21 @@ export function RiskBadge({ ticker, days = 90, benchmark = 'SPY', assetCategory 
     // For mutual funds, bonds, and other securities without stock data,
     // we silently show N/A instead of cluttering the UI with errors
     const getTooltipMessage = () => {
+      // Prioritize industry field for better categorization
+      if (industry) {
+        const industryLower = industry.toLowerCase();
+        if (industryLower.includes('mutual fund')) {
+          return 'Risk metrics not available for mutual funds';
+        }
+        if (industryLower.includes('bond')) {
+          return 'Risk metrics not available for bonds';
+        }
+        if (industryLower.includes('money market')) {
+          return 'Risk metrics not available for money market funds';
+        }
+      }
+
+      // Fall back to asset_category
       if (assetCategory) {
         const category = assetCategory.toLowerCase();
         if (category.includes('mutual fund') || category.includes('fund')) {
@@ -44,6 +62,7 @@ export function RiskBadge({ ticker, days = 90, benchmark = 'SPY', assetCategory 
         }
         return `Risk metrics not available for ${assetCategory}`;
       }
+
       return 'Risk metrics not available for this security type';
     };
 
@@ -51,10 +70,14 @@ export function RiskBadge({ ticker, days = 90, benchmark = 'SPY', assetCategory 
       <Tooltip title={getTooltipMessage()}>
         <Chip
           size="small"
-          label="N/A"
+          label={showLabel ? "N/A" : ""}
           color="default"
           variant="outlined"
-          sx={{ opacity: 0.6 }}
+          sx={{
+            opacity: 0.6,
+            cursor: onNavigate ? 'pointer' : 'default',
+          }}
+          onClick={onNavigate ? () => onNavigate(ticker) : undefined}
         />
       </Tooltip>
     );
@@ -93,10 +116,15 @@ export function RiskBadge({ ticker, days = 90, benchmark = 'SPY', assetCategory 
     <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tooltipContent}</span>}>
       <Chip
         size="small"
-        label={risk.risk_level.toUpperCase()}
+        label={showLabel ? risk.risk_level.toUpperCase() : ''}
         color={getRiskColor(risk.risk_level)}
         icon={getRiskIcon(risk.risk_level)}
-        sx={{ minWidth: 85, fontWeight: 'bold' }}
+        sx={{
+          minWidth: showLabel ? 85 : 'auto',
+          fontWeight: 'bold',
+          cursor: onNavigate ? 'pointer' : 'default',
+        }}
+        onClick={onNavigate ? () => onNavigate(ticker) : undefined}
       />
     </Tooltip>
   );

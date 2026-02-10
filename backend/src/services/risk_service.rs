@@ -4,6 +4,7 @@ use crate::external::price_provider::PriceProvider;
 use crate::models::risk::{PositionRisk, RiskAssessment, RiskLevel};
 use crate::models::PricePoint;
 use crate::services::price_service;
+use crate::services::failure_cache::FailureCache;
 use bigdecimal::ToPrimitive;
 use sqlx::PgPool;
 use tracing::{info, warn};
@@ -19,6 +20,7 @@ use tracing::{info, warn};
 /// * `days` – number of trading days in the window (e.g., 90)
 /// * `benchmark` – symbol of the benchmark index for beta calculation (e.g., "SPY")
 /// * `price_provider` – external price data provider for fetching fresh data
+/// * `failure_cache` – cache to avoid retrying known-bad tickers
 ///
 /// # Returns
 /// A `RiskAssessment` containing all risk metrics and an overall risk score.
@@ -28,13 +30,14 @@ pub async fn compute_risk_metrics(
     days: i64,
     benchmark: &str,
     price_provider: &dyn PriceProvider,
+    failure_cache: &FailureCache,
 ) -> Result<RiskAssessment, AppError> {
     // Ensure we have recent price data for both ticker and benchmark
     info!("Ensuring fresh price data for ticker: {}", ticker);
-    let ticker_fetch_failed = price_service::refresh_from_api(pool, price_provider, ticker).await.is_err();
+    let ticker_fetch_failed = price_service::refresh_from_api(pool, price_provider, ticker, failure_cache).await.is_err();
 
     info!("Ensuring fresh price data for benchmark: {}", benchmark);
-    let benchmark_fetch_failed = price_service::refresh_from_api(pool, price_provider, benchmark).await.is_err();
+    let benchmark_fetch_failed = price_service::refresh_from_api(pool, price_provider, benchmark, failure_cache).await.is_err();
 
     // Fetch price history for the ticker and benchmark
     let series = price_queries::fetch_window(pool, ticker, days).await?;
@@ -333,6 +336,73 @@ pub fn score_risk(risk: &PositionRisk) -> f64 {
         .unwrap_or(0.0);
 
     (vol_score + dd_score + beta_score + var_score).min(100.0)
+}
+
+/// Calculate the correlation coefficient between two price series.
+///
+/// Correlation measures how two securities move together:
+/// - +1.0: Perfect positive correlation (move together)
+/// -  0.0: No correlation (independent movement)
+/// - -1.0: Perfect negative correlation (move opposite)
+pub fn compute_correlation(series1: &[PricePoint], series2: &[PricePoint]) -> Option<f64> {
+    if series1.len() != series2.len() || series1.len() < 2 {
+        return None;
+    }
+
+    // Convert to f64 prices
+    let prices1: Vec<f64> = series1
+        .iter()
+        .filter_map(|p| p.close_price.to_f64())
+        .collect();
+    let prices2: Vec<f64> = series2
+        .iter()
+        .filter_map(|p| p.close_price.to_f64())
+        .collect();
+
+    if prices1.len() != prices2.len() || prices1.len() < 2 {
+        return None;
+    }
+
+    // Calculate daily returns
+    let returns1: Vec<f64> = prices1
+        .windows(2)
+        .map(|w| (w[1] - w[0]) / w[0])
+        .collect();
+    let returns2: Vec<f64> = prices2
+        .windows(2)
+        .map(|w| (w[1] - w[0]) / w[0])
+        .collect();
+
+    if returns1.is_empty() {
+        return None;
+    }
+
+    // Calculate means
+    let mean1 = returns1.iter().sum::<f64>() / returns1.len() as f64;
+    let mean2 = returns2.iter().sum::<f64>() / returns2.len() as f64;
+
+    // Calculate covariance and standard deviations
+    let mut cov = 0.0;
+    let mut var1 = 0.0;
+    let mut var2 = 0.0;
+
+    for (r1, r2) in returns1.iter().zip(returns2.iter()) {
+        let diff1 = r1 - mean1;
+        let diff2 = r2 - mean2;
+        cov += diff1 * diff2;
+        var1 += diff1 * diff1;
+        var2 += diff2 * diff2;
+    }
+
+    let std1 = var1.sqrt();
+    let std2 = var2.sqrt();
+
+    if std1 < f64::EPSILON || std2 < f64::EPSILON {
+        return None;
+    }
+
+    // Pearson correlation coefficient
+    Some(cov / (std1 * std2))
 }
 
 #[cfg(test)]

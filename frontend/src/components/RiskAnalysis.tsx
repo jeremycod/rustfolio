@@ -11,9 +11,15 @@ import {
   MenuItem,
   Grid,
   Alert,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { Assessment, Search } from '@mui/icons-material';
+import { useQuery } from '@tanstack/react-query';
+import { searchTickers } from '../lib/endpoints';
 import { RiskMetricsPanel } from './RiskMetricsPanel';
+import { PriceHistoryChart } from './PriceHistoryChart';
+import { RiskChart } from './RiskChart';
 
 interface RiskAnalysisProps {
   selectedTicker?: string | null;
@@ -24,18 +30,31 @@ export function RiskAnalysis({ selectedTicker }: RiskAnalysisProps) {
   const [searchTicker, setSearchTicker] = useState('');
   const [days, setDays] = useState(90);
   const [benchmark, setBenchmark] = useState('SPY');
+  const [activeTab, setActiveTab] = useState(0);
+
+  // Fetch company name when ticker is searched
+  const companyInfoQ = useQuery({
+    queryKey: ['companyInfo', searchTicker],
+    queryFn: () => searchTickers(searchTicker),
+    enabled: !!searchTicker,
+    staleTime: 1000 * 60 * 60, // 1 hour
+  });
+
+  const companyName = companyInfoQ.data?.[0]?.name || null;
 
   // Auto-populate and search when selectedTicker changes
   useEffect(() => {
     if (selectedTicker) {
       setTicker(selectedTicker);
       setSearchTicker(selectedTicker);
+      setActiveTab(0); // Reset to Risk Metrics tab
     }
   }, [selectedTicker]);
 
   const handleSearch = () => {
     if (ticker.trim()) {
       setSearchTicker(ticker.trim().toUpperCase());
+      setActiveTab(0); // Reset to Risk Metrics tab
     }
   };
 
@@ -138,10 +157,40 @@ export function RiskAnalysis({ selectedTicker }: RiskAnalysisProps) {
 
       {searchTicker && (
         <Box>
-          <Typography variant="h5" gutterBottom>
-            {searchTicker} Risk Analysis
-          </Typography>
-          <RiskMetricsPanel ticker={searchTicker} days={days} benchmark={benchmark} />
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h5" fontWeight="bold">
+              {searchTicker} Risk Analysis
+            </Typography>
+            {companyName && (
+              <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
+                {companyName}
+              </Typography>
+            )}
+          </Box>
+
+          {/* Tabs */}
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs value={activeTab} onChange={(_, val) => setActiveTab(val)}>
+              <Tab label="Risk Metrics" />
+              <Tab label="Price History" />
+              <Tab label="Risk Trends" />
+            </Tabs>
+          </Box>
+
+          {/* Risk Metrics Tab */}
+          {activeTab === 0 && (
+            <RiskMetricsPanel ticker={searchTicker} days={days} benchmark={benchmark} />
+          )}
+
+          {/* Price History Tab */}
+          {activeTab === 1 && (
+            <PriceHistoryChart ticker={searchTicker} days={days} companyName={companyName} />
+          )}
+
+          {/* Risk Trends Tab */}
+          {activeTab === 2 && (
+            <RiskChart ticker={searchTicker} days={days} />
+          )}
         </Box>
       )}
     </Box>

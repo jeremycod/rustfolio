@@ -14,7 +14,9 @@ import type {
     AccountActivity,
     AccountTruePerformance,
     RiskAssessment,
-    RiskThresholds
+    RiskThresholds,
+    PortfolioRisk,
+    CorrelationMatrix
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -38,6 +40,11 @@ export async function updatePrices(ticker: string): Promise<void> {
 
 export async function getLatestPrice(ticker: string): Promise<PricePoint> {
     const res = await api.get(`/api/prices/${ticker}/latest`);
+    return res.data;
+}
+
+export async function getPriceHistory(ticker: string): Promise<PricePoint[]> {
+    const res = await api.get(`/api/prices/${ticker}`);
     return res.data;
 }
 
@@ -143,6 +150,22 @@ export async function getPositionRisk(
     return res.data;
 }
 
+export async function getPortfolioRisk(
+    portfolioId: string,
+    days?: number,
+    benchmark?: string
+): Promise<PortfolioRisk> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+    if (benchmark) params.append('benchmark', benchmark);
+
+    const queryString = params.toString();
+    const url = `/api/risk/portfolios/${portfolioId}${queryString ? `?${queryString}` : ''}`;
+
+    const res = await api.get(url);
+    return res.data;
+}
+
 export async function getRiskThresholds(): Promise<RiskThresholds> {
     const res = await api.get('/api/risk/thresholds');
     return res.data;
@@ -150,4 +173,19 @@ export async function getRiskThresholds(): Promise<RiskThresholds> {
 
 export async function setRiskThresholds(thresholds: RiskThresholds): Promise<void> {
     await api.post('/api/risk/thresholds', { thresholds });
+}
+
+export async function getPortfolioCorrelations(
+    portfolioId: string,
+    days?: number
+): Promise<CorrelationMatrix> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+
+    const queryString = params.toString();
+    const url = `/api/risk/portfolios/${portfolioId}/correlations${queryString ? `?${queryString}` : ''}`;
+
+    // Use longer timeout for correlation calculation (2 minutes)
+    const res = await api.get(url, { timeout: 120000 });
+    return res.data;
 }

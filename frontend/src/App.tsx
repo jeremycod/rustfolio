@@ -9,6 +9,9 @@ import { Settings } from "./components/Settings";
 import { Accounts } from "./components/Accounts";
 import { AccountDetail } from "./components/AccountDetail";
 import { RiskAnalysis } from "./components/RiskAnalysis";
+import { PortfolioRiskOverview } from "./components/PortfolioRiskOverview";
+import { RiskComparison } from "./components/RiskComparison";
+import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 
 export default function App() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
@@ -72,6 +75,20 @@ export default function App() {
                 );
             case 'risk':
                 return <RiskAnalysis selectedTicker={selectedTicker} />;
+            case 'portfolio-risk':
+                return (
+                    <PortfolioRiskOverview
+                        selectedPortfolioId={selectedPortfolioId}
+                        onPortfolioChange={setSelectedPortfolioId}
+                        onTickerNavigate={handleTickerNavigate}
+                    />
+                );
+            case 'risk-comparison':
+                return <RiskComparison />;
+            case 'correlations':
+                return selectedPortfolioId ? (
+                    <CorrelationHeatmap portfolioId={selectedPortfolioId} />
+                ) : null;
             case 'settings':
                 return <Settings />;
             default:

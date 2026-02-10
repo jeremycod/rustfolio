@@ -15,6 +15,7 @@ import {
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { resetAllData } from '../lib/endpoints';
+import { RiskThresholdSettings } from './RiskThresholdSettings';
 
 export function Settings() {
   const [darkMode, setDarkMode] = useState(false);
@@ -41,6 +42,11 @@ export function Settings() {
       <Typography variant="h4" gutterBottom>
         Settings
       </Typography>
+
+      {/* Risk Thresholds Section */}
+      <Box sx={{ mb: 4 }}>
+        <RiskThresholdSettings />
+      </Box>
 
       <Paper sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>

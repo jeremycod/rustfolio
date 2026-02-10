@@ -53,6 +53,7 @@ pub struct LatestAccountHolding {
     pub ticker: String,
     pub holding_name: Option<String>,
     pub asset_category: Option<String>,
+    pub industry: Option<String>,
     pub quantity: BigDecimal,
     pub price: BigDecimal,
     pub market_value: BigDecimal,

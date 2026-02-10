@@ -39,6 +39,7 @@ import {
 } from '../lib/endpoints';
 import { formatCurrency, formatNumber, formatPercentage } from '../lib/formatters';
 import { TickerChip } from './TickerChip';
+import { RiskMetricsPanel } from './RiskMetricsPanel';
 
 interface AccountDetailProps {
   accountId: string;
@@ -204,6 +205,7 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
           <Tab label="Holdings" />
           <Tab label="History" />
           <Tab label="Transactions" />
+          <Tab label="Risk Analysis" />
         </Tabs>
       </Box>
 
@@ -450,6 +452,40 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Risk Analysis Tab */}
+      {activeTab === 3 && (
+        <Box>
+          <Typography variant="h6" gutterBottom>
+            Risk Analysis by Position
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+            View risk metrics for each holding in this account. Click on a ticker to see detailed risk analysis.
+          </Typography>
+          {holdingsQ.data && holdingsQ.data.length > 0 ? (
+            <Grid container spacing={3}>
+              {holdingsQ.data.map((holding) => (
+                <Grid item xs={12} md={6} key={holding.id}>
+                  <RiskMetricsPanel
+                    ticker={holding.ticker}
+                    days={90}
+                    benchmark="SPY"
+                    onTickerClick={onTickerNavigate}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" sx={{ textAlign: 'center', py: 4 }}>
+                  No holdings available for risk analysis.
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
+        </Box>
       )}
     </Box>
   );

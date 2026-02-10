@@ -19,17 +19,21 @@ import {
   Card,
   CardContent,
   Chip,
+  Badge,
 } from '@mui/material';
-import { TrendingUp, TrendingDown } from '@mui/icons-material';
+import { TrendingUp, TrendingDown, Warning } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import {
   listPortfolios,
   listAccounts,
   getPortfolioTruePerformance,
   getLatestHoldings,
+  getRiskThresholds,
+  getPositionRisk,
 } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
 import { TickerChip } from './TickerChip';
+import { RiskBadge } from './RiskBadge';
 
 interface PortfolioOverviewProps {
   selectedPortfolioId: string | null;
@@ -53,6 +57,13 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
     queryKey: ['portfolioPerformance', selectedPortfolioId],
     queryFn: () => getPortfolioTruePerformance(selectedPortfolioId!),
     enabled: !!selectedPortfolioId,
+  });
+
+  // Fetch risk thresholds
+  const thresholdsQ = useQuery({
+    queryKey: ['riskThresholds'],
+    queryFn: getRiskThresholds,
+    staleTime: 1000 * 60 * 60, // 1 hour
   });
 
   // Fetch holdings for all accounts
@@ -85,6 +96,7 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
       ticker: string;
       holding_name: string | null;
       asset_category: string | null;
+      industry: string | null;
       total_quantity: number;
       total_market_value: number;
       total_gain_loss: number;
@@ -108,6 +120,7 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
           ticker: holding.ticker,
           holding_name: holding.holding_name,
           asset_category: holding.asset_category,
+          industry: holding.industry,
           total_quantity: quantity,
           total_market_value: marketValue,
           total_gain_loss: gainLoss,
@@ -141,6 +154,11 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
     });
   }, [performanceQ.data]);
 
+  // Get unique tickers for risk analysis
+  const tickers = useMemo(() => {
+    return aggregatedHoldings.map(h => h.ticker);
+  }, [aggregatedHoldings]);
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
@@ -164,6 +182,23 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
           </Select>
         </FormControl>
       </Box>
+
+      {/* Risk Warning Banner - Shown only if there are high-risk positions */}
+      {thresholdsQ.data && aggregatedHoldings.length > 0 && (
+        <Alert
+          severity="warning"
+          icon={<Warning />}
+          sx={{
+            mb: 3,
+            display: 'none', // Will be shown by RiskBadge logic
+          }}
+          id="risk-warning-banner"
+        >
+          <Typography variant="body2">
+            Some positions exceed your risk thresholds. Review the Risk column below for details.
+          </Typography>
+        </Alert>
+      )}
 
       {/* Summary Cards */}
       {selectedPortfolioId && performanceQ.data && (
@@ -258,6 +293,7 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
                   <TableCell align="right">Market Value</TableCell>
                   <TableCell align="right">Gain/Loss</TableCell>
                   <TableCell align="right">G/L %</TableCell>
+                  <TableCell align="center">Risk</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -317,6 +353,16 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
                         sx={{ color: gainLossPct >= 0 ? 'success.main' : 'error.main' }}
                       >
                         {formatPercentage(gainLossPct)}
+                      </TableCell>
+                      <TableCell align="center">
+                        <RiskBadge
+                          ticker={holding.ticker}
+                          days={90}
+                          showLabel={false}
+                          onNavigate={onTickerNavigate}
+                          assetCategory={holding.asset_category}
+                          industry={holding.industry}
+                        />
                       </TableCell>
                     </TableRow>
                   );

@@ -18,6 +18,9 @@ import {
   Settings,
   AccountBalanceWallet,
   Assessment,
+  Security,
+  Compare,
+  GridOn,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -27,7 +30,10 @@ const menuItems = [
   { text: 'Accounts', icon: <AccountBalanceWallet />, path: 'accounts' },
   { text: 'Portfolio', icon: <AccountBalance />, path: 'holdings' },
   { text: 'Analytics', icon: <Analytics />, path: 'analytics' },
+  { text: 'Portfolio Risk', icon: <Security />, path: 'portfolio-risk' },
   { text: 'Risk Analysis', icon: <Assessment />, path: 'risk' },
+  { text: 'Risk Comparison', icon: <Compare />, path: 'risk-comparison' },
+  { text: 'Correlations', icon: <GridOn />, path: 'correlations' },
   { text: 'Settings', icon: <Settings />, path: 'settings' },
 ];
 

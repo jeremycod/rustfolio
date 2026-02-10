@@ -1,4 +1,4 @@
-# Price Provider Configuration
+1# Price Provider Configuration
 
 This application supports multiple price data providers for fetching stock market data.
 
