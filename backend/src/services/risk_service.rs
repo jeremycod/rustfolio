@@ -43,7 +43,7 @@ pub async fn compute_risk_metrics(
     if series.is_empty() {
         let error_msg = if ticker_fetch_failed {
             format!(
-                "No price data found for ticker {}. Failed to fetch from external API. Check Alpha Vantage API key and rate limits.",
+                "No price data found for ticker {}. Failed to fetch from external API. The ticker may not be available in your price provider's free tier, may not exist, or you may have hit rate limits.",
                 ticker
             )
         } else {
