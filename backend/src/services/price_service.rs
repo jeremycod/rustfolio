@@ -81,27 +81,34 @@ pub async fn refresh_from_api(
     ticker: &str,
     failure_cache: &FailureCache,
 ) -> Result<(), AppError> {
-    // Check failure cache first - avoid repeated calls for known-bad tickers
-    if let Some(failure_info) = failure_cache.is_failed(ticker) {
-        info!("⚠️ Skipping API call for {} - ticker is in failure cache ({}). Cached until {:?}",
-              ticker,
-              match failure_info.error_type {
-                  FailureType::NotFound => "not found",
-                  FailureType::RateLimited => "rate limited",
-                  FailureType::ApiError => "API error",
-              },
-              failure_info.failed_at + chrono::Duration::hours(failure_info.ttl_hours));
-        return Err(AppError::External(
-            format!("Ticker {} is in failure cache. Will retry after cache expiry.", ticker)
-        ));
+    // Check database failure cache first - avoid repeated calls for known-bad tickers
+    let should_retry = db::ticker_fetch_failure_queries::should_retry_ticker(pool, ticker)
+        .await
+        .map_err(|e| {
+            error!("Failed to check failure cache for ticker {}: {}", ticker, e);
+            AppError::Db(e)
+        })?;
+
+    if !should_retry {
+        if let Ok(Some(failure)) = db::ticker_fetch_failure_queries::get_active_failure(pool, ticker).await {
+            info!("⚠️ Skipping API call for {} - ticker is in failure cache ({}). Will retry after {}",
+                  ticker,
+                  failure.failure_type,
+                  failure.retry_after);
+            return Err(AppError::External(
+                format!("Ticker {} is in failure cache ({}). Will retry after {}",
+                    ticker, failure.failure_type, failure.retry_after)
+            ));
+        }
     }
 
+    // Check if we already have recent data in database
     if let Some(latest) = db::price_queries::fetch_latest(pool, ticker).await? {
         let today = Utc::now().date_naive();
 
         // If we already have recent data, skip fetching to avoid rate limits
         if latest.date >= today - ChronoDuration::hours(6) {
-            warn!("Skipping API call for {} - data is recent ({})", ticker, latest.date);
+            info!("✓ Skipping API call for {} - data is recent ({})", ticker, latest.date);
             return Ok(());
         }
     }
@@ -121,6 +128,11 @@ pub async fn refresh_from_api(
 
                 // Clear from failure cache on success
                 failure_cache.clear(ticker);
+                if let Err(e) = db::ticker_fetch_failure_queries::clear_fetch_failure(pool, ticker).await {
+                    warn!("Failed to clear failure cache for ticker {}: {}", ticker, e);
+                }
+
+                info!("✓ Successfully fetched price data for {}", ticker);
                 return Ok(());
             },
             Err(PriceProviderError::RateLimited) if retry_count < max_retries => {
@@ -131,14 +143,31 @@ pub async fn refresh_from_api(
                 async_sleep(delay).await;
             },
             Err(e) => {
-                // Record failure in cache to avoid retrying
-                let failure_type = match &e {
+                // Record failure in both memory and database cache to avoid retrying
+                let failure_type_str = match &e {
+                    PriceProviderError::RateLimited => "rate_limited",
+                    PriceProviderError::NotFound => "not_found",
+                    _ => "api_error",
+                };
+
+                let failure_type_mem = match &e {
                     PriceProviderError::RateLimited => FailureType::RateLimited,
                     PriceProviderError::NotFound => FailureType::NotFound,
                     _ => FailureType::ApiError,
                 };
-                failure_cache.record_failure(ticker, failure_type);
 
+                failure_cache.record_failure(ticker, failure_type_mem);
+
+                if let Err(db_err) = db::ticker_fetch_failure_queries::record_fetch_failure(
+                    pool,
+                    ticker,
+                    failure_type_str,
+                    Some(&e.to_string())
+                ).await {
+                    error!("Failed to record failure in database for ticker {}: {}", ticker, db_err);
+                }
+
+                error!("✗ Failed to fetch price data for {}: {}", ticker, e);
                 return Err(match e {
                     PriceProviderError::RateLimited => AppError::RateLimited,
                     _ => AppError::External(e.to_string()),

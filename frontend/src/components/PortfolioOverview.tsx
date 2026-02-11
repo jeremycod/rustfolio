@@ -39,6 +39,7 @@ import { TickerChip } from './TickerChip';
 import { RiskBadge } from './RiskBadge';
 import { AssetTypeChip } from './AssetTypeChip';
 import { AssetTypeLegend } from './AssetTypeLegend';
+import { OptimizationRecommendations } from './OptimizationRecommendations';
 
 interface PortfolioOverviewProps {
   selectedPortfolioId: string | null;
@@ -438,6 +439,13 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
             </Card>
           </Grid>
         </Grid>
+      )}
+
+      {/* Optimization Recommendations */}
+      {selectedPortfolioId && (
+        <Box sx={{ mb: 3 }}>
+          <OptimizationRecommendations portfolioId={selectedPortfolioId} />
+        </Box>
       )}
 
       {/* Asset Type Legend */}

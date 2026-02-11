@@ -73,14 +73,22 @@ pub async fn get_position_risk(
     )
     .await
     .map_err(|e| {
-        // Use warn instead of error for missing data - this is expected for
-        // mutual funds, bonds, and other non-stock securities
+        // Log with detailed context for debugging
         match &e {
+            AppError::External(msg) if msg.contains("failure cache") => {
+                info!("⚠️  Ticker {} in failure cache, skipping API call: {}", ticker, msg);
+            }
             AppError::External(msg) if msg.contains("No price data") => {
-                warn!("No price data available for {}: {}", ticker, msg);
+                warn!("📊 No price data available for {}: {}", ticker, msg);
+            }
+            AppError::NotFound => {
+                warn!("🔍 Ticker {} not found in database or API", ticker);
+            }
+            AppError::RateLimited => {
+                warn!("⏳ Rate limited when fetching {}", ticker);
             }
             _ => {
-                error!("Failed to compute risk metrics for {}: {}", ticker, e);
+                error!("❌ Failed to compute risk metrics for {}: {:?}", ticker, e);
             }
         }
         e

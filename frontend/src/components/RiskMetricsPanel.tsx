@@ -113,9 +113,50 @@ export function RiskMetricsPanel({ ticker, days = 90, benchmark = 'SPY' }: RiskM
   }
 
   if (error) {
+    // Parse error message to provide better feedback
+    const errorMsg = error instanceof Error ? error.message : String(error);
+
+    // Log error details for debugging
+    console.error(`[RiskMetricsPanel] Failed to load risk data for ${ticker}:`, {
+      error: errorMsg,
+      ticker,
+      days,
+      benchmark,
+    });
+
+    let severity: 'error' | 'warning' | 'info' = 'error';
+    let message = `Failed to load risk metrics for ${ticker}`;
+    let details = '';
+
+    if (errorMsg.includes('failure cache') || errorMsg.includes('not_found')) {
+      severity = 'info';
+      message = `${ticker} is not available for risk analysis`;
+      details = 'This security may be a mutual fund, bond, or other instrument without publicly available price data.';
+    } else if (errorMsg.includes('rate limit')) {
+      severity = 'warning';
+      message = `Rate limit reached for ${ticker}`;
+      details = 'Too many API requests. Risk data will be available after cooldown period.';
+    } else if (errorMsg.includes('Grow plan') || errorMsg.includes('upgrade')) {
+      severity = 'info';
+      message = `${ticker} requires paid API tier`;
+      details = 'Canadian securities require a paid subscription to the price data provider.';
+    } else if (errorMsg.includes('symbol') && errorMsg.includes('invalid')) {
+      severity = 'info';
+      message = `${ticker} is not a publicly traded security`;
+      details = 'This appears to be a mutual fund or proprietary security code.';
+    } else {
+      // Generic error - include ticker and actual error message
+      details = `The ticker may not have sufficient price history, or the data provider is unavailable. Error: ${errorMsg}`;
+    }
+
     return (
-      <Alert severity="error">
-        Failed to load risk metrics. The ticker may not have sufficient price history.
+      <Alert severity={severity}>
+        <strong>{message}</strong>
+        {details && (
+          <Typography variant="body2" sx={{ mt: 0.5 }}>
+            {details}
+          </Typography>
+        )}
       </Alert>
     );
   }

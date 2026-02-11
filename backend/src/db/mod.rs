@@ -7,3 +7,4 @@ pub mod holding_snapshot_queries;
 pub mod cash_flow_queries;
 pub mod detected_transaction_queries;
 pub mod risk_snapshot_queries;
+pub mod ticker_fetch_failure_queries;

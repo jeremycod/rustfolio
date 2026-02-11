@@ -18,7 +18,8 @@ import type {
     PortfolioRisk,
     CorrelationMatrix,
     RiskSnapshot,
-    RiskAlert
+    RiskAlert,
+    OptimizationAnalysis
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -233,5 +234,13 @@ export async function getRiskAlerts(
     const url = `/api/risk/portfolios/${portfolioId}/alerts${queryString ? `?${queryString}` : ''}`;
 
     const res = await api.get(url);
+    return res.data;
+}
+
+// Portfolio optimization endpoints
+export async function getPortfolioOptimization(
+    portfolioId: string
+): Promise<OptimizationAnalysis> {
+    const res = await api.get(`/api/optimization/portfolios/${portfolioId}`);
     return res.data;
 }

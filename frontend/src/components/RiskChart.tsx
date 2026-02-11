@@ -45,15 +45,27 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
 
   // Calculate rolling metrics
   const rollingMetrics = useMemo(() => {
-    if (!priceHistoryQ.data || priceHistoryQ.data.length < 30) return null;
+    if (!priceHistoryQ.data || priceHistoryQ.data.length < 30) {
+      console.log(`[RiskChart] Insufficient data for ${ticker}: ${priceHistoryQ.data?.length || 0} days (need 30)`);
+      return null;
+    }
 
     const prices = priceHistoryQ.data
       .slice(-days)
-      .map((p) => ({
-        date: p.date,
-        close: parseFloat(p.close),
-      }))
+      .map((p) => {
+        const closePrice = parseFloat(p.close_price);
+        if (isNaN(closePrice)) {
+          console.error(`[RiskChart] Invalid price for ${ticker} on ${p.date}:`, p.close_price);
+        }
+        return {
+          date: p.date,
+          close: closePrice,
+        };
+      })
+      .filter((p) => !isNaN(p.close)) // Filter out any invalid prices
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    console.log(`[RiskChart] Calculating rolling metrics for ${ticker} with ${prices.length} valid price points`);
 
     const rollingWindow = 30; // 30-day rolling window
     const metrics: RollingMetric[] = [];
@@ -99,10 +111,18 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
 
   // Calculate statistics
   const stats = useMemo(() => {
-    if (!rollingMetrics) return null;
+    if (!rollingMetrics || rollingMetrics.length === 0) {
+      console.warn(`[RiskChart] No rolling metrics available for ${ticker}`);
+      return null;
+    }
 
-    const volatilities = rollingMetrics.map((m) => m.volatility);
-    const drawdowns = rollingMetrics.map((m) => m.drawdown);
+    const volatilities = rollingMetrics.map((m) => m.volatility).filter((v) => !isNaN(v));
+    const drawdowns = rollingMetrics.map((m) => m.drawdown).filter((d) => !isNaN(d));
+
+    if (volatilities.length === 0 || drawdowns.length === 0) {
+      console.error(`[RiskChart] All calculated metrics are NaN for ${ticker}`);
+      return null;
+    }
 
     return {
       avgVolatility: (volatilities.reduce((a, b) => a + b, 0) / volatilities.length).toFixed(2),
@@ -112,7 +132,7 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
       currentVolatility: volatilities[volatilities.length - 1].toFixed(2),
       currentDrawdown: drawdowns[drawdowns.length - 1].toFixed(2),
     };
-  }, [rollingMetrics]);
+  }, [rollingMetrics, ticker]);
 
   if (priceHistoryQ.isLoading) {
     return (

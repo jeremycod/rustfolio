@@ -68,13 +68,14 @@ export function RiskHistoryChart({ portfolioId, ticker }: RiskHistoryChartProps)
   };
 
   // Transform data for recharts
+  // Note: Backend returns BigDecimal as strings, so we need to parse them
   const chartData = historyQuery.data?.map((snapshot: RiskSnapshot) => ({
     date: snapshot.snapshot_date,
-    risk_score: snapshot.risk_score,
-    volatility: snapshot.volatility,
-    max_drawdown: Math.abs(snapshot.max_drawdown), // Show as positive for readability
-    sharpe: snapshot.sharpe || 0,
-    beta: snapshot.beta || 0,
+    risk_score: typeof snapshot.risk_score === 'string' ? parseFloat(snapshot.risk_score) : snapshot.risk_score,
+    volatility: typeof snapshot.volatility === 'string' ? parseFloat(snapshot.volatility) : snapshot.volatility,
+    max_drawdown: Math.abs(typeof snapshot.max_drawdown === 'string' ? parseFloat(snapshot.max_drawdown) : snapshot.max_drawdown),
+    sharpe: snapshot.sharpe ? (typeof snapshot.sharpe === 'string' ? parseFloat(snapshot.sharpe) : snapshot.sharpe) : 0,
+    beta: snapshot.beta ? (typeof snapshot.beta === 'string' ? parseFloat(snapshot.beta) : snapshot.beta) : 0,
     risk_level: snapshot.risk_level,
   })) || [];
 
@@ -171,7 +172,9 @@ export function RiskHistoryChart({ portfolioId, ticker }: RiskHistoryChartProps)
                   size="small"
                 />
                 <Typography variant="body2" color="text.secondary">
-                  Score: {latestSnapshot.risk_score.toFixed(1)}
+                  Score: {(typeof latestSnapshot.risk_score === 'string'
+                    ? parseFloat(latestSnapshot.risk_score)
+                    : latestSnapshot.risk_score).toFixed(1)}
                 </Typography>
               </Box>
             )}

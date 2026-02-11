@@ -6,5 +6,6 @@ pub mod csv_import_service;
 pub mod transaction_detection_service;
 pub mod risk_service;
 pub mod risk_snapshot_service;
+pub mod optimization_service;
 pub mod failure_cache;
 mod indicators;

@@ -239,15 +239,15 @@ export type RiskSnapshot = {
     ticker?: string;
     snapshot_date: string; // Date YYYY-MM-DD
     snapshot_type: 'portfolio' | 'position';
-    volatility: number;
-    max_drawdown: number;
-    beta?: number;
-    sharpe?: number;
-    value_at_risk?: number;
-    risk_score: number;
+    volatility: number | string; // BigDecimal from backend (comes as string)
+    max_drawdown: number | string; // BigDecimal from backend (comes as string)
+    beta?: number | string; // BigDecimal from backend (comes as string)
+    sharpe?: number | string; // BigDecimal from backend (comes as string)
+    value_at_risk?: number | string; // BigDecimal from backend (comes as string)
+    risk_score: number | string; // BigDecimal from backend (comes as string)
     risk_level: RiskLevel;
-    total_value?: number; // For portfolio snapshots
-    market_value?: number; // For position snapshots
+    total_value?: number | string; // BigDecimal from backend (comes as string)
+    market_value?: number | string; // BigDecimal from backend (comes as string)
     created_at: string;
 };
 
@@ -260,4 +260,88 @@ export type RiskAlert = {
     change_percent: number;
     date: string; // Date YYYY-MM-DD
     metric_name: string; // "risk_score", "volatility", etc.
+};
+
+// Portfolio Optimization types
+export type RecommendationType =
+    | 'reduce_concentration'
+    | 'rebalance_sectors'
+    | 'reduce_risk'
+    | 'improve_efficiency'
+    | 'increase_diversification';
+
+export type Severity = 'info' | 'warning' | 'high' | 'critical';
+
+export type AdjustmentAction = 'BUY' | 'SELL' | 'HOLD';
+
+export type PositionAdjustment = {
+    ticker: string;
+    holding_name?: string;
+    current_value: number;
+    current_weight: number;
+    recommended_value: number;
+    recommended_weight: number;
+    action: AdjustmentAction;
+    amount_change: number;
+    shares_change?: number;
+};
+
+export type ExpectedImpact = {
+    risk_score_before: number;
+    risk_score_after: number;
+    risk_score_change: number;
+    volatility_before: number;
+    volatility_after: number;
+    volatility_change: number;
+    sharpe_before?: number;
+    sharpe_after?: number;
+    sharpe_change?: number;
+    diversification_before: number;
+    diversification_after: number;
+    diversification_change: number;
+    max_drawdown_before: number;
+    max_drawdown_after: number;
+};
+
+export type OptimizationRecommendation = {
+    id: string;
+    recommendation_type: RecommendationType;
+    severity: Severity;
+    title: string;
+    rationale: string;
+    affected_positions: PositionAdjustment[];
+    expected_impact: ExpectedImpact;
+    suggested_actions: string[];
+};
+
+export type CurrentMetrics = {
+    risk_score: number;
+    volatility: number;
+    max_drawdown: number;
+    sharpe_ratio?: number;
+    diversification_score: number;
+    position_count: number;
+    largest_position_weight: number;
+    top_3_concentration: number;
+};
+
+export type PortfolioHealth = 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
+
+export type AnalysisSummary = {
+    total_recommendations: number;
+    critical_issues: number;
+    high_priority: number;
+    warnings: number;
+    overall_health: PortfolioHealth;
+    key_findings: string[];
+};
+
+export type OptimizationAnalysis = {
+    portfolio_id: string;
+    portfolio_name: string;
+    total_value: number;
+    analysis_date: string;
+    current_metrics: CurrentMetrics;
+    recommendations: OptimizationRecommendation[];
+    summary: AnalysisSummary;
 };

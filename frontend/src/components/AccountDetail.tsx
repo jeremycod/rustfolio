@@ -16,6 +16,7 @@ import {
   Chip,
   Button,
   Grid,
+  Alert,
 } from '@mui/material';
 import { ArrowBack, TrendingUp, TrendingDown } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
@@ -466,21 +467,68 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
             Risk Analysis by Position
           </Typography>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-            View risk metrics for each holding in this account. Click on a ticker to see detailed risk analysis.
+            View risk metrics for each equity holding in this account. Click on a ticker to see detailed risk analysis.
           </Typography>
           {holdingsQ.data && holdingsQ.data.length > 0 ? (
-            <Grid container spacing={3}>
-              {holdingsQ.data.map((holding) => (
-                <Grid item xs={12} md={6} key={holding.id}>
-                  <RiskMetricsPanel
-                    ticker={holding.ticker}
-                    days={90}
-                    benchmark="SPY"
-                    onTickerClick={onTickerNavigate}
-                  />
-                </Grid>
-              ))}
-            </Grid>
+            (() => {
+              // Filter holdings that can have risk analysis
+              // Exclude: cash (no ticker), mutual funds with proprietary codes, bonds/fixed income
+              const analyzableHoldings = holdingsQ.data.filter((holding) => {
+                // Must have a ticker
+                if (!holding.ticker) return false;
+
+                // Exclude cash equivalents
+                if (holding.asset_category === 'Cash and Cash Equivalents') return false;
+
+                // Exclude fixed income (bonds)
+                if (holding.asset_category === 'FIXED INCOME') return false;
+
+                // Exclude alternatives
+                if (holding.asset_category === 'ALTERNATIVES AND OTHER') return false;
+
+                // Exclude mutual funds with proprietary codes (contain numbers but not ETF-style)
+                // Common patterns: EDG5001, FID5494, AGF9110, RBF1684, etc.
+                if (/^[A-Z]{3,}[0-9]{3,}/.test(holding.ticker)) return false;
+
+                return true;
+              });
+
+              const excludedCount = holdingsQ.data.length - analyzableHoldings.length;
+
+              return (
+                <>
+                  {excludedCount > 0 && (
+                    <Alert severity="info" sx={{ mb: 3 }}>
+                      {excludedCount} holding{excludedCount !== 1 ? 's' : ''} excluded from risk analysis
+                      (mutual funds, bonds, cash, or securities without public price data).
+                    </Alert>
+                  )}
+                  {analyzableHoldings.length > 0 ? (
+                    <Grid container spacing={3}>
+                      {analyzableHoldings.map((holding) => (
+                        <Grid item xs={12} md={6} key={holding.id}>
+                          <RiskMetricsPanel
+                            ticker={holding.ticker}
+                            days={90}
+                            benchmark="SPY"
+                            onTickerClick={onTickerNavigate}
+                          />
+                        </Grid>
+                      ))}
+                    </Grid>
+                  ) : (
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary" sx={{ textAlign: 'center', py: 4 }}>
+                          No equity holdings available for risk analysis.
+                          This account contains only mutual funds, bonds, or other securities without public price data.
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              );
+            })()
           ) : (
             <Card>
               <CardContent>

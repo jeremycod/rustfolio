@@ -8,5 +8,6 @@ pub mod cash_flows;
 pub mod transactions;
 pub mod admin;
 pub mod risk;
+pub mod optimization;
 
 pub use portfolios::*;
