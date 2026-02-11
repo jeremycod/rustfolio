@@ -7,8 +7,8 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{RiskAssessment, RiskThresholds, SetThresholdsRequest, CorrelationMatrix, CorrelationPair};
-use crate::services::risk_service;
+use crate::models::{RiskAssessment, RiskThresholds, SetThresholdsRequest, CorrelationMatrix, CorrelationPair, RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams};
+use crate::services::{risk_service, risk_snapshot_service};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -16,6 +16,9 @@ pub fn router() -> Router<AppState> {
         .route("/positions/:ticker", get(get_position_risk))
         .route("/portfolios/:portfolio_id", get(get_portfolio_risk))
         .route("/portfolios/:portfolio_id/correlations", get(get_portfolio_correlations))
+        .route("/portfolios/:portfolio_id/snapshot", post(create_portfolio_snapshot))
+        .route("/portfolios/:portfolio_id/history", get(get_risk_history))
+        .route("/portfolios/:portfolio_id/alerts", get(get_risk_alerts))
         .route("/thresholds", get(get_thresholds))
         .route("/thresholds", post(set_thresholds))
 }
@@ -503,4 +506,111 @@ pub async fn get_portfolio_correlations(
     };
 
     Ok(Json(matrix))
+}
+
+/// POST /api/risk/portfolios/:portfolio_id/snapshot
+///
+/// Manually trigger snapshot creation for a portfolio
+///
+/// Example: POST /api/risk/portfolios/{uuid}/snapshot
+pub async fn create_portfolio_snapshot(
+    Path(portfolio_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<RiskSnapshot>>, AppError> {
+    info!(
+        "POST /api/risk/portfolios/{}/snapshot - Creating risk snapshots",
+        portfolio_id
+    );
+
+    let today = chrono::Utc::now().date_naive();
+
+    let snapshots = risk_snapshot_service::create_daily_snapshots(
+        &state.pool,
+        portfolio_id,
+        today,
+        state.price_provider.as_ref(),
+        &state.failure_cache,
+    )
+    .await?;
+
+    info!(
+        "Successfully created {} snapshots for portfolio {}",
+        snapshots.len(),
+        portfolio_id
+    );
+
+    Ok(Json(snapshots))
+}
+
+/// GET /api/risk/portfolios/:portfolio_id/history
+///
+/// Retrieve historical risk data for a portfolio or specific position
+///
+/// Query parameters:
+/// - `days`: Number of days of history to retrieve (default: 90)
+/// - `ticker`: Optional ticker symbol for position-specific history
+///
+/// Example: GET /api/risk/portfolios/{uuid}/history?days=180&ticker=AAPL
+pub async fn get_risk_history(
+    Path(portfolio_id): Path<Uuid>,
+    Query(params): Query<RiskHistoryParams>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<RiskSnapshot>>, AppError> {
+    info!(
+        "GET /api/risk/portfolios/{}/history - Fetching risk history (days={}, ticker={:?})",
+        portfolio_id, params.days, params.ticker
+    );
+
+    let history = risk_snapshot_service::get_risk_trend(
+        &state.pool,
+        portfolio_id,
+        params.ticker.as_deref(),
+        params.days,
+        crate::models::risk_snapshot::Aggregation::Daily,
+    )
+    .await?;
+
+    info!(
+        "Successfully fetched {} historical snapshots for portfolio {}",
+        history.len(),
+        portfolio_id
+    );
+
+    Ok(Json(history))
+}
+
+/// GET /api/risk/portfolios/:portfolio_id/alerts
+///
+/// Get risk increase alerts for a portfolio
+///
+/// Query parameters:
+/// - `days`: Lookback period in days (default: 30)
+/// - `threshold`: Percentage change threshold for alerts (default: 20.0)
+///
+/// Example: GET /api/risk/portfolios/{uuid}/alerts?days=30&threshold=15.0
+pub async fn get_risk_alerts(
+    Path(portfolio_id): Path<Uuid>,
+    Query(params): Query<AlertQueryParams>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<RiskAlert>>, AppError> {
+    info!(
+        "GET /api/risk/portfolios/{}/alerts - Detecting risk increases (days={}, threshold={}%)",
+        portfolio_id, params.days, params.threshold
+    );
+
+    let alerts = risk_snapshot_service::detect_risk_increases(
+        &state.pool,
+        portfolio_id,
+        params.days,
+        params.threshold,
+    )
+    .await?;
+
+    info!(
+        "Found {} risk alerts for portfolio {}",
+        alerts.len(),
+        portfolio_id
+    );
+
+    Ok(Json(alerts))
 }

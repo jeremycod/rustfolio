@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -20,8 +20,10 @@ import {
   CardContent,
   Chip,
   Badge,
+  Button,
+  ButtonGroup,
 } from '@mui/material';
-import { TrendingUp, TrendingDown, Warning } from '@mui/icons-material';
+import { TrendingUp, TrendingDown, Warning, Download, Description } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import {
   listPortfolios,
@@ -32,8 +34,11 @@ import {
   getPositionRisk,
 } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
+import { arrayToCSV, downloadCSV, generateFilename, generatePortfolioPDF, type PortfolioPDFData } from '../lib/exportUtils';
 import { TickerChip } from './TickerChip';
 import { RiskBadge } from './RiskBadge';
+import { AssetTypeChip } from './AssetTypeChip';
+import { AssetTypeLegend } from './AssetTypeLegend';
 
 interface PortfolioOverviewProps {
   selectedPortfolioId: string | null;
@@ -42,6 +47,8 @@ interface PortfolioOverviewProps {
 }
 
 export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTickerNavigate }: PortfolioOverviewProps) {
+  const [isExporting, setIsExporting] = useState(false);
+
   const portfoliosQ = useQuery({
     queryKey: ['portfolios'],
     queryFn: listPortfolios,
@@ -159,14 +166,164 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
     return aggregatedHoldings.map(h => h.ticker);
   }, [aggregatedHoldings]);
 
+  // Export portfolio risk data to CSV
+  const handleExportCSV = async () => {
+    if (aggregatedHoldings.length === 0) {
+      alert('No holdings to export');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // Fetch risk data for all tickers in parallel
+      const riskDataPromises = aggregatedHoldings.map(async (holding) => {
+        try {
+          const risk = await getPositionRisk(holding.ticker, 90, 'SPY');
+          return {
+            ticker: holding.ticker,
+            risk,
+          };
+        } catch (error) {
+          // Return null for tickers without risk data (mutual funds, bonds, etc.)
+          return {
+            ticker: holding.ticker,
+            risk: null,
+          };
+        }
+      });
+
+      const riskDataResults = await Promise.all(riskDataPromises);
+      const riskDataMap = new Map(
+        riskDataResults.map(r => [r.ticker, r.risk])
+      );
+
+      // Combine holdings with risk data
+      const exportData = aggregatedHoldings.map((holding) => {
+        const gainLossPct = holding.total_market_value > 0
+          ? (holding.total_gain_loss / (holding.total_market_value - holding.total_gain_loss)) * 100
+          : 0;
+
+        const risk = riskDataMap.get(holding.ticker);
+
+        return {
+          Ticker: holding.ticker,
+          Name: holding.holding_name || '',
+          'Asset Type': holding.asset_category || '',
+          Quantity: holding.total_quantity.toFixed(2),
+          'Market Value': holding.total_market_value.toFixed(2),
+          'Gain/Loss': holding.total_gain_loss.toFixed(2),
+          'G/L %': gainLossPct.toFixed(2),
+          'Risk Score': risk?.risk_score.toFixed(1) || 'N/A',
+          'Risk Level': risk?.risk_level.toUpperCase() || 'N/A',
+          'Volatility %': risk?.metrics.volatility.toFixed(2) || 'N/A',
+          'Max Drawdown %': risk?.metrics.max_drawdown.toFixed(2) || 'N/A',
+          'Beta': risk?.metrics.beta?.toFixed(2) || 'N/A',
+          'VaR 95%': risk?.metrics.var_95?.toFixed(2) || 'N/A',
+        };
+      });
+
+      // Generate CSV
+      const csvContent = arrayToCSV(exportData);
+      const portfolioName = portfoliosQ.data?.find(p => p.id === selectedPortfolioId)?.name || 'portfolio';
+      const filename = generateFilename(`${portfolioName.replace(/\s+/g, '_')}_risk_report`, 'csv');
+
+      downloadCSV(csvContent, filename);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export portfolio data. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Export portfolio risk data to PDF
+  const handleExportPDF = async () => {
+    if (aggregatedHoldings.length === 0) {
+      alert('No holdings to export');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // Fetch risk data for all tickers in parallel
+      const riskDataPromises = aggregatedHoldings.map(async (holding) => {
+        try {
+          const risk = await getPositionRisk(holding.ticker, 90, 'SPY');
+          return {
+            ticker: holding.ticker,
+            risk,
+          };
+        } catch (error) {
+          return {
+            ticker: holding.ticker,
+            risk: null,
+          };
+        }
+      });
+
+      const riskDataResults = await Promise.all(riskDataPromises);
+      const riskDataMap = new Map(
+        riskDataResults.map(r => [r.ticker, r.risk])
+      );
+
+      const portfolioName = portfoliosQ.data?.find(p => p.id === selectedPortfolioId)?.name || 'Portfolio';
+      const reportDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
+      // Prepare PDF data
+      const pdfData: PortfolioPDFData = {
+        portfolioName,
+        reportDate,
+        summary: {
+          currentValue: formatCurrency(portfolioTotals.currentValue),
+          totalDeposits: formatCurrency(portfolioTotals.totalDeposits),
+          totalWithdrawals: formatCurrency(portfolioTotals.totalWithdrawals),
+          trueGainLoss: formatCurrency(portfolioTotals.trueGainLoss),
+        },
+        holdings: aggregatedHoldings.map((holding) => {
+          const gainLossPct = holding.total_market_value > 0
+            ? (holding.total_gain_loss / (holding.total_market_value - holding.total_gain_loss)) * 100
+            : 0;
+
+          const risk = riskDataMap.get(holding.ticker);
+
+          return {
+            ticker: holding.ticker,
+            name: holding.holding_name || '',
+            assetType: holding.asset_category || '',
+            quantity: holding.total_quantity.toFixed(2),
+            marketValue: formatCurrency(holding.total_market_value),
+            gainLoss: formatCurrency(holding.total_gain_loss),
+            gainLossPct: formatPercentage(gainLossPct),
+            riskScore: risk?.risk_score.toFixed(1) || 'N/A',
+            riskLevel: risk?.risk_level.toUpperCase() || 'N/A',
+            volatility: risk?.metrics.volatility.toFixed(2) || 'N/A',
+            maxDrawdown: risk?.metrics.max_drawdown.toFixed(2) || 'N/A',
+            beta: risk?.metrics.beta?.toFixed(2) || 'N/A',
+          };
+        }),
+      };
+
+      generatePortfolioPDF(pdfData);
+    } catch (error) {
+      console.error('PDF export failed:', error);
+      alert('Failed to generate PDF report. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
         Portfolio Overview
       </Typography>
 
-      {/* Portfolio Selector */}
-      <Box sx={{ mb: 3 }}>
+      {/* Portfolio Selector and Export */}
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
         <FormControl sx={{ minWidth: 200 }}>
           <InputLabel>Portfolio</InputLabel>
           <Select
@@ -181,6 +338,28 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
             ))}
           </Select>
         </FormControl>
+
+        {selectedPortfolioId && aggregatedHoldings.length > 0 && (
+          <ButtonGroup variant="outlined" disabled={isExporting}>
+            <Button
+              startIcon={<Download />}
+              onClick={handleExportCSV}
+            >
+              Export CSV
+            </Button>
+            <Button
+              startIcon={<Description />}
+              onClick={handleExportPDF}
+            >
+              Export PDF
+            </Button>
+          </ButtonGroup>
+        )}
+        {isExporting && (
+          <Typography variant="caption" color="textSecondary">
+            Generating report...
+          </Typography>
+        )}
       </Box>
 
       {/* Risk Warning Banner - Shown only if there are high-risk positions */}
@@ -261,6 +440,9 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
         </Grid>
       )}
 
+      {/* Asset Type Legend */}
+      {aggregatedHoldings.length > 0 && <AssetTypeLegend />}
+
       {/* Holdings Table */}
       <Paper>
         <Box sx={{ p: 2 }}>
@@ -303,15 +485,6 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
                     ? (holding.total_gain_loss / (holding.total_market_value - holding.total_gain_loss)) * 100
                     : 0;
 
-                  const getAssetTypeColor = (assetType: string | null): 'default' | 'primary' | 'secondary' | 'info' => {
-                    if (!assetType) return 'default';
-                    const type = assetType.toLowerCase();
-                    if (type.includes('stock') || type.includes('equity')) return 'primary';
-                    if (type.includes('mutual fund') || type.includes('fund')) return 'secondary';
-                    if (type.includes('bond') || type.includes('fixed')) return 'info';
-                    return 'default';
-                  };
-
                   return (
                     <TableRow key={holding.ticker}>
                       <TableCell>
@@ -323,18 +496,11 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {holding.asset_category ? (
-                          <Chip
-                            label={holding.asset_category}
-                            size="small"
-                            color={getAssetTypeColor(holding.asset_category)}
-                            variant="outlined"
-                          />
-                        ) : (
-                          <Typography variant="body2" color="textSecondary">
-                            —
-                          </Typography>
-                        )}
+                        <AssetTypeChip
+                          ticker={holding.ticker}
+                          holdingName={holding.holding_name}
+                          assetCategory={holding.asset_category}
+                        />
                       </TableCell>
                       <TableCell align="right">
                         {holding.total_quantity.toFixed(2)}

@@ -40,6 +40,8 @@ import {
 import { formatCurrency, formatNumber, formatPercentage } from '../lib/formatters';
 import { TickerChip } from './TickerChip';
 import { RiskMetricsPanel } from './RiskMetricsPanel';
+import { AssetTypeChip } from './AssetTypeChip';
+import { AssetTypeLegend } from './AssetTypeLegend';
 
 interface AccountDetailProps {
   accountId: string;
@@ -211,7 +213,9 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
 
       {/* Holdings Tab */}
       {activeTab === 0 && (
-        <TableContainer component={Paper}>
+        <>
+          {holdingsQ.data && holdingsQ.data.length > 0 && <AssetTypeLegend />}
+          <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
@@ -254,10 +258,10 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
                       {formatPercentage(gainLossPct)}
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={holding.asset_category || 'N/A'}
-                        size="small"
-                        variant="outlined"
+                      <AssetTypeChip
+                        ticker={holding.ticker}
+                        holdingName={holding.holding_name}
+                        assetCategory={holding.asset_category}
                       />
                     </TableCell>
                   </TableRow>
@@ -266,6 +270,7 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
             </TableBody>
           </Table>
         </TableContainer>
+        </>
       )}
 
       {/* History Tab */}

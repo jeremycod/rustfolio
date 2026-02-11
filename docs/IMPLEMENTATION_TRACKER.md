@@ -19,7 +19,7 @@ This document tracks the phased implementation of advanced risk analytics, AI-dr
 |-------|--------|-------------|
 | Phase 1 | ✅ Completed | Risk Metrics Core Module (Rust) |
 | Phase 2 | ✅ Completed | API Endpoints & Database Integration |
-| Phase 3 | ✅ Completed (95%) | Frontend Integration - Risk Display |
+| Phase 3 | 🟡 In Progress (85%) | Frontend Integration - Risk Display (11/13 enhancements) |
 | Phase 4 | ⬜ Not Started | News & LLM Integration (Rust) |
 | Phase 5 | ⬜ Not Started | Alerts & Notifications System |
 | Phase 6 | ⬜ Not Started | Testing, Performance & Deployment |
@@ -666,10 +666,78 @@ Before proceeding to Phase 4, implementing polish and extension features for Pha
 
 **Documentation:**
 - Created `docs/PHASE3_ENHANCEMENTS.md` with full enhancement plan
-- Prioritized into Phase 3A (quick wins), 3B (medium effort), 3C (larger features)
-- Updated PHASE3_ENHANCEMENTS.md to mark Phase 3A as complete
 
-**Status:** Phase 3A Quick Wins complete ✅ (Total: 6 enhancements completed)
+**Phase 3B Medium Effort Features - Completed:**
+7. ✅ **RiskChart Component** (Volatility/Drawdown Trends)
+   - Added Risk Trends tab to Risk Analysis page
+   - Rolling 30-day volatility chart showing trend over time
+   - Underwater drawdown chart (area chart from running peak)
+   - Summary cards: current/average volatility, current/max drawdown
+   - All calculations done on frontend using existing price data
+
+8. ✅ **Risk Comparison Tool**
+   - Standalone Risk Comparison page
+   - Compare 2-4 tickers side-by-side
+   - Table with all risk metrics and tooltips
+   - Bar charts for visual comparison (volatility, drawdown, beta, risk score)
+   - Color coding: green (low), orange (moderate), red (high)
+   - Best/worst indicators (🏆/⚠️) for each metric
+   - CSV export functionality
+
+9. ✅ **Enhanced Drawdown Visualization**
+   - Added underwater chart to Price History tab
+   - Shows drawdown from running peak with shaded red area
+   - Max drawdown alert with date range
+   - Days underwater calculation
+   - Risk notice for significant drawdowns (>10%)
+
+**Phase 3C Larger Features - In Progress:**
+10. ✅ **Downloadable Risk Reports** (Completed 2026-02-10)
+    - Added export buttons to Portfolio Overview page
+    - CSV export with complete holdings and risk data
+    - PDF export with formatted report including:
+      - Portfolio name and report date
+      - Summary metrics (current value, deposits, withdrawals, gain/loss)
+      - Holdings table with risk metrics
+      - Professional formatting with tables and pagination
+    - Uses jsPDF + jspdf-autotable for PDF generation
+    - Fetches risk data for all positions in parallel
+    - Graceful handling of securities without risk data (mutual funds, bonds)
+    - Auto-generated filename with timestamp
+
+**Files Created (Phase 3C):**
+- `frontend/src/lib/exportUtils.ts` - Export utility functions for CSV and PDF
+
+**Files Modified (Phase 3C):**
+- `frontend/src/components/PortfolioOverview.tsx` - Added export buttons and handlers
+- `package.json` - Added jspdf and jspdf-autotable dependencies
+
+**Phase 3C Remaining Features:**
+- 🔄 Portfolio Optimization Suggestions (Planned - 10+ hours)
+- 🔄 Correlation Heatmap (Planned - 6-8 hours)
+
+**Status:** Phase 3 Progress - 11 of 13 enhancements completed (85%)
+- Phase 3A Quick Wins: 6/6 complete ✅
+- Phase 3B Medium Effort: 3/3 complete ✅
+- Phase 3C Larger Features: 2/4 complete (Historical Risk Tracking ✅, Downloadable Reports ✅)
+
+11. ✅ **Historical Risk Tracking** (Completed 2026-02-10)
+    - Backend: risk_snapshots table with full schema
+    - Database migration: `20260210000001_create_risk_snapshots.sql`
+    - Queries: `risk_snapshot_queries.rs` with upsert, fetch history, fetch latest
+    - Service: `risk_snapshot_service.rs` for snapshot creation and trend analysis
+    - API endpoints:
+      - POST `/api/risk/portfolios/:id/snapshot` - Create snapshots manually
+      - GET `/api/risk/portfolios/:id/history` - Retrieve historical data
+      - GET `/api/risk/portfolios/:id/alerts` - Detect risk increases
+    - Frontend: RiskHistoryChart component with:
+      - Multi-metric selection (risk score, volatility, drawdown, sharpe, beta)
+      - Time range selection (30, 90, 180, 365 days)
+      - Interactive charts with Recharts
+      - Visual alert markers (red dots) for risk increases
+      - Alert summary panel
+    - Integration: Added to Risk Analysis page as "Risk History" tab
+    - Create snapshot button in Portfolio Risk Overview page
 
 ### 2026-02-09 (Phase 3B Enhancements)
 

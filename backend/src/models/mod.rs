@@ -8,6 +8,8 @@ mod holding_snapshot;
 mod cash_flow;
 mod detected_transaction;
 pub mod risk;
+pub mod risk_snapshot;
+pub mod optimization;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -20,3 +22,11 @@ pub use holding_snapshot::{HoldingSnapshot, CreateHoldingSnapshot, LatestAccount
 pub use cash_flow::{CashFlow, CreateCashFlow, FlowType};
 pub use detected_transaction::{DetectedTransaction, CreateDetectedTransaction, TransactionType, AccountActivity, AccountTruePerformance};
 pub use risk::{PositionRisk, RiskAssessment, RiskLevel, RiskThresholds, PortfolioRisk, PositionRiskContribution, SetThresholdsRequest, CorrelationPair, CorrelationMatrix};
+pub use risk_snapshot::{RiskSnapshot, CreateRiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams, Aggregation};
+pub use optimization::{
+    OptimizationRecommendation, OptimizationAnalysis, PositionAdjustment, ExpectedImpact,
+    RecommendationType, Severity, AdjustmentAction, CurrentMetrics, AnalysisSummary,
+    PortfolioHealth, SimulationRequest, SimulationResult, SimulationAdjustment,
+    PortfolioMetrics, MetricChanges, RiskContribution, ConcentrationAnalysis,
+    PositionConcentration, ConcentrationRisk,
+};

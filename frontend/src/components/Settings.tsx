@@ -11,19 +11,34 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
+  Alert,
 } from '@mui/material';
+import { Delete, Warning } from '@mui/icons-material';
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { resetAllData } from '../lib/endpoints';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { resetAllData, listPortfolios, deletePortfolio } from '../lib/endpoints';
 import { RiskThresholdSettings } from './RiskThresholdSettings';
+import type { Portfolio } from '../types';
 
 export function Settings() {
   const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [portfolioToDelete, setPortfolioToDelete] = useState<Portfolio | null>(null);
 
   const queryClient = useQueryClient();
+
+  const portfoliosQ = useQuery({
+    queryKey: ['portfolios'],
+    queryFn: listPortfolios,
+  });
 
   const resetMutation = useMutation({
     mutationFn: resetAllData,
@@ -37,11 +52,91 @@ export function Settings() {
     },
   });
 
+  const deletePortfolioMutation = useMutation({
+    mutationFn: deletePortfolio,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolios'] });
+      alert(`Portfolio "${portfolioToDelete?.name}" has been deleted successfully.`);
+      setDeleteDialogOpen(false);
+      setPortfolioToDelete(null);
+    },
+    onError: (error: any) => {
+      alert(`Failed to delete portfolio: ${error.response?.data || error.message}`);
+    },
+  });
+
+  const handleDeleteClick = (portfolio: Portfolio) => {
+    setPortfolioToDelete(portfolio);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (portfolioToDelete) {
+      deletePortfolioMutation.mutate(portfolioToDelete.id);
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
         Settings
       </Typography>
+
+      {/* Portfolio Management Section */}
+      <Paper sx={{ p: 3, mb: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          Portfolio Management
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Manage your portfolios. Deleting a portfolio will permanently remove all associated accounts, holdings, transactions, and cash flows.
+        </Typography>
+
+        {portfoliosQ.isLoading && (
+          <Typography color="text.secondary">Loading portfolios...</Typography>
+        )}
+
+        {portfoliosQ.isError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Failed to load portfolios
+          </Alert>
+        )}
+
+        {portfoliosQ.data && portfoliosQ.data.length === 0 && (
+          <Alert severity="info">
+            No portfolios found. Create a portfolio from the Dashboard.
+          </Alert>
+        )}
+
+        {portfoliosQ.data && portfoliosQ.data.length > 0 && (
+          <>
+            <List>
+              {portfoliosQ.data.map((portfolio) => (
+                <ListItem key={portfolio.id} divider>
+                  <ListItemText
+                    primary={portfolio.name}
+                    secondary={`Created: ${new Date(portfolio.created_at).toLocaleDateString()}`}
+                  />
+                  <ListItemSecondaryAction>
+                    <IconButton
+                      edge="end"
+                      color="error"
+                      onClick={() => handleDeleteClick(portfolio)}
+                      disabled={deletePortfolioMutation.isPending}
+                    >
+                      <Delete />
+                    </IconButton>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              ))}
+            </List>
+            {portfoliosQ.data.length === 1 && (
+              <Alert severity="warning" sx={{ mt: 2 }} icon={<Warning />}>
+                This is your only portfolio. Deleting it will remove all your data.
+              </Alert>
+            )}
+          </>
+        )}
+      </Paper>
 
       {/* Risk Thresholds Section */}
       <Box sx={{ mb: 4 }}>
@@ -112,6 +207,54 @@ export function Settings() {
           </Button>
         </Box>
       </Paper>
+
+      {/* Delete Portfolio Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => !deletePortfolioMutation.isPending && setDeleteDialogOpen(false)}
+      >
+        <DialogTitle>Delete Portfolio?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete the portfolio <strong>"{portfolioToDelete?.name}"</strong>?
+            <br />
+            <br />
+            This will permanently delete:
+            <br />
+            • All accounts in this portfolio
+            <br />
+            • All holdings snapshots
+            <br />
+            • All transactions
+            <br />
+            • All cash flows
+            <br />
+            • All related data
+            <br />
+            <br />
+            <strong>This action cannot be undone!</strong>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setDeleteDialogOpen(false);
+              setPortfolioToDelete(null);
+            }}
+            disabled={deletePortfolioMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+            disabled={deletePortfolioMutation.isPending}
+          >
+            {deletePortfolioMutation.isPending ? 'Deleting...' : 'Yes, Delete Portfolio'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Reset Confirmation Dialog */}
       <Dialog

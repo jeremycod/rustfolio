@@ -16,10 +16,11 @@ import {
 } from '@mui/material';
 import { Assessment, Search } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
-import { searchTickers } from '../lib/endpoints';
+import { searchTickers, listPortfolios } from '../lib/endpoints';
 import { RiskMetricsPanel } from './RiskMetricsPanel';
 import { PriceHistoryChart } from './PriceHistoryChart';
 import { RiskChart } from './RiskChart';
+import { RiskHistoryChart } from './RiskHistoryChart';
 
 interface RiskAnalysisProps {
   selectedTicker?: string | null;
@@ -31,6 +32,20 @@ export function RiskAnalysis({ selectedTicker }: RiskAnalysisProps) {
   const [days, setDays] = useState(90);
   const [benchmark, setBenchmark] = useState('SPY');
   const [activeTab, setActiveTab] = useState(0);
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
+
+  // Fetch portfolios for risk history
+  const portfoliosQ = useQuery({
+    queryKey: ['portfolios'],
+    queryFn: listPortfolios,
+  });
+
+  // Auto-select first portfolio if available
+  useEffect(() => {
+    if (portfoliosQ.data && portfoliosQ.data.length > 0 && !selectedPortfolioId) {
+      setSelectedPortfolioId(portfoliosQ.data[0].id);
+    }
+  }, [portfoliosQ.data, selectedPortfolioId]);
 
   // Fetch company name when ticker is searched
   const companyInfoQ = useQuery({
@@ -174,6 +189,7 @@ export function RiskAnalysis({ selectedTicker }: RiskAnalysisProps) {
               <Tab label="Risk Metrics" />
               <Tab label="Price History" />
               <Tab label="Risk Trends" />
+              <Tab label="Risk History" />
             </Tabs>
           </Box>
 
@@ -190,6 +206,32 @@ export function RiskAnalysis({ selectedTicker }: RiskAnalysisProps) {
           {/* Risk Trends Tab */}
           {activeTab === 2 && (
             <RiskChart ticker={searchTicker} days={days} />
+          )}
+
+          {/* Risk History Tab */}
+          {activeTab === 3 && selectedPortfolioId && (
+            <Box>
+              {portfoliosQ.data && portfoliosQ.data.length > 1 && (
+                <Box mb={2}>
+                  <FormControl sx={{ minWidth: 250 }}>
+                    <InputLabel>Portfolio</InputLabel>
+                    <Select
+                      value={selectedPortfolioId}
+                      onChange={(e) => setSelectedPortfolioId(e.target.value)}
+                      label="Portfolio"
+                      size="small"
+                    >
+                      {portfoliosQ.data.map((p) => (
+                        <MenuItem key={p.id} value={p.id}>
+                          {p.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              )}
+              <RiskHistoryChart portfolioId={selectedPortfolioId} ticker={searchTicker} />
+            </Box>
           )}
         </Box>
       )}

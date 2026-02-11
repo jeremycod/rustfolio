@@ -1,0 +1,199 @@
+/**
+ * Utility functions for exporting data in various formats (CSV, PDF)
+ */
+
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+/**
+ * Convert array of objects to CSV string
+ */
+export function arrayToCSV<T extends Record<string, any>>(
+  data: T[],
+  headers?: Record<keyof T, string>
+): string {
+  if (data.length === 0) return '';
+
+  const keys = Object.keys(data[0]) as (keyof T)[];
+
+  // Use provided headers or default to keys
+  const headerRow = keys.map(key =>
+    headers?.[key] || String(key)
+  ).join(',');
+
+  const rows = data.map(row =>
+    keys.map(key => {
+      const value = row[key];
+      // Handle values that might contain commas or quotes
+      if (value === null || value === undefined) return '';
+      const stringValue = String(value);
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    }).join(',')
+  );
+
+  return [headerRow, ...rows].join('\n');
+}
+
+/**
+ * Download CSV file
+ */
+export function downloadCSV(csvContent: string, filename: string): void {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Generate filename with timestamp
+ */
+export function generateFilename(prefix: string, extension: string): string {
+  const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  return `${prefix}_${timestamp}.${extension}`;
+}
+
+/**
+ * Format number for export (remove commas, preserve decimals)
+ */
+export function formatNumberForExport(value: number | string): string {
+  if (typeof value === 'number') {
+    return value.toFixed(2);
+  }
+  // Remove currency symbols and commas
+  return value.replace(/[$,]/g, '');
+}
+
+/**
+ * Generate PDF report for portfolio risk analysis
+ */
+export interface PortfolioPDFData {
+  portfolioName: string;
+  reportDate: string;
+  summary: {
+    currentValue: string;
+    totalDeposits: string;
+    totalWithdrawals: string;
+    trueGainLoss: string;
+  };
+  holdings: Array<{
+    ticker: string;
+    name: string;
+    assetType: string;
+    quantity: string;
+    marketValue: string;
+    gainLoss: string;
+    gainLossPct: string;
+    riskScore: string;
+    riskLevel: string;
+    volatility: string;
+    maxDrawdown: string;
+    beta: string;
+  }>;
+}
+
+export function generatePortfolioPDF(data: PortfolioPDFData): void {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // Title
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Portfolio Risk Report', pageWidth / 2, 20, { align: 'center' });
+
+  // Portfolio name and date
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Portfolio: ${data.portfolioName}`, 14, 35);
+  doc.text(`Report Date: ${data.reportDate}`, 14, 42);
+
+  // Summary section
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Portfolio Summary', 14, 55);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  const summaryData = [
+    ['Current Value', data.summary.currentValue],
+    ['Total Deposits', data.summary.totalDeposits],
+    ['Total Withdrawals', data.summary.totalWithdrawals],
+    ['True Gain/Loss', data.summary.trueGainLoss],
+  ];
+
+  autoTable(doc, {
+    startY: 60,
+    head: [['Metric', 'Value']],
+    body: summaryData,
+    theme: 'grid',
+    headStyles: { fillColor: [25, 118, 210] },
+    margin: { left: 14 },
+    tableWidth: pageWidth - 28,
+  });
+
+  // Holdings section
+  const finalY = (doc as any).lastAutoTable.finalY || 100;
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Holdings & Risk Analysis', 14, finalY + 10);
+
+  const holdingsData = data.holdings.map(h => [
+    h.ticker,
+    h.name.substring(0, 20) + (h.name.length > 20 ? '...' : ''),
+    h.assetType,
+    h.marketValue,
+    h.gainLossPct,
+    h.riskScore,
+    h.volatility,
+    h.maxDrawdown,
+  ]);
+
+  autoTable(doc, {
+    startY: finalY + 15,
+    head: [['Ticker', 'Name', 'Type', 'Value', 'G/L %', 'Risk', 'Vol %', 'DD %']],
+    body: holdingsData,
+    theme: 'striped',
+    headStyles: { fillColor: [25, 118, 210] },
+    styles: { fontSize: 8 },
+    margin: { left: 14, right: 14 },
+    columnStyles: {
+      0: { cellWidth: 20 },
+      1: { cellWidth: 30 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 25 },
+      4: { cellWidth: 20 },
+      5: { cellWidth: 20 },
+      6: { cellWidth: 20 },
+      7: { cellWidth: 20 },
+    },
+  });
+
+  // Footer
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text(
+      `Generated by Rustfolio - Page ${i} of ${pageCount}`,
+      pageWidth / 2,
+      doc.internal.pageSize.getHeight() - 10,
+      { align: 'center' }
+    );
+  }
+
+  // Download
+  const filename = generateFilename(`${data.portfolioName.replace(/\s+/g, '_')}_risk_report`, 'pdf');
+  doc.save(filename);
+}

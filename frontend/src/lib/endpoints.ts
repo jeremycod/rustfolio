@@ -16,7 +16,9 @@ import type {
     RiskAssessment,
     RiskThresholds,
     PortfolioRisk,
-    CorrelationMatrix
+    CorrelationMatrix,
+    RiskSnapshot,
+    RiskAlert
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -27,6 +29,10 @@ export async function listPortfolios(): Promise<Portfolio[]> {
 export async function createPortfolio(name: string): Promise<Portfolio> {
     const res = await api.post("/api/portfolios", { name });
     return res.data;
+}
+
+export async function deletePortfolio(portfolioId: string): Promise<void> {
+    await api.delete(`/api/portfolios/${portfolioId}`);
 }
 
 export async function getAnalytics(portfolioId: string): Promise<AnalyticsResponse> {
@@ -187,5 +193,45 @@ export async function getPortfolioCorrelations(
 
     // Use longer timeout for correlation calculation (2 minutes)
     const res = await api.get(url, { timeout: 120000 });
+    return res.data;
+}
+
+// Risk snapshot endpoints
+export async function createRiskSnapshot(
+    portfolioId: string
+): Promise<RiskSnapshot[]> {
+    const res = await api.post(`/api/risk/portfolios/${portfolioId}/snapshot`);
+    return res.data;
+}
+
+export async function getRiskHistory(
+    portfolioId: string,
+    ticker?: string,
+    days?: number
+): Promise<RiskSnapshot[]> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+    if (ticker) params.append('ticker', ticker);
+
+    const queryString = params.toString();
+    const url = `/api/risk/portfolios/${portfolioId}/history${queryString ? `?${queryString}` : ''}`;
+
+    const res = await api.get(url);
+    return res.data;
+}
+
+export async function getRiskAlerts(
+    portfolioId: string,
+    days?: number,
+    threshold?: number
+): Promise<RiskAlert[]> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+    if (threshold) params.append('threshold', threshold.toString());
+
+    const queryString = params.toString();
+    const url = `/api/risk/portfolios/${portfolioId}/alerts${queryString ? `?${queryString}` : ''}`;
+
+    const res = await api.get(url);
     return res.data;
 }

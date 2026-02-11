@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -20,13 +20,16 @@ import {
   Select,
   MenuItem,
   LinearProgress,
+  Button,
+  Snackbar,
 } from '@mui/material';
-import { TrendingUp, TrendingDown, ShowChart, Assessment } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
-import { getPortfolioRisk, listPortfolios } from '../lib/endpoints';
+import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera } from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getPortfolioRisk, listPortfolios, createRiskSnapshot } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
 import { RiskLevel } from '../types';
 import { TickerChip } from './TickerChip';
+import { RiskHistoryChart } from './RiskHistoryChart';
 
 interface PortfolioRiskOverviewProps {
   selectedPortfolioId: string | null;
@@ -39,6 +42,10 @@ export function PortfolioRiskOverview({
   onPortfolioChange,
   onTickerNavigate,
 }: PortfolioRiskOverviewProps) {
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const queryClient = useQueryClient();
+
   const portfoliosQ = useQuery({
     queryKey: ['portfolios'],
     queryFn: listPortfolios,
@@ -49,6 +56,21 @@ export function PortfolioRiskOverview({
     queryFn: () => getPortfolioRisk(selectedPortfolioId!, 90, 'SPY'),
     enabled: !!selectedPortfolioId,
     staleTime: 1000 * 60 * 30, // 30 minutes
+  });
+
+  const createSnapshotMutation = useMutation({
+    mutationFn: (portfolioId: string) => createRiskSnapshot(portfolioId),
+    onSuccess: (data) => {
+      setSnackbarMessage(`Successfully created ${data.length} risk snapshot${data.length > 1 ? 's' : ''}!`);
+      setSnackbarOpen(true);
+      // Invalidate risk history cache to refresh the chart
+      queryClient.invalidateQueries({ queryKey: ['risk-history', selectedPortfolioId] });
+      queryClient.invalidateQueries({ queryKey: ['risk-alerts', selectedPortfolioId] });
+    },
+    onError: (error: Error) => {
+      setSnackbarMessage(`Failed to create snapshot: ${error.message}`);
+      setSnackbarOpen(true);
+    },
   });
 
   const getRiskColor = (level: RiskLevel): string => {
@@ -88,7 +110,7 @@ export function PortfolioRiskOverview({
       </Box>
 
       {/* Portfolio Selector */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
         <FormControl sx={{ minWidth: 250 }}>
           <InputLabel>Select Portfolio</InputLabel>
           <Select
@@ -103,6 +125,16 @@ export function PortfolioRiskOverview({
             ))}
           </Select>
         </FormControl>
+
+        <Button
+          variant="contained"
+          startIcon={<Camera />}
+          onClick={() => selectedPortfolioId && createSnapshotMutation.mutate(selectedPortfolioId)}
+          disabled={!selectedPortfolioId || createSnapshotMutation.isPending}
+          sx={{ height: 'fit-content' }}
+        >
+          {createSnapshotMutation.isPending ? 'Creating...' : 'Create Snapshot'}
+        </Button>
       </Box>
 
       {portfolioRiskQ.isLoading && (
@@ -330,6 +362,11 @@ export function PortfolioRiskOverview({
             </TableContainer>
           </Paper>
 
+          {/* Risk History Chart */}
+          <Box sx={{ mt: 3 }}>
+            <RiskHistoryChart portfolioId={selectedPortfolioId!} />
+          </Box>
+
           {/* Disclaimer */}
           <Alert severity="info" sx={{ mt: 3 }}>
             <Typography variant="body2">
@@ -346,6 +383,15 @@ export function PortfolioRiskOverview({
           Select a portfolio above to view its risk analysis and position contributions.
         </Alert>
       )}
+
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        message={snackbarMessage}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   );
 }

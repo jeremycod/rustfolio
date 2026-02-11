@@ -231,3 +231,33 @@ export type CorrelationMatrix = {
     tickers: string[];
     correlations: CorrelationPair[];
 };
+
+// Historical Risk Tracking Types
+export type RiskSnapshot = {
+    id: string;
+    portfolio_id: string;
+    ticker?: string;
+    snapshot_date: string; // Date YYYY-MM-DD
+    snapshot_type: 'portfolio' | 'position';
+    volatility: number;
+    max_drawdown: number;
+    beta?: number;
+    sharpe?: number;
+    value_at_risk?: number;
+    risk_score: number;
+    risk_level: RiskLevel;
+    total_value?: number; // For portfolio snapshots
+    market_value?: number; // For position snapshots
+    created_at: string;
+};
+
+export type RiskAlert = {
+    portfolio_id: string;
+    ticker?: string;
+    alert_type: string; // "risk_increase", "threshold_breach"
+    previous_value: number;
+    current_value: number;
+    change_percent: number;
+    date: string; // Date YYYY-MM-DD
+    metric_name: string; // "risk_score", "volatility", etc.
+};

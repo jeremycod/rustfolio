@@ -55,6 +55,16 @@ impl RiskLevel {
     }
 }
 
+impl std::fmt::Display for RiskLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RiskLevel::Low => write!(f, "low"),
+            RiskLevel::Moderate => write!(f, "moderate"),
+            RiskLevel::High => write!(f, "high"),
+        }
+    }
+}
+
 /// User-defined thresholds for risk warnings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RiskThresholds {
