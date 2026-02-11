@@ -108,8 +108,8 @@ export type AccountValueHistory = {
     snapshot_date: string; // Date
     total_value: string; // BigDecimal
     total_cost: string; // BigDecimal
-    total_gain_loss: string; // BigDecimal
-    total_gain_loss_pct: string; // BigDecimal
+    total_gain_loss: string | null; // BigDecimal (optional)
+    total_gain_loss_pct: string | null; // BigDecimal (optional)
 };
 
 export type ImportResponse = {

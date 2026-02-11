@@ -509,6 +509,7 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
                         <Grid item xs={12} md={6} key={holding.id}>
                           <RiskMetricsPanel
                             ticker={holding.ticker}
+                            holdingName={holding.holding_name}
                             days={90}
                             benchmark="SPY"
                             onTickerClick={onTickerNavigate}

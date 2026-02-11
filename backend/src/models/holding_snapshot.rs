@@ -69,8 +69,8 @@ pub struct AccountValueHistory {
     pub snapshot_date: chrono::NaiveDate,
     pub total_value: BigDecimal,
     pub total_cost: BigDecimal,
-    pub total_gain_loss: BigDecimal,
-    pub total_gain_loss_pct: BigDecimal,
+    pub total_gain_loss: Option<BigDecimal>,
+    pub total_gain_loss_pct: Option<BigDecimal>,
 }
 
 impl HoldingSnapshot {

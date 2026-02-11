@@ -22,6 +22,8 @@ import {
   Badge,
   Button,
   ButtonGroup,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { TrendingUp, TrendingDown, Warning, Download, Description } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
@@ -40,6 +42,7 @@ import { RiskBadge } from './RiskBadge';
 import { AssetTypeChip } from './AssetTypeChip';
 import { AssetTypeLegend } from './AssetTypeLegend';
 import { OptimizationRecommendations } from './OptimizationRecommendations';
+import { PortfolioPerformance } from './PortfolioPerformance';
 
 interface PortfolioOverviewProps {
   selectedPortfolioId: string | null;
@@ -49,6 +52,7 @@ interface PortfolioOverviewProps {
 
 export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTickerNavigate }: PortfolioOverviewProps) {
   const [isExporting, setIsExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'holdings' | 'performance'>('holdings');
 
   const portfoliosQ = useQuery({
     queryKey: ['portfolios'],
@@ -340,7 +344,7 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
           </Select>
         </FormControl>
 
-        {selectedPortfolioId && aggregatedHoldings.length > 0 && (
+        {selectedPortfolioId && aggregatedHoldings.length > 0 && activeTab === 'holdings' && (
           <ButtonGroup variant="outlined" disabled={isExporting}>
             <Button
               startIcon={<Download />}
@@ -363,195 +367,220 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
         )}
       </Box>
 
-      {/* Risk Warning Banner - Shown only if there are high-risk positions */}
-      {thresholdsQ.data && aggregatedHoldings.length > 0 && (
-        <Alert
-          severity="warning"
-          icon={<Warning />}
-          sx={{
-            mb: 3,
-            display: 'none', // Will be shown by RiskBadge logic
-          }}
-          id="risk-warning-banner"
-        >
-          <Typography variant="body2">
-            Some positions exceed your risk thresholds. Review the Risk column below for details.
-          </Typography>
-        </Alert>
-      )}
-
-      {/* Summary Cards */}
-      {selectedPortfolioId && performanceQ.data && (
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" variant="body2">
-                  Current Value
-                </Typography>
-                <Typography variant="h5">
-                  {formatCurrency(portfolioTotals.currentValue)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" variant="body2">
-                  Total Deposits
-                </Typography>
-                <Typography variant="h5">
-                  {formatCurrency(portfolioTotals.totalDeposits)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" variant="body2">
-                  Total Withdrawals
-                </Typography>
-                <Typography variant="h5">
-                  {formatCurrency(portfolioTotals.totalWithdrawals)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ bgcolor: portfolioTotals.trueGainLoss >= 0 ? 'success.light' : 'error.light' }}>
-              <CardContent>
-                <Typography color="white" variant="body2">
-                  True Gain/Loss
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="h5" color="white">
-                    {formatCurrency(portfolioTotals.trueGainLoss)}
-                  </Typography>
-                  {portfolioTotals.trueGainLoss >= 0 ? (
-                    <TrendingUp sx={{ color: 'white' }} />
-                  ) : (
-                    <TrendingDown sx={{ color: 'white' }} />
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-
-      {/* Optimization Recommendations */}
+      {/* Tab Navigation */}
       {selectedPortfolioId && (
-        <Box sx={{ mb: 3 }}>
-          <OptimizationRecommendations portfolioId={selectedPortfolioId} />
-        </Box>
+        <Paper sx={{ mb: 3 }}>
+          <Tabs
+            value={activeTab}
+            onChange={(_, newValue) => setActiveTab(newValue)}
+            indicatorColor="primary"
+            textColor="primary"
+          >
+            <Tab label="Holdings" value="holdings" />
+            <Tab label="Performance" value="performance" />
+          </Tabs>
+        </Paper>
       )}
 
-      {/* Asset Type Legend */}
-      {aggregatedHoldings.length > 0 && <AssetTypeLegend />}
+      {/* Holdings Tab Content */}
+      {activeTab === 'holdings' && (
+        <>
+          {/* Risk Warning Banner - Shown only if there are high-risk positions */}
+          {thresholdsQ.data && aggregatedHoldings.length > 0 && (
+            <Alert
+              severity="warning"
+              icon={<Warning />}
+              sx={{
+                mb: 3,
+                display: 'none', // Will be shown by RiskBadge logic
+              }}
+              id="risk-warning-banner"
+            >
+              <Typography variant="body2">
+                Some positions exceed your risk thresholds. Review the Risk column below for details.
+              </Typography>
+            </Alert>
+          )}
 
-      {/* Holdings Table */}
-      <Paper>
-        <Box sx={{ p: 2 }}>
-          <Typography variant="h6">Aggregated Holdings</Typography>
-          <Typography variant="body2" color="textSecondary">
-            Combined holdings across all accounts in this portfolio
-          </Typography>
-        </Box>
+          {/* Summary Cards */}
+          {selectedPortfolioId && performanceQ.data && (
+            <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" variant="body2">
+                      Current Value
+                    </Typography>
+                    <Typography variant="h5">
+                      {formatCurrency(portfolioTotals.currentValue)}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" variant="body2">
+                      Total Deposits
+                    </Typography>
+                    <Typography variant="h5">
+                      {formatCurrency(portfolioTotals.totalDeposits)}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" variant="body2">
+                      Total Withdrawals
+                    </Typography>
+                    <Typography variant="h5">
+                      {formatCurrency(portfolioTotals.totalWithdrawals)}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ bgcolor: portfolioTotals.trueGainLoss >= 0 ? 'success.light' : 'error.light' }}>
+                  <CardContent>
+                    <Typography color="white" variant="body2">
+                      True Gain/Loss
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="h5" color="white">
+                        {formatCurrency(portfolioTotals.trueGainLoss)}
+                      </Typography>
+                      {portfolioTotals.trueGainLoss >= 0 ? (
+                        <TrendingUp sx={{ color: 'white' }} />
+                      ) : (
+                        <TrendingDown sx={{ color: 'white' }} />
+                      )}
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
 
-        {holdingsQueries.isLoading && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 3 }}>
-            <CircularProgress size={20} />
-            <Typography>Loading holdings...</Typography>
-          </Box>
-        )}
+          {/* Optimization Recommendations */}
+          {selectedPortfolioId && (
+            <Box sx={{ mb: 3 }}>
+              <OptimizationRecommendations portfolioId={selectedPortfolioId} />
+            </Box>
+          )}
 
-        {holdingsQueries.isError && (
-          <Alert severity="error" sx={{ m: 2 }}>Failed to load holdings</Alert>
-        )}
+          {/* Asset Type Legend */}
+          {aggregatedHoldings.length > 0 && <AssetTypeLegend />}
 
-        {aggregatedHoldings.length > 0 && (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Ticker</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Asset Type</TableCell>
-                  <TableCell align="right">Total Quantity</TableCell>
-                  <TableCell align="right">Market Value</TableCell>
-                  <TableCell align="right">Gain/Loss</TableCell>
-                  <TableCell align="right">G/L %</TableCell>
-                  <TableCell align="center">Risk</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {aggregatedHoldings.map((holding) => {
-                  const avgPrice = holding.total_market_value / holding.total_quantity;
-                  const gainLossPct = holding.total_market_value > 0
-                    ? (holding.total_gain_loss / (holding.total_market_value - holding.total_gain_loss)) * 100
-                    : 0;
+          {/* Holdings Table */}
+          <Paper>
+            <Box sx={{ p: 2 }}>
+              <Typography variant="h6">Aggregated Holdings</Typography>
+              <Typography variant="body2" color="textSecondary">
+                Combined holdings across all accounts in this portfolio
+              </Typography>
+            </Box>
 
-                  return (
-                    <TableRow key={holding.ticker}>
-                      <TableCell>
-                        <TickerChip ticker={holding.ticker} onNavigate={onTickerNavigate} />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {holding.holding_name || '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <AssetTypeChip
-                          ticker={holding.ticker}
-                          holdingName={holding.holding_name}
-                          assetCategory={holding.asset_category}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        {holding.total_quantity.toFixed(2)}
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(holding.total_market_value)}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{ color: holding.total_gain_loss >= 0 ? 'success.main' : 'error.main' }}
-                      >
-                        {formatCurrency(holding.total_gain_loss)}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{ color: gainLossPct >= 0 ? 'success.main' : 'error.main' }}
-                      >
-                        {formatPercentage(gainLossPct)}
-                      </TableCell>
-                      <TableCell align="center">
-                        <RiskBadge
-                          ticker={holding.ticker}
-                          days={90}
-                          showLabel={false}
-                          onNavigate={onTickerNavigate}
-                          assetCategory={holding.asset_category}
-                          industry={holding.industry}
-                        />
-                      </TableCell>
+            {holdingsQueries.isLoading && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 3 }}>
+                <CircularProgress size={20} />
+                <Typography>Loading holdings...</Typography>
+              </Box>
+            )}
+
+            {holdingsQueries.isError && (
+              <Alert severity="error" sx={{ m: 2 }}>Failed to load holdings</Alert>
+            )}
+
+            {aggregatedHoldings.length > 0 && (
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Ticker</TableCell>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Asset Type</TableCell>
+                      <TableCell align="right">Total Quantity</TableCell>
+                      <TableCell align="right">Market Value</TableCell>
+                      <TableCell align="right">Gain/Loss</TableCell>
+                      <TableCell align="right">G/L %</TableCell>
+                      <TableCell align="center">Risk</TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+                  </TableHead>
+                  <TableBody>
+                    {aggregatedHoldings.map((holding) => {
+                      const avgPrice = holding.total_market_value / holding.total_quantity;
+                      const gainLossPct = holding.total_market_value > 0
+                        ? (holding.total_gain_loss / (holding.total_market_value - holding.total_gain_loss)) * 100
+                        : 0;
 
-        {aggregatedHoldings.length === 0 && !holdingsQueries.isLoading && (
-          <Alert severity="info" sx={{ m: 2 }}>
-            No holdings found. Import CSV data in the Accounts tab to get started.
-          </Alert>
-        )}
-      </Paper>
+                      return (
+                        <TableRow key={holding.ticker}>
+                          <TableCell>
+                            <TickerChip ticker={holding.ticker} onNavigate={onTickerNavigate} />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {holding.holding_name || '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <AssetTypeChip
+                              ticker={holding.ticker}
+                              holdingName={holding.holding_name}
+                              assetCategory={holding.asset_category}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            {holding.total_quantity.toFixed(2)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(holding.total_market_value)}
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ color: holding.total_gain_loss >= 0 ? 'success.main' : 'error.main' }}
+                          >
+                            {formatCurrency(holding.total_gain_loss)}
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ color: gainLossPct >= 0 ? 'success.main' : 'error.main' }}
+                          >
+                            {formatPercentage(gainLossPct)}
+                          </TableCell>
+                          <TableCell align="center">
+                            <RiskBadge
+                              ticker={holding.ticker}
+                              days={90}
+                              showLabel={false}
+                              onNavigate={onTickerNavigate}
+                              assetCategory={holding.asset_category}
+                              industry={holding.industry}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+
+            {aggregatedHoldings.length === 0 && !holdingsQueries.isLoading && (
+              <Alert severity="info" sx={{ m: 2 }}>
+                No holdings found. Import CSV data in the Accounts tab to get started.
+              </Alert>
+            )}
+          </Paper>
+        </>
+      )}
+
+      {/* Performance Tab Content */}
+      {activeTab === 'performance' && selectedPortfolioId && (
+        <PortfolioPerformance portfolioId={selectedPortfolioId} />
+      )}
     </Box>
   );
 }

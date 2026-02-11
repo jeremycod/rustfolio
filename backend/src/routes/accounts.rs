@@ -86,8 +86,9 @@ pub async fn get_portfolio_history(
     let history = holding_snapshot_queries::fetch_portfolio_value_history(&state.pool, portfolio_id)
         .await
         .map_err(|e| {
-            error!("Failed to fetch portfolio value history for portfolio {}: {}", portfolio_id, e);
+            error!("Failed to fetch portfolio value history for portfolio {}: {:?}", portfolio_id, e);
             AppError::Db(e)
         })?;
+    info!("Successfully fetched {} history records for portfolio {}", history.len(), portfolio_id);
     Ok(Json(history))
 }

@@ -29,8 +29,10 @@ import type { RiskLevel } from '../types';
 
 interface RiskMetricsPanelProps {
   ticker: string;
+  holdingName?: string | null;
   days?: number;
   benchmark?: string;
+  onTickerClick?: (ticker: string) => void;
 }
 
 interface MetricCardProps {
@@ -82,7 +84,7 @@ function MetricCard({ icon, label, value, subValue, color = '#1976d2', tooltip }
   );
 }
 
-export function RiskMetricsPanel({ ticker, days = 90, benchmark = 'SPY' }: RiskMetricsPanelProps) {
+export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = 'SPY', onTickerClick }: RiskMetricsPanelProps) {
   const { data: risk, isLoading, error } = useQuery({
     queryKey: ['risk', ticker, days, benchmark],
     queryFn: () => getPositionRisk(ticker, days, benchmark),
@@ -169,6 +171,31 @@ export function RiskMetricsPanel({ ticker, days = 90, benchmark = 'SPY' }: RiskM
 
   return (
     <Box>
+      {/* Ticker Header */}
+      <Box
+        sx={{
+          mb: 2,
+          p: 2,
+          backgroundColor: 'primary.main',
+          color: 'primary.contrastText',
+          borderRadius: 1,
+          cursor: onTickerClick ? 'pointer' : 'default',
+          '&:hover': onTickerClick ? {
+            backgroundColor: 'primary.dark',
+          } : {},
+        }}
+        onClick={() => onTickerClick?.(ticker)}
+      >
+        <Typography variant="h5" fontWeight="bold">
+          {ticker}
+        </Typography>
+        {holdingName && (
+          <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
+            {holdingName}
+          </Typography>
+        )}
+      </Box>
+
       {/* Header with overall risk score */}
       <Paper sx={{ p: 3, mb: 3, background: `linear-gradient(135deg, ${riskColor}15 0%, ${riskColor}05 100%)` }}>
         <Grid container spacing={2} alignItems="center">

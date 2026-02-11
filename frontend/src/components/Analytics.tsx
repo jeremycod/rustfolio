@@ -144,6 +144,15 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
               </Alert>
             )}
 
+            {analyticsQ.data && analyticsQ.data.meta.points < 10 && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <strong>Limited Historical Data</strong><br />
+                You only have {analyticsQ.data.meta.points} data point{analyticsQ.data.meta.points !== 1 ? 's' : ''}.
+                Technical indicators (SMA, EMA) require at least 20 points to be meaningful.
+                Please import more CSV snapshots from your brokerage to see trend analysis.
+              </Alert>
+            )}
+
             {analyticsQ.data ? (
               <PortfolioChart series={analyticsQ.data.series} />
             ) : (
