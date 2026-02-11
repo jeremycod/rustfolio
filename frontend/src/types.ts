@@ -124,6 +124,7 @@ export type CsvFileInfo = {
     name: string;
     path: string;
     date: string | null;
+    file_type: "holdings" | "activities";
 };
 
 export type DetectedTransaction = {

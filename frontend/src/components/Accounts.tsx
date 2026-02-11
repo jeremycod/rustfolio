@@ -88,11 +88,17 @@ export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSele
       await qc.invalidateQueries({ queryKey: ['allAccountHoldings', selectedPortfolioId] });
       setIsImportModalOpen(false);
       setSelectedFilePath('');
-      alert(
-        `Import successful!\n\nAccounts created: ${data.accounts_created}\nHoldings created: ${data.holdings_created}\nTransactions detected: ${data.transactions_detected}\nSnapshot date: ${data.snapshot_date}\n\n${
-          data.errors.length > 0 ? `Errors:\n${data.errors.join('\n')}` : 'No errors'
-        }`
-      );
+
+      // Different message for activities vs holdings
+      const isActivities = data.snapshot_date === 'N/A';
+      const message = isActivities
+        ? `Transaction import successful!\n\nTransactions imported: ${data.transactions_detected}\n\n${
+            data.errors.length > 0 ? `Errors:\n${data.errors.join('\n')}` : 'No errors'
+          }`
+        : `Holdings import successful!\n\nAccounts created: ${data.accounts_created}\nHoldings created: ${data.holdings_created}\nTransactions detected: ${data.transactions_detected}\nSnapshot date: ${data.snapshot_date}\n\n${
+            data.errors.length > 0 ? `Errors:\n${data.errors.join('\n')}` : 'No errors'
+          }`;
+      alert(message);
     },
     onError: (error: any) => {
       alert(`Import failed: ${error.response?.data || error.message}`);
@@ -349,7 +355,11 @@ export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSele
         <DialogContent>
           <Alert severity="info" sx={{ mb: 3, mt: 1 }}>
             <Typography variant="body2">
-              Select a CSV file from the backend/data directory to import account holdings.
+              Select a CSV file from the backend/data directory.
+              <br />
+              <strong>Holdings files</strong>: Import account snapshots (AccountsHoldings-YYYYMMDD.csv)
+              <br />
+              <strong>Activities files</strong>: Import transactions (AccountActivities-ACCOUNT-YYYYMMDD.csv)
             </Typography>
           </Alert>
 
@@ -370,10 +380,18 @@ export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSele
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                       <CalendarToday fontSize="small" color="action" />
                       <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2">{file.name}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Chip
+                            label={file.file_type === 'holdings' ? 'Holdings' : 'Activities'}
+                            size="small"
+                            color={file.file_type === 'holdings' ? 'primary' : 'secondary'}
+                            sx={{ height: 20, fontSize: '0.7rem' }}
+                          />
+                          <Typography variant="body2">{file.name}</Typography>
+                        </Box>
                         {file.date && (
                           <Typography variant="caption" color="textSecondary">
-                            Snapshot: {file.date}
+                            Date: {file.date}
                           </Typography>
                         )}
                       </Box>
@@ -384,8 +402,11 @@ export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSele
             </FormControl>
           ) : (
             <Alert severity="warning">
-              No CSV files found in the backend/data directory. Please add CSV files with the format:
-              AccountsHoldings-YYYYMMDD.csv
+              No CSV files found in the backend/data directory. Please add CSV files with formats:
+              <br />
+              - AccountsHoldings-YYYYMMDD.csv (for holdings snapshots)
+              <br />
+              - AccountActivities-ACCOUNT-YYYYMMDD.csv (for transaction records)
             </Alert>
           )}
         </DialogContent>
