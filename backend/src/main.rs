@@ -9,30 +9,28 @@ mod app;
 mod services;
 mod external;
 mod state;
+mod logging;
 
-use axum::{routing::get, Router};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::external::alphavantage::AlphaVantageProvider;
 use crate::external::twelvedata::TwelveDataProvider;
 use crate::external::multi_provider::MultiProvider;
 use crate::state::AppState;
 use crate::services::failure_cache::FailureCache;
+use crate::logging::{LoggingConfig, init_logging};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
-    let database_url = std::env::var("DATABASE_URL")?;
-
     // Initialize logging FIRST
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new("info"))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    let logging_config = LoggingConfig::from_env();
+    init_logging(logging_config)?;
+
+    let database_url = std::env::var("DATABASE_URL")?;
 
     let pool = PgPoolOptions::new()
         .max_connections(10)
