@@ -1,4 +1,3 @@
-use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
 /// Type of optimization recommendation
@@ -124,50 +123,6 @@ pub enum PortfolioHealth {
     Critical,   // Major problems, immediate action needed
 }
 
-/// Request to simulate portfolio changes
-#[derive(Debug, Clone, Deserialize)]
-pub struct SimulationRequest {
-    pub adjustments: Vec<SimulationAdjustment>,
-}
-
-/// Position adjustment for simulation
-#[derive(Debug, Clone, Deserialize)]
-pub struct SimulationAdjustment {
-    pub ticker: String,
-    pub new_weight: f64,  // Target weight as percentage (0-100)
-}
-
-/// Result of portfolio simulation
-#[derive(Debug, Clone, Serialize)]
-pub struct SimulationResult {
-    pub original_metrics: PortfolioMetrics,
-    pub simulated_metrics: PortfolioMetrics,
-    pub changes: MetricChanges,
-    pub is_improvement: bool,
-    pub warnings: Vec<String>,
-}
-
-/// Portfolio metrics for comparison
-#[derive(Debug, Clone, Serialize)]
-pub struct PortfolioMetrics {
-    pub risk_score: f64,
-    pub volatility: f64,
-    pub max_drawdown: f64,
-    pub sharpe_ratio: Option<f64>,
-    pub diversification_score: f64,
-    pub largest_position: f64,
-}
-
-/// Changes between original and simulated metrics
-#[derive(Debug, Clone, Serialize)]
-pub struct MetricChanges {
-    pub risk_score_change: f64,
-    pub risk_score_pct: f64,
-    pub volatility_change: f64,
-    pub volatility_pct: f64,
-    pub diversification_change: f64,
-}
-
 /// Risk contribution of a single position
 #[derive(Debug, Clone, Serialize)]
 pub struct RiskContribution {
@@ -178,31 +133,3 @@ pub struct RiskContribution {
     pub is_excessive: bool,       // Contributing >20% of total risk
 }
 
-/// Concentration risk analysis
-#[derive(Debug, Clone, Serialize)]
-pub struct ConcentrationAnalysis {
-    pub largest_position: PositionConcentration,
-    pub top_3_positions: Vec<PositionConcentration>,
-    pub top_5_positions: Vec<PositionConcentration>,
-    pub top_3_total: f64,
-    pub top_5_total: f64,
-    pub concentration_risk: ConcentrationRisk,
-}
-
-/// Concentration info for a position
-#[derive(Debug, Clone, Serialize)]
-pub struct PositionConcentration {
-    pub ticker: String,
-    pub weight: f64,
-    pub value: f64,
-}
-
-/// Concentration risk level
-#[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum ConcentrationRisk {
-    Low,       // Well-diversified
-    Moderate,  // Some concentration but acceptable
-    High,      // Significant concentration
-    Extreme,   // Dangerous concentration
-}

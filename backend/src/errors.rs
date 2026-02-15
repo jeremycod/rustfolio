@@ -1,5 +1,4 @@
 use axum::http::{HeaderMap, HeaderValue};
-use axum::Json;
 use axum::response::IntoResponse;
 use reqwest::StatusCode;
 use sqlx::Error;

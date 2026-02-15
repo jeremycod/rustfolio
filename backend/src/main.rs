@@ -83,11 +83,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     Ok(())
 }
-
-async fn health_check() -> &'static str {
-    "OK"
-}
-
-async fn root() -> &'static str {
-    "Rustfolio backend is alive"
-}

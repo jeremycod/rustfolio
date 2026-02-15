@@ -1,4 +1,3 @@
-use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 use sqlx::PgPool;
 use uuid::Uuid;

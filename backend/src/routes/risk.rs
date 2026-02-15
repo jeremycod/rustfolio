@@ -1,6 +1,5 @@
 use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
-use axum::http::StatusCode;
 use axum::routing::{get, post};
 use serde::Deserialize;
 use tracing::{error, info, warn};

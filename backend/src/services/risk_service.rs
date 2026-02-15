@@ -7,7 +7,7 @@ use crate::services::price_service;
 use crate::services::failure_cache::FailureCache;
 use bigdecimal::ToPrimitive;
 use sqlx::PgPool;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Compute comprehensive risk metrics for a ticker over a rolling window.
 ///

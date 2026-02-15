@@ -65,37 +65,6 @@ impl std::fmt::Display for RiskLevel {
     }
 }
 
-/// User-defined thresholds for risk warnings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RiskThresholds {
-    /// Volatility threshold percentage (e.g., 30.0 for 30%)
-    pub volatility_threshold: Option<f64>,
-
-    /// Maximum drawdown threshold as negative percentage (e.g., -15.0 for -15%)
-    pub drawdown_threshold: Option<f64>,
-
-    /// Beta threshold (e.g., 1.5)
-    pub beta_threshold: Option<f64>,
-
-    /// VaR threshold as negative percentage
-    pub var_threshold: Option<f64>,
-
-    /// Overall risk score threshold (0-100)
-    pub risk_score_threshold: Option<f64>,
-}
-
-impl Default for RiskThresholds {
-    fn default() -> Self {
-        Self {
-            volatility_threshold: Some(30.0),
-            drawdown_threshold: Some(-15.0),
-            beta_threshold: Some(1.5),
-            var_threshold: Some(-5.0),
-            risk_score_threshold: Some(70.0),
-        }
-    }
-}
-
 /// Portfolio-level aggregated risk metrics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortfolioRisk {
@@ -135,11 +104,6 @@ pub struct PositionRiskContribution {
     pub risk_assessment: RiskAssessment,
 }
 
-/// Request body for setting custom risk thresholds.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetThresholdsRequest {
-    pub thresholds: RiskThresholds,
-}
 
 /// Correlation pair between two tickers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -208,21 +172,3 @@ pub struct UpdateRiskThresholds {
     pub var_critical_threshold: Option<f64>,
 }
 
-/// Severity level for threshold violations.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum ViolationSeverity {
-    Warning,
-    Critical,
-}
-
-/// A position that violates risk thresholds.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ThresholdViolation {
-    pub ticker: String,
-    pub holding_name: Option<String>,
-    pub metric_name: String,
-    pub metric_value: f64,
-    pub threshold_value: f64,
-    pub threshold_type: ViolationSeverity,
-}

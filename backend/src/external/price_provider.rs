@@ -17,7 +17,7 @@ pub struct ExternalTickerMatch {
     pub _type: String,
     pub region: String,
     pub currency: String,
-    pub matchScore: f64,
+    pub match_score: f64,
 }
 
 #[derive(Debug, Error)]

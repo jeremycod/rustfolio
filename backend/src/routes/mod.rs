@@ -10,4 +10,3 @@ pub mod admin;
 pub mod risk;
 pub mod optimization;
 
-pub use portfolios::*;

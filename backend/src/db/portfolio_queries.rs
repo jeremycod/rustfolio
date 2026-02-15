@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::models::{CreatePortfolio, Portfolio, UpdatePortfolio};
+use crate::models::{Portfolio, UpdatePortfolio};
 
 pub async fn fetch_all(pool: &PgPool) -> Result<Vec<Portfolio>, sqlx::Error> {
     sqlx::query_as!(Portfolio, "SELECT id, name, created_at

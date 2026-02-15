@@ -31,10 +31,13 @@ struct TwelveDataSearchResponse {
 struct TwelveDataSearchMatch {
     symbol: String,
     instrument_name: String,
+    #[allow(dead_code)]
     exchange: String,
     #[serde(default)]
+    #[allow(dead_code)]
     mic_code: String,
     #[serde(default)]
+    #[allow(dead_code)]
     exchange_timezone: String,
     instrument_type: String,
     country: String,
@@ -43,16 +46,19 @@ struct TwelveDataSearchMatch {
 
 #[derive(Debug, Deserialize)]
 struct TwelveDataTimeSeriesResponse {
+    #[allow(dead_code)]
     meta: Option<TwelveDataMeta>,
     values: Option<Vec<TwelveDataValue>>,
     status: String,
 
     // Error handling
     message: Option<String>,
+    #[allow(dead_code)]
     code: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct TwelveDataMeta {
     symbol: String,
     interval: String,
@@ -65,10 +71,14 @@ struct TwelveDataMeta {
 #[derive(Debug, Deserialize)]
 struct TwelveDataValue {
     datetime: String,
+    #[allow(dead_code)]
     open: String,
+    #[allow(dead_code)]
     high: String,
+    #[allow(dead_code)]
     low: String,
     close: String,
+    #[allow(dead_code)]
     volume: Option<String>,
 }
 
@@ -113,7 +123,7 @@ impl PriceProvider for TwelveDataProvider {
                 region: m.country,
                 currency: m.currency,
                 // Calculate match score based on position (first result = highest score)
-                matchScore: 1.0 - (idx as f64 * 0.05),
+                match_score: 1.0 - (idx as f64 * 0.05),
             })
             .collect();
 

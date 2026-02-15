@@ -1,5 +1,5 @@
 use sqlx::PgPool;
-use chrono::{DateTime, Utc, Duration, NaiveDateTime};
+use chrono::{Utc, Duration, NaiveDateTime};
 
 #[derive(Debug, Clone)]
 pub struct TickerFetchFailure {

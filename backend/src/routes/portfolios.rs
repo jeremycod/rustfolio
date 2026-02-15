@@ -1,12 +1,10 @@
 use axum::extract::{Path, State};
 use axum::{Json, Router};
 use axum::routing::{delete, get, post, put};
-use http::StatusCode;
-use sqlx::PgPool;
 use tracing::{info, error};
 use uuid::Uuid;
 
-use crate::{db, services};
+use crate::services;
 
 use crate::errors::AppError;
 use crate::models::{CreatePortfolio, Portfolio, UpdatePortfolio, LatestAccountHolding};

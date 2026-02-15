@@ -1,10 +1,9 @@
-use std::thread::sleep;
 
 use bigdecimal::BigDecimal;
 use sqlx::PgPool;
 use tracing::{error, warn, info};
 use tokio::time::{sleep as async_sleep, Duration};
-use crate::{db, external};
+use crate::db;
 use crate::errors::AppError;
 use crate::external::price_provider::{ExternalPricePoint, ExternalTickerMatch, PriceProvider, PriceProviderError};
 use crate::models::PricePoint;

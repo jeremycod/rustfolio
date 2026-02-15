@@ -39,15 +39,18 @@ struct ExternalTickerSearchResponse {
     #[serde(rename = "4. region")]
     pub region: String,
     #[serde(rename = "5. marketOpen")]
-    pub marketOpen: String,
+    #[allow(dead_code)]
+    pub market_open: String,
     #[serde(rename = "6. marketClose")]
-    pub marketClose: String,
+    #[allow(dead_code)]
+    pub market_close: String,
     #[serde(rename = "7. timezone")]
+    #[allow(dead_code)]
     pub timezone: String,
     #[serde(rename = "8. currency")]
     pub currency: String,
     #[serde(rename = "9. matchScore")]
-    pub matchScore: String,
+    pub match_score: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -97,10 +100,10 @@ impl PriceProvider for AlphaVantageProvider {
         .map_err(|e| PriceProviderError::Network(e.to_string()))?;
     println!("{}", text);
 
-    let responseWrapper: TickerSearchWrapper = serde_json::from_str(&text)
+    let response_wrapper: TickerSearchWrapper = serde_json::from_str(&text)
         .map_err(|e| PriceProviderError::Parse(format!("JSON parse error: {} | Response: {}", e, text)))?;
 
-    let out: Vec<ExternalTickerMatch> = responseWrapper
+    let out: Vec<ExternalTickerMatch> = response_wrapper
         .best_matches
         .into_iter()
         .map(|ticker_match| -> Result<ExternalTickerMatch, PriceProviderError>{
@@ -110,7 +113,7 @@ impl PriceProvider for AlphaVantageProvider {
                 _type: ticker_match._type,
                 region: ticker_match.region,
                 currency: ticker_match.currency,
-                matchScore: ticker_match.matchScore.parse::<f64>()
+                match_score: ticker_match.match_score.parse::<f64>()
                     .map_err(|e| PriceProviderError::Parse(e.to_string()))?,
             })
             
@@ -148,7 +151,7 @@ impl PriceProvider for AlphaVantageProvider {
             .await
             .map_err(|e| PriceProviderError::Parse(e.to_string()))?;
 
-        if let Some(note) = body.note {
+        if let Some(_note) = body.note {
             // This is the throttle response
             return Err(PriceProviderError::RateLimited);
         }
