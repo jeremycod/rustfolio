@@ -20,6 +20,7 @@ use crate::external::twelvedata::TwelveDataProvider;
 use crate::external::multi_provider::MultiProvider;
 use crate::state::AppState;
 use crate::services::failure_cache::FailureCache;
+use crate::services::llm_service::{LlmService, LlmConfig};
 use crate::logging::{LoggingConfig, init_logging};
 
 #[tokio::main]
@@ -72,11 +73,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("📈 Risk-free rate set to: {:.2}%", risk_free_rate * 100.0);
 
+    // Initialize LLM service
+    let llm_config = LlmConfig {
+        enabled: std::env::var("LLM_ENABLED")
+            .ok()
+            .and_then(|s| s.parse::<bool>().ok())
+            .unwrap_or(false),
+        provider: std::env::var("LLM_PROVIDER")
+            .unwrap_or_else(|_| "openai".to_string()),
+        api_key: std::env::var("OPENAI_API_KEY").ok(),
+        max_tokens: std::env::var("LLM_MAX_TOKENS")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(500),
+        temperature: std::env::var("LLM_TEMPERATURE")
+            .ok()
+            .and_then(|s| s.parse::<f32>().ok())
+            .unwrap_or(0.7),
+    };
+
+    let llm_service = Arc::new(LlmService::new(llm_config));
+
+    if llm_service.is_enabled() {
+        tracing::info!("🤖 LLM service enabled");
+    } else {
+        tracing::info!("🤖 LLM service disabled");
+    }
+
     let state = AppState {
         pool,
         price_provider: provider,
         failure_cache: FailureCache::new(),
         risk_free_rate,
+        llm_service,
     };
     let app = app::create_app(state);
 

@@ -428,3 +428,25 @@ export type ThresholdViolation = {
     threshold_value: number;
     threshold_type: ViolationSeverity;
 };
+
+// LLM / AI Features
+export type UserPreferences = {
+    id: string;
+    user_id: string;
+    llm_enabled: boolean;
+    consent_given_at: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+export type UpdateUserPreferences = {
+    llm_enabled: boolean;
+};
+
+export type LlmUsageStats = {
+    total_requests: number;
+    total_prompt_tokens: number;
+    total_completion_tokens: number;
+    total_cost: string; // BigDecimal from backend
+    current_month_cost: string; // BigDecimal from backend
+};

@@ -8,6 +8,7 @@ mod detected_transaction;
 pub mod risk;
 pub mod risk_snapshot;
 pub mod optimization;
+pub mod llm;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -28,4 +29,7 @@ pub use optimization::{
     OptimizationRecommendation, OptimizationAnalysis, PositionAdjustment, ExpectedImpact,
     RecommendationType, Severity, AdjustmentAction, CurrentMetrics, AnalysisSummary,
     PortfolioHealth, RiskContribution,
+};
+pub use llm::{
+    LlmUsage, CreateLlmUsage, UserPreferences, UpdateUserPreferences, LlmUsageStats,
 };

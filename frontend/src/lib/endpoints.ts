@@ -21,7 +21,10 @@ import type {
     RiskAlert,
     RiskThresholdSettings,
     UpdateRiskThresholds,
-    OptimizationAnalysis
+    OptimizationAnalysis,
+    UserPreferences,
+    UpdateUserPreferences,
+    LlmUsageStats
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -292,5 +295,31 @@ export async function getPortfolioOptimization(
     portfolioId: string
 ): Promise<OptimizationAnalysis> {
     const res = await api.get(`/api/optimization/portfolios/${portfolioId}`);
+    return res.data;
+}
+// LLM / AI Features endpoints
+export async function getUserPreferences(userId: string): Promise<UserPreferences> {
+    const res = await api.get(`/api/llm/users/${userId}/preferences`);
+    return res.data;
+}
+
+export async function updateUserPreferences(
+    userId: string,
+    preferences: UpdateUserPreferences
+): Promise<UserPreferences> {
+    const res = await api.put(`/api/llm/users/${userId}/preferences`, preferences);
+    return res.data;
+}
+
+export async function updateLlmConsent(
+    userId: string,
+    consent: boolean
+): Promise<UserPreferences> {
+    const res = await api.post(`/api/llm/users/${userId}/llm-consent`, { consent });
+    return res.data;
+}
+
+export async function getLlmUsageStats(userId: string): Promise<LlmUsageStats> {
+    const res = await api.get(`/api/llm/users/${userId}/usage`);
     return res.data;
 }

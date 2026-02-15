@@ -9,4 +9,5 @@ pub mod transactions;
 pub mod admin;
 pub mod risk;
 pub mod optimization;
+pub mod llm;
 
