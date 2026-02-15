@@ -15,6 +15,7 @@ pub async fn analyze_portfolio(
     portfolio_id: Uuid,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    risk_free_rate: f64,
 ) -> Result<OptimizationAnalysis, AppError> {
     info!("Analyzing portfolio {} for optimization", portfolio_id);
 
@@ -54,6 +55,7 @@ pub async fn analyze_portfolio(
         total_value,
         price_provider,
         failure_cache,
+        risk_free_rate,
     )
     .await?;
 
@@ -72,6 +74,7 @@ pub async fn analyze_portfolio(
         total_value,
         price_provider,
         failure_cache,
+        risk_free_rate,
     )
     .await?;
 
@@ -108,6 +111,7 @@ async fn calculate_current_metrics(
     total_value: f64,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    risk_free_rate: f64,
 ) -> Result<CurrentMetrics, AppError> {
     let mut weighted_volatility = 0.0;
     let mut weighted_max_drawdown = 0.0;
@@ -128,6 +132,7 @@ async fn calculate_current_metrics(
             "SPY",
             price_provider,
             failure_cache,
+            risk_free_rate,
         )
         .await
         {
@@ -273,6 +278,7 @@ async fn calculate_risk_contributions(
     total_value: f64,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    risk_free_rate: f64,
 ) -> Result<Vec<RiskContribution>, AppError> {
     let mut contributions = Vec::new();
     let mut total_risk = 0.0;
@@ -289,6 +295,7 @@ async fn calculate_risk_contributions(
             "SPY",
             price_provider,
             failure_cache,
+            risk_free_rate,
         )
         .await
         {

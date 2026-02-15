@@ -184,6 +184,8 @@ export type PositionRisk = {
     max_drawdown: number; // Maximum drawdown as negative percentage
     beta: number | null; // Beta coefficient relative to benchmark
     sharpe: number | null; // Sharpe ratio (risk-adjusted return)
+    sortino: number | null; // Sortino ratio (downside risk-adjusted return)
+    annualized_return: number | null; // Annualized return as percentage
     value_at_risk: number | null; // 5% VaR as negative percentage
 };
 
@@ -262,6 +264,8 @@ export type RiskSnapshot = {
     max_drawdown: number | string; // BigDecimal from backend (comes as string)
     beta?: number | string; // BigDecimal from backend (comes as string)
     sharpe?: number | string; // BigDecimal from backend (comes as string)
+    sortino?: number | string; // BigDecimal from backend (comes as string)
+    annualized_return?: number | string; // BigDecimal from backend (comes as string)
     value_at_risk?: number | string; // BigDecimal from backend (comes as string)
     risk_score: number | string; // BigDecimal from backend (comes as string)
     risk_level: RiskLevel;

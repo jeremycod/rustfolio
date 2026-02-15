@@ -373,6 +373,9 @@ export function PortfolioRiskOverview({
                     <TableCell align="right">Volatility</TableCell>
                     <TableCell align="right">Drawdown</TableCell>
                     <TableCell align="right">Beta</TableCell>
+                    <TableCell align="right">Sharpe</TableCell>
+                    <TableCell align="right">Sortino</TableCell>
+                    <TableCell align="right">Ann. Return</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -435,6 +438,21 @@ export function PortfolioRiskOverview({
                         </TableCell>
                         <TableCell align="right">
                           {position.risk_assessment.metrics.beta?.toFixed(2) ?? '—'}
+                        </TableCell>
+                        <TableCell align="right">
+                          {position.risk_assessment.metrics.sharpe?.toFixed(2) ?? '—'}
+                        </TableCell>
+                        <TableCell align="right">
+                          {position.risk_assessment.metrics.sortino?.toFixed(2) ?? '—'}
+                        </TableCell>
+                        <TableCell align="right" sx={{
+                          color: position.risk_assessment.metrics.annualized_return !== null && position.risk_assessment.metrics.annualized_return > 0
+                            ? 'success.main'
+                            : position.risk_assessment.metrics.annualized_return !== null && position.risk_assessment.metrics.annualized_return < 0
+                            ? 'error.main'
+                            : 'text.primary'
+                        }}>
+                          {position.risk_assessment.metrics.annualized_return?.toFixed(2) ? `${position.risk_assessment.metrics.annualized_return.toFixed(2)}%` : '—'}
                         </TableCell>
                       </TableRow>
                     );

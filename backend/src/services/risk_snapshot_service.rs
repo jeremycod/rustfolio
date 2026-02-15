@@ -20,6 +20,7 @@ pub async fn create_daily_snapshots(
     date: NaiveDate,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    risk_free_rate: f64,
 ) -> Result<Vec<RiskSnapshot>, AppError> {
     info!(
         "Creating risk snapshots for portfolio {} on {}",
@@ -62,6 +63,7 @@ pub async fn create_daily_snapshots(
             *market_value,
             price_provider,
             failure_cache,
+            risk_free_rate,
         )
         .await
         {
@@ -76,7 +78,7 @@ pub async fn create_daily_snapshots(
     }
 
     // Create portfolio-level snapshot
-    match create_portfolio_snapshot(pool, portfolio_id, date, &ticker_aggregates, price_provider, failure_cache)
+    match create_portfolio_snapshot(pool, portfolio_id, date, &ticker_aggregates, price_provider, failure_cache, risk_free_rate)
         .await
     {
         Ok(snapshot) => snapshots.push(snapshot),
@@ -103,10 +105,11 @@ async fn create_position_snapshot(
     market_value: f64,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    risk_free_rate: f64,
 ) -> Result<RiskSnapshot, AppError> {
     // Compute risk metrics for the position
     let risk_assessment =
-        risk_service::compute_risk_metrics(pool, ticker, 90, "SPY", price_provider, failure_cache)
+        risk_service::compute_risk_metrics(pool, ticker, 90, "SPY", price_provider, failure_cache, risk_free_rate)
             .await?;
 
     let position_risk = &risk_assessment.metrics;
@@ -140,6 +143,7 @@ async fn create_portfolio_snapshot(
     ticker_aggregates: &HashMap<String, (f64, f64)>,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    risk_free_rate: f64,
 ) -> Result<RiskSnapshot, AppError> {
     // Calculate total portfolio value
     let total_value: f64 = ticker_aggregates.values().map(|(_, mv)| mv).sum();
@@ -171,6 +175,7 @@ async fn create_portfolio_snapshot(
             "SPY",
             price_provider,
             failure_cache,
+            risk_free_rate,
         ).await {
             Ok(assessment) => {
                 weighted_volatility += assessment.metrics.volatility * weight;
@@ -198,6 +203,8 @@ async fn create_portfolio_snapshot(
         max_drawdown: weighted_max_drawdown,
         beta: if beta_count > 0 { Some(weighted_beta) } else { None },
         sharpe: if sharpe_count > 0 { Some(weighted_sharpe) } else { None },
+        sortino: None,
+        annualized_return: None,
         value_at_risk: None,
     });
 

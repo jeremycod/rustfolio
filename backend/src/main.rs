@@ -64,10 +64,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             panic!("Invalid PRICE_PROVIDER: {}. Must be 'alphavantage', 'twelvedata', or 'multi'", provider_name);
         }
     };
+    // Read risk-free rate from environment (default to 4.5% = 0.045 annual rate)
+    let risk_free_rate = std::env::var("RISK_FREE_RATE")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(0.045); // Default: 4.5% (US 10-year Treasury approximation)
+
+    tracing::info!("📈 Risk-free rate set to: {:.2}%", risk_free_rate * 100.0);
+
     let state = AppState {
         pool,
         price_provider: provider,
         failure_cache: FailureCache::new(),
+        risk_free_rate,
     };
     let app = app::create_app(state);
 

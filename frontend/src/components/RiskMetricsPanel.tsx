@@ -445,6 +445,32 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
           </Grid>
         )}
 
+        {risk.metrics.sortino !== null && (
+          <Grid item xs={12} sm={6} md={4}>
+            <MetricCard
+              icon={<AccountBalance />}
+              label="Sortino Ratio"
+              value={risk.metrics.sortino.toFixed(2)}
+              subValue="Downside risk-adjusted return"
+              color={risk.metrics.sortino > 1 ? '#4caf50' : risk.metrics.sortino > 0 ? '#ff9800' : '#f44336'}
+              tooltip="Like Sharpe but focuses only on downside risk. Higher is better. >1 is good, >2 is excellent."
+            />
+          </Grid>
+        )}
+
+        {risk.metrics.annualized_return !== null && (
+          <Grid item xs={12} sm={6} md={4}>
+            <MetricCard
+              icon={<TrendingDown />}
+              label="Annualized Return"
+              value={`${risk.metrics.annualized_return.toFixed(2)}%`}
+              subValue="Expected yearly return"
+              color={risk.metrics.annualized_return > 10 ? '#4caf50' : risk.metrics.annualized_return > 0 ? '#ff9800' : '#f44336'}
+              tooltip="Expected yearly return based on historical data. Calculated from average daily returns."
+            />
+          </Grid>
+        )}
+
         {risk.metrics.value_at_risk !== null && (
           <Grid item xs={12} sm={6} md={4}>
             <MetricCard

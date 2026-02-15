@@ -17,6 +17,12 @@ pub struct PositionRisk {
     /// Annualized Sharpe ratio (risk-adjusted return)
     pub sharpe: Option<f64>,
 
+    /// Annualized Sortino ratio (downside risk-adjusted return)
+    pub sortino: Option<f64>,
+
+    /// Annualized return (mean return extrapolated to one year), as a percentage
+    pub annualized_return: Option<f64>,
+
     /// 5% Value at Risk (1-day horizon), as a negative percentage
     pub value_at_risk: Option<f64>,
 }

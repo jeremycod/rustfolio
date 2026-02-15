@@ -8,4 +8,5 @@ pub struct AppState {
     pub pool: PgPool,
     pub price_provider: Arc<dyn PriceProvider>,
     pub failure_cache: FailureCache,
+    pub risk_free_rate: f64, // Annual risk-free rate (e.g., 0.045 for 4.5%)
 }

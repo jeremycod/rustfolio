@@ -34,6 +34,7 @@ pub async fn get_portfolio_optimization(
         portfolio_id,
         state.price_provider.as_ref(),
         &state.failure_cache,
+        state.risk_free_rate,
     )
     .await
     .map_err(|e| {

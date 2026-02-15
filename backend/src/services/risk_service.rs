@@ -21,6 +21,7 @@ use tracing::info;
 /// * `benchmark` – symbol of the benchmark index for beta calculation (e.g., "SPY")
 /// * `price_provider` – external price data provider for fetching fresh data
 /// * `failure_cache` – cache to avoid retrying known-bad tickers
+/// * `risk_free_rate` – annual risk-free rate for Sharpe/Sortino calculations (e.g., 0.045 for 4.5%)
 ///
 /// # Returns
 /// A `RiskAssessment` containing all risk metrics and an overall risk score.
@@ -31,6 +32,7 @@ pub async fn compute_risk_metrics(
     benchmark: &str,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    risk_free_rate: f64,
 ) -> Result<RiskAssessment, AppError> {
     // Ensure we have recent price data for both ticker and benchmark
     info!("Ensuring fresh price data for ticker: {}", ticker);
@@ -76,7 +78,9 @@ pub async fn compute_risk_metrics(
     // Compute individual risk metrics
     let (volatility, max_drawdown) = compute_vol_drawdown(&series);
     let beta = compute_beta(&series, &bench);
-    let sharpe = compute_sharpe(&series);
+    let sharpe = compute_sharpe(&series, risk_free_rate);
+    let sortino = compute_sortino(&series, risk_free_rate);
+    let annualized_return = compute_annualized_return(&series);
     let var = compute_var(&series);
 
     let metrics = PositionRisk {
@@ -84,6 +88,8 @@ pub async fn compute_risk_metrics(
         max_drawdown,
         beta,
         sharpe,
+        sortino,
+        annualized_return,
         value_at_risk: var,
     };
 
@@ -212,11 +218,54 @@ fn compute_beta(series: &[PricePoint], bench: &[PricePoint]) -> Option<f64> {
     Some(cov / var_b)
 }
 
-/// Compute the annualized Sharpe ratio using a fixed risk-free rate.
+/// Compute the annualized return from a price series.
+///
+/// Returns the mean daily return extrapolated to one year, expressed as a percentage.
+fn compute_annualized_return(series: &[PricePoint]) -> Option<f64> {
+    if series.len() < 2 {
+        return None;
+    }
+
+    // Convert to f64 prices
+    let prices: Vec<f64> = series
+        .iter()
+        .filter_map(|p| p.close_price.to_f64())
+        .collect();
+
+    if prices.len() < 2 {
+        return None;
+    }
+
+    // Calculate daily returns
+    let mut returns = Vec::new();
+    for i in 1..prices.len() {
+        let prev = prices[i - 1];
+        let cur = prices[i];
+        if prev > 0.0 {
+            returns.push((cur - prev) / prev);
+        }
+    }
+
+    if returns.is_empty() {
+        return None;
+    }
+
+    // Calculate mean return and annualize
+    let mean_daily = returns.iter().sum::<f64>() / returns.len() as f64;
+    let annualized = mean_daily * 252.0 * 100.0; // Annualized and convert to percentage
+
+    Some(annualized)
+}
+
+/// Compute the annualized Sharpe ratio using the provided risk-free rate.
 ///
 /// The Sharpe ratio measures risk-adjusted return. Higher values indicate better
-/// risk-adjusted performance.
-fn compute_sharpe(series: &[PricePoint]) -> Option<f64> {
+/// risk-adjusted performance. Formula: (portfolio_return - risk_free_rate) / volatility
+///
+/// # Arguments
+/// * `series` - Price history for the asset
+/// * `risk_free_rate` - Annual risk-free rate (e.g., 0.045 for 4.5%)
+fn compute_sharpe(series: &[PricePoint], risk_free_rate: f64) -> Option<f64> {
     if series.len() < 2 {
         return None;
     }
@@ -254,11 +303,88 @@ fn compute_sharpe(series: &[PricePoint]) -> Option<f64> {
         / (returns.len() as f64 - 1.0);
     let volatility = variance.sqrt() * (252.0_f64).sqrt(); // Annualized
 
-    // Assume 2% annual risk-free rate
-    let risk_free = 0.02 / 252.0;
+    if volatility.abs() < f64::EPSILON {
+        return None; // Avoid division by zero
+    }
+
+    // Daily risk-free rate
+    let risk_free_daily = risk_free_rate / 252.0;
 
     // Annualized Sharpe ratio
-    Some(((mean - risk_free) * 252.0) / volatility)
+    Some(((mean - risk_free_daily) * 252.0) / volatility)
+}
+
+/// Compute the annualized Sortino ratio using the provided risk-free rate.
+///
+/// The Sortino ratio is similar to Sharpe but only considers downside volatility
+/// (negative returns), making it better for assessing downside risk.
+/// Formula: (portfolio_return - risk_free_rate) / downside_deviation
+///
+/// # Arguments
+/// * `series` - Price history for the asset
+/// * `risk_free_rate` - Annual risk-free rate (e.g., 0.045 for 4.5%)
+fn compute_sortino(series: &[PricePoint], risk_free_rate: f64) -> Option<f64> {
+    if series.len() < 2 {
+        return None;
+    }
+
+    // Convert to f64 prices
+    let prices: Vec<f64> = series
+        .iter()
+        .filter_map(|p| p.close_price.to_f64())
+        .collect();
+
+    if prices.len() < 2 {
+        return None;
+    }
+
+    // Calculate daily returns
+    let mut returns = Vec::new();
+    for i in 1..prices.len() {
+        let prev = prices[i - 1];
+        let cur = prices[i];
+        if prev > 0.0 {
+            returns.push((cur - prev) / prev);
+        }
+    }
+
+    if returns.is_empty() {
+        return None;
+    }
+
+    // Calculate mean return
+    let mean = returns.iter().sum::<f64>() / returns.len() as f64;
+
+    // Daily risk-free rate
+    let risk_free_daily = risk_free_rate / 252.0;
+
+    // Calculate downside deviation (only negative returns below risk-free rate)
+    let downside_returns: Vec<f64> = returns
+        .iter()
+        .filter(|&&r| r < risk_free_daily)
+        .copied()
+        .collect();
+
+    if downside_returns.is_empty() {
+        // No negative returns - infinite Sortino ratio, but we'll return None or a high value
+        // For practical purposes, return None (can't divide by zero downside deviation)
+        return None;
+    }
+
+    let downside_variance: f64 = downside_returns
+        .iter()
+        .map(|r| (r - risk_free_daily).powi(2))
+        .sum::<f64>()
+        / (downside_returns.len() as f64 - 1.0);
+
+    let downside_deviation = downside_variance.sqrt() * (252.0_f64).sqrt(); // Annualized
+
+    if downside_deviation.abs() < f64::EPSILON {
+        return None; // Avoid division by zero
+    }
+
+    // Annualized Sortino ratio
+    Some(((mean - risk_free_daily) * 252.0) / downside_deviation)
 }
 
 /// Compute a 5% Value at Risk (VaR) using historical simulation.
@@ -457,6 +583,8 @@ mod tests {
             max_drawdown: 0.0,
             beta: Some(0.0),
             sharpe: Some(0.0),
+            sortino: None,
+            annualized_return: None,
             value_at_risk: Some(0.0),
         };
 
@@ -471,6 +599,8 @@ mod tests {
             max_drawdown: -50.0,  // Large drawdown
             beta: Some(2.0),      // High beta
             sharpe: Some(1.0),    // Sharpe ratio doesn't affect score
+            sortino: None,
+            annualized_return: None,
             value_at_risk: Some(-10.0), // High VaR
         };
 

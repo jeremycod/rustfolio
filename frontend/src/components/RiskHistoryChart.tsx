@@ -39,7 +39,7 @@ interface RiskHistoryChartProps {
 }
 
 type TimeRange = 30 | 90 | 180 | 365;
-type MetricType = 'risk_score' | 'volatility' | 'max_drawdown' | 'sharpe' | 'beta';
+type MetricType = 'risk_score' | 'volatility' | 'max_drawdown' | 'sharpe' | 'sortino' | 'annualized_return' | 'beta';
 
 export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistoryChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>(90);
@@ -77,6 +77,8 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
     volatility: typeof snapshot.volatility === 'string' ? parseFloat(snapshot.volatility) : snapshot.volatility,
     max_drawdown: Math.abs(typeof snapshot.max_drawdown === 'string' ? parseFloat(snapshot.max_drawdown) : snapshot.max_drawdown),
     sharpe: snapshot.sharpe ? (typeof snapshot.sharpe === 'string' ? parseFloat(snapshot.sharpe) : snapshot.sharpe) : 0,
+    sortino: snapshot.sortino ? (typeof snapshot.sortino === 'string' ? parseFloat(snapshot.sortino) : snapshot.sortino) : 0,
+    annualized_return: snapshot.annualized_return ? (typeof snapshot.annualized_return === 'string' ? parseFloat(snapshot.annualized_return) : snapshot.annualized_return) : 0,
     beta: snapshot.beta ? (typeof snapshot.beta === 'string' ? parseFloat(snapshot.beta) : snapshot.beta) : 0,
     risk_level: snapshot.risk_level,
   })) || [];
@@ -108,6 +110,16 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
       sharpe: {
         name: 'Sharpe Ratio',
         color: '#4caf50',
+        yAxisId: 'right',
+      },
+      sortino: {
+        name: 'Sortino Ratio',
+        color: '#00bcd4',
+        yAxisId: 'right',
+      },
+      annualized_return: {
+        name: 'Annualized Return (%)',
+        color: '#8bc34a',
         yAxisId: 'right',
       },
       beta: {
@@ -222,6 +234,12 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
             <ToggleButton value="sharpe" aria-label="sharpe ratio">
               Sharpe
             </ToggleButton>
+            <ToggleButton value="sortino" aria-label="sortino ratio">
+              Sortino
+            </ToggleButton>
+            <ToggleButton value="annualized_return" aria-label="annualized return">
+              Ann. Return
+            </ToggleButton>
             <ToggleButton value="beta" aria-label="beta">
               Beta
             </ToggleButton>
@@ -264,7 +282,7 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
                 tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               />
               <YAxis yAxisId="left" />
-              {(selectedMetrics.includes('sharpe') || selectedMetrics.includes('beta')) && (
+              {(selectedMetrics.includes('sharpe') || selectedMetrics.includes('sortino') || selectedMetrics.includes('annualized_return') || selectedMetrics.includes('beta')) && (
                 <YAxis yAxisId="right" orientation="right" />
               )}
               <Tooltip
@@ -274,7 +292,7 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
                   day: 'numeric'
                 })}
                 formatter={(value: number, name: string) => {
-                  if (name === 'Sharpe Ratio' || name === 'Beta') {
+                  if (name === 'Sharpe Ratio' || name === 'Sortino Ratio' || name === 'Beta') {
                     return value.toFixed(2);
                   }
                   return value.toFixed(1);

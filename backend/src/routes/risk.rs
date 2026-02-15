@@ -73,6 +73,7 @@ pub async fn get_position_risk(
         &params.benchmark,
         state.price_provider.as_ref(),
         &state.failure_cache,
+        state.risk_free_rate,
     )
     .await
     .map_err(|e| {
@@ -181,6 +182,7 @@ pub async fn get_portfolio_risk(
             &params.benchmark,
             state.price_provider.as_ref(),
             &state.failure_cache,
+            state.risk_free_rate,
         ).await {
             Ok(assessment) => {
                 // Weight metrics by position size
@@ -223,6 +225,8 @@ pub async fn get_portfolio_risk(
         max_drawdown: weighted_max_drawdown,
         beta: if beta_count > 0 { Some(weighted_beta) } else { None },
         sharpe: if sharpe_count > 0 { Some(weighted_sharpe) } else { None },
+        sortino: None,
+        annualized_return: None,
         value_at_risk: None, // VaR not meaningful at portfolio level without correlations
     });
 
@@ -697,6 +701,7 @@ pub async fn create_portfolio_snapshot(
         today,
         state.price_provider.as_ref(),
         &state.failure_cache,
+        state.risk_free_rate,
     )
     .await?;
 
@@ -877,6 +882,7 @@ pub async fn export_portfolio_risk_csv(
             &params.benchmark,
             state.price_provider.as_ref(),
             &state.failure_cache,
+            state.risk_free_rate,
         ).await {
             Ok(assessment) => {
                 csv_writer.write_record(&[
