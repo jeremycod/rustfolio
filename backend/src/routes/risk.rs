@@ -8,9 +8,9 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{RiskAssessment, CorrelationMatrix, CorrelationPair, RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams};
+use crate::models::{RiskAssessment, CorrelationMatrix, CorrelationPair, RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams, PortfolioNarrative, GenerateNarrativeRequest};
 use crate::models::risk::{RiskThresholdSettings, UpdateRiskThresholds, PortfolioRiskWithViolations, ThresholdViolation, ViolationSeverity};
-use crate::services::{risk_service, risk_snapshot_service};
+use crate::services::{risk_service, risk_snapshot_service, narrative_service};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -23,6 +23,7 @@ pub fn router() -> Router<AppState> {
         .route("/portfolios/:portfolio_id/alerts", get(get_risk_alerts))
         .route("/portfolios/:portfolio_id/thresholds", get(get_thresholds))
         .route("/portfolios/:portfolio_id/thresholds", post(set_thresholds))
+        .route("/portfolios/:portfolio_id/narrative", get(get_portfolio_narrative))
         .route("/portfolios/:portfolio_id/export/csv", get(export_portfolio_risk_csv))
 }
 
@@ -980,4 +981,195 @@ pub async fn export_portfolio_risk_csv(
         )
         .body(csv_data.into())
         .unwrap())
+}
+
+/// GET /api/risk/portfolios/:portfolio_id/narrative
+///
+/// Generate an AI-powered narrative summary for a portfolio
+///
+/// Query parameters:
+/// - `time_period`: Optional time period for analysis (e.g., "30d", "90d", "1y")
+///
+/// Requires LLM to be enabled and user consent granted.
+/// Returns a structured narrative with summary, performance explanation, risk highlights, and top contributors.
+///
+/// Example: GET /api/risk/portfolios/{uuid}/narrative?time_period=30d
+pub async fn get_portfolio_narrative(
+    Path(portfolio_id): Path<Uuid>,
+    Query(params): Query<GenerateNarrativeRequest>,
+    State(state): State<AppState>,
+) -> Result<Json<PortfolioNarrative>, AppError> {
+    use crate::db::holding_snapshot_queries;
+    use std::collections::HashMap;
+
+    info!(
+        "GET /api/risk/portfolios/{}/narrative - Generating AI narrative (time_period: {:?})",
+        portfolio_id, params.time_period
+    );
+
+    // Use provided time_period or default to "90 days"
+    let time_period = params.time_period.as_deref().unwrap_or("90 days");
+
+    // Parse days from time_period for risk calculation
+    let days = if time_period.contains("30") || time_period.contains("month") {
+        30
+    } else if time_period.contains("90") {
+        90
+    } else if time_period.contains("1y") || time_period.contains("year") {
+        365
+    } else {
+        90 // default
+    };
+
+    // 1. Get portfolio risk data (similar to get_portfolio_risk)
+    let holdings = holding_snapshot_queries::fetch_portfolio_latest_holdings(
+        &state.pool,
+        portfolio_id
+    ).await.map_err(|e| {
+        error!("Failed to fetch portfolio holdings: {}", e);
+        AppError::Db(e)
+    })?;
+
+    if holdings.is_empty() {
+        return Err(AppError::External(
+            "Portfolio has no holdings. Please add holdings before generating a narrative.".to_string()
+        ));
+    }
+
+    // 2. Aggregate holdings by ticker
+    let mut ticker_aggregates: HashMap<String, (f64, f64)> = HashMap::new();
+
+    for holding in &holdings {
+        let market_value = holding.market_value.to_string().parse::<f64>().unwrap_or(0.0);
+        let quantity = holding.quantity.to_string().parse::<f64>().unwrap_or(0.0);
+
+        ticker_aggregates
+            .entry(holding.ticker.clone())
+            .and_modify(|(q, mv)| {
+                *q += quantity;
+                *mv += market_value;
+            })
+            .or_insert((quantity, market_value));
+    }
+
+    let total_value: f64 = ticker_aggregates.values().map(|(_, mv)| mv).sum();
+
+    if total_value == 0.0 {
+        return Err(AppError::External(
+            "Portfolio has no holdings with market value".to_string()
+        ));
+    }
+
+    // 3. Compute risk metrics for each position
+    let mut position_risks = Vec::new();
+    let mut weighted_volatility = 0.0;
+    let mut weighted_max_drawdown = 0.0;
+    let mut weighted_beta = 0.0;
+    let mut weighted_sharpe = 0.0;
+    let mut beta_count = 0;
+    let mut sharpe_count = 0;
+
+    for (ticker, (_quantity, market_value)) in ticker_aggregates {
+        let weight = market_value / total_value;
+        if weight < 0.001 {
+            continue;
+        }
+
+        match risk_service::compute_risk_metrics(
+            &state.pool,
+            &ticker,
+            days,
+            "SPY",
+            state.price_provider.as_ref(),
+            &state.failure_cache,
+            state.risk_free_rate,
+        ).await {
+            Ok(assessment) => {
+                weighted_volatility += assessment.metrics.volatility * weight;
+                weighted_max_drawdown += assessment.metrics.max_drawdown * weight;
+
+                if let Some(beta) = assessment.metrics.beta {
+                    weighted_beta += beta * weight;
+                    beta_count += 1;
+                }
+
+                if let Some(sharpe) = assessment.metrics.sharpe {
+                    weighted_sharpe += sharpe * weight;
+                    sharpe_count += 1;
+                }
+
+                position_risks.push(crate::models::PositionRiskContribution {
+                    ticker: ticker.clone(),
+                    market_value,
+                    weight,
+                    risk_assessment: assessment,
+                });
+            },
+            Err(e) => {
+                warn!("Could not compute risk for {} in portfolio: {}", ticker, e);
+            }
+        }
+    }
+
+    if position_risks.is_empty() {
+        return Err(AppError::External(
+            "No positions in portfolio have available risk data".to_string()
+        ));
+    }
+
+    // 4. Calculate portfolio-level risk score
+    let portfolio_risk_score = risk_service::score_risk(&crate::models::PositionRisk {
+        volatility: weighted_volatility,
+        max_drawdown: weighted_max_drawdown,
+        beta: if beta_count > 0 { Some(weighted_beta) } else { None },
+        beta_spy: if beta_count > 0 { Some(weighted_beta) } else { None },
+        beta_qqq: None,
+        beta_iwm: None,
+        risk_decomposition: None,
+        sharpe: if sharpe_count > 0 { Some(weighted_sharpe) } else { None },
+        sortino: None,
+        annualized_return: None,
+        value_at_risk: None,
+        var_95: None,
+        var_99: None,
+        expected_shortfall_95: None,
+        expected_shortfall_99: None,
+    });
+
+    let risk_level = crate::models::RiskLevel::from_score(portfolio_risk_score);
+
+    position_risks.sort_by(|a, b| {
+        b.risk_assessment.risk_score.partial_cmp(&a.risk_assessment.risk_score).unwrap()
+    });
+
+    let portfolio_risk = crate::models::PortfolioRisk {
+        portfolio_id: portfolio_id.to_string(),
+        total_value,
+        portfolio_volatility: weighted_volatility,
+        portfolio_max_drawdown: weighted_max_drawdown,
+        portfolio_beta: if beta_count > 0 { Some(weighted_beta) } else { None },
+        portfolio_sharpe: if sharpe_count > 0 { Some(weighted_sharpe) } else { None },
+        portfolio_risk_score,
+        risk_level,
+        position_risks,
+    };
+
+    // 5. Generate narrative using LLM service
+    // Use a demo user ID (in production, extract from auth token)
+    let demo_user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")
+        .expect("Invalid demo user UUID");
+
+    let narrative = narrative_service::generate_portfolio_narrative(
+        state.llm_service.clone(),
+        demo_user_id,
+        &portfolio_risk,
+        time_period,
+    ).await?;
+
+    info!(
+        "Successfully generated narrative for portfolio {}",
+        portfolio_id
+    );
+
+    Ok(Json(narrative))
 }

@@ -32,6 +32,7 @@ import { TickerChip } from './TickerChip';
 import { RiskHistoryChart } from './RiskHistoryChart';
 import { RiskThresholdSettings } from './RiskThresholdSettings';
 import { OptimizationRecommendations } from './OptimizationRecommendations';
+import PortfolioNarrative from './PortfolioNarrative';
 
 interface PortfolioRiskOverviewProps {
   selectedPortfolioId: string | null;
@@ -480,6 +481,11 @@ export function PortfolioRiskOverview({
               portfolioId={selectedPortfolioId!}
               thresholds={riskData?.thresholds}
             />
+          </Box>
+
+          {/* AI Portfolio Narrative */}
+          <Box sx={{ mt: 3 }}>
+            <PortfolioNarrative portfolioId={selectedPortfolioId!} timePeriod="90d" />
           </Box>
 
           {/* Portfolio Optimization Suggestions */}

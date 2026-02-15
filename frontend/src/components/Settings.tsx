@@ -18,11 +18,12 @@ import {
   IconButton,
   Alert,
 } from '@mui/material';
-import { Delete, Warning } from '@mui/icons-material';
+import { Delete, Warning, Settings as SettingsIcon } from '@mui/icons-material';
 import { useState } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { resetAllData, listPortfolios, deletePortfolio } from '../lib/endpoints';
 import { RiskThresholdSettings } from './RiskThresholdSettings';
+import LlmSettings from './LlmSettings';
 import type { Portfolio } from '../types';
 
 export function Settings() {
@@ -32,6 +33,8 @@ export function Settings() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [portfolioToDelete, setPortfolioToDelete] = useState<Portfolio | null>(null);
+  const [riskThresholdsDialogOpen, setRiskThresholdsDialogOpen] = useState(false);
+  const [selectedPortfolioForThresholds, setSelectedPortfolioForThresholds] = useState<Portfolio | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -118,6 +121,16 @@ export function Settings() {
                   />
                   <ListItemSecondaryAction>
                     <IconButton
+                      color="primary"
+                      onClick={() => {
+                        setSelectedPortfolioForThresholds(portfolio);
+                        setRiskThresholdsDialogOpen(true);
+                      }}
+                      title="Configure risk thresholds"
+                    >
+                      <SettingsIcon />
+                    </IconButton>
+                    <IconButton
                       edge="end"
                       color="error"
                       onClick={() => handleDeleteClick(portfolio)}
@@ -138,9 +151,9 @@ export function Settings() {
         )}
       </Paper>
 
-      {/* Risk Thresholds Section */}
+      {/* AI Features Section */}
       <Box sx={{ mb: 4 }}>
-        <RiskThresholdSettings />
+        <LlmSettings />
       </Box>
 
       <Paper sx={{ p: 3 }}>
@@ -296,6 +309,18 @@ export function Settings() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Risk Thresholds Dialog */}
+      {selectedPortfolioForThresholds && (
+        <RiskThresholdSettings
+          portfolioId={selectedPortfolioForThresholds.id}
+          open={riskThresholdsDialogOpen}
+          onClose={() => {
+            setRiskThresholdsDialogOpen(false);
+            setSelectedPortfolioForThresholds(null);
+          }}
+        />
+      )}
     </Box>
   );
 }

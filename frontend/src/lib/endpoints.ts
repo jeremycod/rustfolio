@@ -24,7 +24,8 @@ import type {
     OptimizationAnalysis,
     UserPreferences,
     UpdateUserPreferences,
-    LlmUsageStats
+    LlmUsageStats,
+    PortfolioNarrative
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -246,6 +247,21 @@ export async function updateRiskThresholds(
     thresholds: UpdateRiskThresholds
 ): Promise<RiskThresholdSettings> {
     const res = await api.post(`/api/risk/portfolios/${portfolioId}/thresholds`, thresholds);
+    return res.data;
+}
+
+// Portfolio narrative endpoint
+export async function getPortfolioNarrative(
+    portfolioId: string,
+    timePeriod?: string
+): Promise<PortfolioNarrative> {
+    const params = new URLSearchParams();
+    if (timePeriod) params.append('time_period', timePeriod);
+
+    const queryString = params.toString();
+    const url = `/api/risk/portfolios/${portfolioId}/narrative${queryString ? `?${queryString}` : ''}`;
+
+    const res = await api.get(url);
     return res.data;
 }
 

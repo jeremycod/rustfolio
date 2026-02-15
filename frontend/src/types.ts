@@ -450,3 +450,11 @@ export type LlmUsageStats = {
     total_cost: string; // BigDecimal from backend
     current_month_cost: string; // BigDecimal from backend
 };
+
+export type PortfolioNarrative = {
+    summary: string;
+    performance_explanation: string;
+    risk_highlights: string[];
+    top_contributors: string[];
+    generated_at: string; // ISO 8601 timestamp
+};

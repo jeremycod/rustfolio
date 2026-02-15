@@ -9,6 +9,7 @@ pub mod risk;
 pub mod risk_snapshot;
 pub mod optimization;
 pub mod llm;
+pub mod narrative;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -33,3 +34,4 @@ pub use optimization::{
 pub use llm::{
     LlmUsage, CreateLlmUsage, UserPreferences, UpdateUserPreferences, LlmUsageStats,
 };
+pub use narrative::{PortfolioNarrative, GenerateNarrativeRequest};
