@@ -228,6 +228,10 @@ pub async fn get_portfolio_risk(
         sortino: None,
         annualized_return: None,
         value_at_risk: None, // VaR not meaningful at portfolio level without correlations
+        var_95: None,
+        var_99: None,
+        expected_shortfall_95: None,
+        expected_shortfall_99: None,
     });
 
     let risk_level = crate::models::RiskLevel::from_score(portfolio_risk_score);

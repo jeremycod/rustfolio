@@ -206,6 +206,10 @@ async fn create_portfolio_snapshot(
         sortino: None,
         annualized_return: None,
         value_at_risk: None,
+        var_95: None,
+        var_99: None,
+        expected_shortfall_95: None,
+        expected_shortfall_99: None,
     });
 
     let risk_level = RiskLevel::from_score(portfolio_risk_score);

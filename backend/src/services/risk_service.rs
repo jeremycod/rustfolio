@@ -82,6 +82,8 @@ pub async fn compute_risk_metrics(
     let sortino = compute_sortino(&series, risk_free_rate);
     let annualized_return = compute_annualized_return(&series);
     let var = compute_var(&series);
+    let (var_95, var_99) = compute_var_multi(&series);
+    let (es_95, es_99) = compute_expected_shortfall(&series);
 
     let metrics = PositionRisk {
         volatility,
@@ -91,6 +93,10 @@ pub async fn compute_risk_metrics(
         sortino,
         annualized_return,
         value_at_risk: var,
+        var_95,
+        var_99,
+        expected_shortfall_95: es_95,
+        expected_shortfall_99: es_99,
     };
 
     // Calculate overall risk score
@@ -428,6 +434,117 @@ fn compute_var(series: &[PricePoint]) -> Option<f64> {
     Some(sorted_returns[idx] * 100.0) // Convert to percentage
 }
 
+/// Compute Value at Risk (VaR) at multiple confidence levels using historical simulation.
+///
+/// Returns (var_95, var_99) as a tuple of negative percentages.
+/// - var_95: 95% confidence (5% chance of exceeding this loss)
+/// - var_99: 99% confidence (1% chance of exceeding this loss)
+fn compute_var_multi(series: &[PricePoint]) -> (Option<f64>, Option<f64>) {
+    if series.len() < 2 {
+        return (None, None);
+    }
+
+    // Convert to f64 prices
+    let prices: Vec<f64> = series
+        .iter()
+        .filter_map(|p| p.close_price.to_f64())
+        .collect();
+
+    if prices.len() < 2 {
+        return (None, None);
+    }
+
+    // Calculate daily returns
+    let mut returns = Vec::new();
+    for i in 1..prices.len() {
+        let prev = prices[i - 1];
+        let cur = prices[i];
+        if prev > 0.0 {
+            returns.push((cur - prev) / prev);
+        }
+    }
+
+    if returns.is_empty() {
+        return (None, None);
+    }
+
+    // Sort returns to find percentiles
+    let mut sorted_returns = returns.clone();
+    sorted_returns.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    // 95% VaR (5th percentile)
+    let idx_95 = (sorted_returns.len() as f64 * 0.05).floor() as usize;
+    let var_95 = Some(sorted_returns[idx_95] * 100.0); // Convert to percentage
+
+    // 99% VaR (1st percentile)
+    let idx_99 = (sorted_returns.len() as f64 * 0.01).floor() as usize;
+    let var_99 = Some(sorted_returns[idx_99] * 100.0); // Convert to percentage
+
+    (var_95, var_99)
+}
+
+/// Compute Expected Shortfall (CVaR) at 95% and 99% confidence levels.
+///
+/// Expected Shortfall is the average loss beyond the VaR threshold.
+/// It's a more conservative risk measure than VaR.
+///
+/// Returns (es_95, es_99) as a tuple of negative percentages.
+fn compute_expected_shortfall(series: &[PricePoint]) -> (Option<f64>, Option<f64>) {
+    if series.len() < 2 {
+        return (None, None);
+    }
+
+    // Convert to f64 prices
+    let prices: Vec<f64> = series
+        .iter()
+        .filter_map(|p| p.close_price.to_f64())
+        .collect();
+
+    if prices.len() < 2 {
+        return (None, None);
+    }
+
+    // Calculate daily returns
+    let mut returns = Vec::new();
+    for i in 1..prices.len() {
+        let prev = prices[i - 1];
+        let cur = prices[i];
+        if prev > 0.0 {
+            returns.push((cur - prev) / prev);
+        }
+    }
+
+    if returns.is_empty() {
+        return (None, None);
+    }
+
+    // Sort returns
+    let mut sorted_returns = returns.clone();
+    sorted_returns.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    // ES at 95% confidence (average of worst 5% returns)
+    let cutoff_95 = (sorted_returns.len() as f64 * 0.05).ceil() as usize;
+    let es_95 = if cutoff_95 > 0 {
+        let worst_returns: Vec<f64> = sorted_returns.iter().take(cutoff_95).copied().collect();
+        let sum: f64 = worst_returns.iter().sum();
+        Some((sum / worst_returns.len() as f64) * 100.0) // Convert to percentage
+    } else {
+        None
+    };
+
+    // ES at 99% confidence (average of worst 1% returns)
+    let cutoff_99 = (sorted_returns.len() as f64 * 0.01).ceil() as usize;
+    let es_99 = if cutoff_99 > 0 {
+        let worst_returns: Vec<f64> = sorted_returns.iter().take(cutoff_99).copied().collect();
+        let sum: f64 = worst_returns.iter().sum();
+        Some((sum / worst_returns.len() as f64) * 100.0) // Convert to percentage
+    } else {
+        None
+    };
+
+    (es_95, es_99)
+}
+
 /// Score a PositionRisk into a 0–100 risk rating.
 ///
 /// Higher scores indicate higher risk. The score is calculated as a weighted
@@ -586,6 +703,10 @@ mod tests {
             sortino: None,
             annualized_return: None,
             value_at_risk: Some(0.0),
+            var_95: Some(0.0),
+            var_99: Some(0.0),
+            expected_shortfall_95: Some(0.0),
+            expected_shortfall_99: Some(0.0),
         };
 
         let score = score_risk(&risk);
@@ -602,6 +723,10 @@ mod tests {
             sortino: None,
             annualized_return: None,
             value_at_risk: Some(-10.0), // High VaR
+            var_95: Some(-10.0),
+            var_99: Some(-15.0),
+            expected_shortfall_95: Some(-12.0),
+            expected_shortfall_99: Some(-18.0),
         };
 
         let score = score_risk(&risk);

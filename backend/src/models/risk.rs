@@ -24,7 +24,24 @@ pub struct PositionRisk {
     pub annualized_return: Option<f64>,
 
     /// 5% Value at Risk (1-day horizon), as a negative percentage
+    /// Kept for backward compatibility - equivalent to var_95
     pub value_at_risk: Option<f64>,
+
+    /// 95% confidence VaR (1-day horizon), as a negative percentage
+    /// 5% chance of losing more than this in a single day
+    pub var_95: Option<f64>,
+
+    /// 99% confidence VaR (1-day horizon), as a negative percentage
+    /// 1% chance of losing more than this in a single day
+    pub var_99: Option<f64>,
+
+    /// Expected Shortfall at 95% confidence (CVaR), as a negative percentage
+    /// Average loss when the 95% VaR threshold is exceeded
+    pub expected_shortfall_95: Option<f64>,
+
+    /// Expected Shortfall at 99% confidence (CVaR), as a negative percentage
+    /// Average loss when the 99% VaR threshold is exceeded
+    pub expected_shortfall_99: Option<f64>,
 }
 
 /// A comprehensive risk assessment including metrics and score.

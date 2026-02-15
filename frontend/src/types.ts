@@ -186,7 +186,11 @@ export type PositionRisk = {
     sharpe: number | null; // Sharpe ratio (risk-adjusted return)
     sortino: number | null; // Sortino ratio (downside risk-adjusted return)
     annualized_return: number | null; // Annualized return as percentage
-    value_at_risk: number | null; // 5% VaR as negative percentage
+    value_at_risk: number | null; // 5% VaR as negative percentage (legacy)
+    var_95: number | null; // 95% confidence VaR (5% chance of exceeding)
+    var_99: number | null; // 99% confidence VaR (1% chance of exceeding)
+    expected_shortfall_95: number | null; // Expected Shortfall at 95% confidence (CVaR)
+    expected_shortfall_99: number | null; // Expected Shortfall at 99% confidence (CVaR)
 };
 
 export type RiskAssessment = {
@@ -267,6 +271,10 @@ export type RiskSnapshot = {
     sortino?: number | string; // BigDecimal from backend (comes as string)
     annualized_return?: number | string; // BigDecimal from backend (comes as string)
     value_at_risk?: number | string; // BigDecimal from backend (comes as string)
+    var_95?: number | string; // BigDecimal from backend (comes as string)
+    var_99?: number | string; // BigDecimal from backend (comes as string)
+    expected_shortfall_95?: number | string; // BigDecimal from backend (comes as string)
+    expected_shortfall_99?: number | string; // BigDecimal from backend (comes as string)
     risk_score: number | string; // BigDecimal from backend (comes as string)
     risk_level: RiskLevel;
     total_value?: number | string; // BigDecimal from backend (comes as string)

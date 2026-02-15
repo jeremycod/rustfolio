@@ -471,15 +471,54 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
           </Grid>
         )}
 
-        {risk.metrics.value_at_risk !== null && (
+        {risk.metrics.var_95 !== null && (
           <Grid item xs={12} sm={6} md={4}>
             <MetricCard
               icon={<WarningIcon />}
-              label="Value at Risk (5%)"
-              value={`${risk.metrics.value_at_risk.toFixed(2)}%`}
-              subValue="Potential 1-day loss"
+              label="Value at Risk (95%)"
+              value={`${risk.metrics.var_95.toFixed(2)}%`}
+              subValue="1-in-20 days worst case"
+              color="#ff9800"
+              tooltip="95% confidence VaR: 5% chance of losing more than this in a single day."
+            />
+          </Grid>
+        )}
+
+        {risk.metrics.var_99 !== null && (
+          <Grid item xs={12} sm={6} md={4}>
+            <MetricCard
+              icon={<WarningIcon />}
+              label="Value at Risk (99%)"
+              value={`${risk.metrics.var_99.toFixed(2)}%`}
+              subValue="1-in-100 days worst case"
               color="#f44336"
-              tooltip="5% chance of losing more than this amount in a single day."
+              tooltip="99% confidence VaR: 1% chance of losing more than this in a single day."
+            />
+          </Grid>
+        )}
+
+        {risk.metrics.expected_shortfall_95 !== null && (
+          <Grid item xs={12} sm={6} md={4}>
+            <MetricCard
+              icon={<WarningIcon />}
+              label="Expected Shortfall (95%)"
+              value={`${risk.metrics.expected_shortfall_95.toFixed(2)}%`}
+              subValue="Average loss beyond VaR"
+              color="#d32f2f"
+              tooltip="Average loss when the 95% VaR threshold is exceeded. More conservative than VaR."
+            />
+          </Grid>
+        )}
+
+        {risk.metrics.expected_shortfall_99 !== null && (
+          <Grid item xs={12} sm={6} md={4}>
+            <MetricCard
+              icon={<WarningIcon />}
+              label="Expected Shortfall (99%)"
+              value={`${risk.metrics.expected_shortfall_99.toFixed(2)}%`}
+              subValue="Extreme loss scenario"
+              color="#b71c1c"
+              tooltip="Average loss when the 99% VaR threshold is exceeded. Captures tail risk."
             />
           </Grid>
         )}

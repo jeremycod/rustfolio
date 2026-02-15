@@ -372,6 +372,9 @@ export function PortfolioRiskOverview({
                     <TableCell align="center">Risk Level</TableCell>
                     <TableCell align="right">Volatility</TableCell>
                     <TableCell align="right">Drawdown</TableCell>
+                    <TableCell align="right">VaR 95%</TableCell>
+                    <TableCell align="right">VaR 99%</TableCell>
+                    <TableCell align="right">ES 95%</TableCell>
                     <TableCell align="right">Beta</TableCell>
                     <TableCell align="right">Sharpe</TableCell>
                     <TableCell align="right">Sortino</TableCell>
@@ -435,6 +438,15 @@ export function PortfolioRiskOverview({
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'error.main' }}>
                           {position.risk_assessment.metrics.max_drawdown.toFixed(2)}%
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: 'warning.main' }}>
+                          {position.risk_assessment.metrics.var_95?.toFixed(2) ?? '—'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: 'error.main' }}>
+                          {position.risk_assessment.metrics.var_99?.toFixed(2) ?? '—'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: 'error.dark' }}>
+                          {position.risk_assessment.metrics.expected_shortfall_95?.toFixed(2) ?? '—'}
                         </TableCell>
                         <TableCell align="right">
                           {position.risk_assessment.metrics.beta?.toFixed(2) ?? '—'}
