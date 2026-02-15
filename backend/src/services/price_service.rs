@@ -29,7 +29,7 @@ pub async fn get_latest(pool: &PgPool, ticker: &str)
         })?
         .ok_or_else(|| {
             error!("No price data found for ticker {}", ticker);
-            AppError::NotFound
+            AppError::NotFound(format!("No price data found for ticker {}", ticker))
         })
 }
 

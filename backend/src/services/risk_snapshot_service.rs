@@ -32,7 +32,7 @@ pub async fn create_daily_snapshots(
         .await?;
 
     if holdings.is_empty() {
-        return Err(AppError::NotFound);
+        return Err(AppError::NotFound("No holdings found for portfolio".to_string()));
     }
 
     let mut snapshots = Vec::new();

@@ -25,7 +25,7 @@ pub async fn update(
         return Err(AppError::Validation("Portfolio name cannot be empty".into()));
     }
     let portfolio = db::portfolio_queries::update(pool, id, input).await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(AppError::NotFound("Portfolio not found".to_string()))?;
     Ok(portfolio)
 
 }
@@ -37,13 +37,13 @@ pub async fn fetch_all(pool: &PgPool) -> Result<Vec<Portfolio>, AppError> {
 
 pub(crate) async fn fetch_one(pool: &PgPool, id: Uuid) -> Result<Portfolio, AppError> {
     let portfolio = db::portfolio_queries::fetch_one(pool, id).await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(AppError::NotFound("Portfolio not found".to_string()))?;
     Ok(portfolio)
 }
 
 pub(crate) async fn delete(pool: &PgPool, id: Uuid) -> Result<u64, AppError>{
     match db::portfolio_queries::delete(pool, id).await {
-        Ok(0) => Err(AppError::NotFound),
+        Ok(0) => Err(AppError::NotFound("Portfolio not found".to_string())),
         Ok(_) => Ok(1),
         Err(e) => Err(AppError::from(e)),
     }

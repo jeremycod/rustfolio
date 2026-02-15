@@ -154,8 +154,8 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
       severity = 'info';
       message = `${ticker} is not a publicly traded security`;
       details = 'This appears to be a mutual fund or proprietary security code.';
-    } else if (axiosError.response?.status === 503) {
-      // Service Unavailable - typically means data provider doesn't have this ticker
+    } else if (axiosError.response?.status === 404 || axiosError.response?.status === 503) {
+      // 404 Not Found or 503 Service Unavailable - data provider doesn't have this ticker
       severity = 'info';
       message = `${ticker} data is unavailable`;
       details = 'This security may not be available in the current data provider, or may be a mutual fund/private security without public market data.';

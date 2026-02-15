@@ -10,11 +10,11 @@ pub enum AppError {
     Db(sqlx::Error),
     #[error("Validation error: {0}")]
     Validation(String),
-    #[error("Not found")]
-    NotFound,
+    #[error("Not found: {0}")]
+    NotFound(String),
     #[error("Rate limited by external provider")]
     RateLimited,
-    #[error("External error: {0}")]
+    #[error("External service error: {0}")]
     External(String),
     #[error("Unauthorized")]
     Unauthorized,
@@ -25,7 +25,7 @@ pub enum AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         match self {
-            AppError::NotFound => (StatusCode::NOT_FOUND, "Not found").into_response(),
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg).into_response(),
             AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg).into_response(),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized").into_response(),
             AppError::RateLimited => {
@@ -33,7 +33,7 @@ impl IntoResponse for AppError {
                 headers.insert("Retry-After", HeaderValue::from_static("60"));
                 (StatusCode::TOO_MANY_REQUESTS, headers, "Rate limited").into_response()
             },
-            // Use 503 Service Unavailable for external API failures (more appropriate than 502)
+            // Use 503 Service Unavailable only for actual external service failures
             AppError::External(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg).into_response(),
             AppError::Db(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response(),
         }

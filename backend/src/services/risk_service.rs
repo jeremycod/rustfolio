@@ -57,7 +57,7 @@ pub async fn compute_risk_metrics(
                 ticker
             )
         };
-        return Err(AppError::External(error_msg));
+        return Err(AppError::NotFound(error_msg));
     }
 
     if bench.len() < 2 {
@@ -72,7 +72,7 @@ pub async fn compute_risk_metrics(
                 benchmark
             )
         };
-        return Err(AppError::External(error_msg));
+        return Err(AppError::NotFound(error_msg));
     }
 
     // Compute individual risk metrics

@@ -82,7 +82,7 @@ pub async fn delete_portfolio(
     match services::portfolio_service::delete(&state.pool, id).await {
         Ok(0) => {
             error!("Portfolio {} not found for deletion", id);
-            Err(AppError::NotFound)
+            Err(AppError::NotFound(format!("Portfolio {} not found", id)))
         },
         Ok(_) => Ok(Json(())),
         Err(e) => {

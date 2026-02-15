@@ -85,8 +85,8 @@ pub async fn get_position_risk(
             AppError::External(msg) if msg.contains("No price data") => {
                 warn!("📊 No price data available for {}: {}", ticker, msg);
             }
-            AppError::NotFound => {
-                warn!("🔍 Ticker {} not found in database or API", ticker);
+            AppError::NotFound(msg) => {
+                warn!("🔍 Ticker {} not found: {}", ticker, msg);
             }
             AppError::RateLimited => {
                 warn!("⏳ Rate limited when fetching {}", ticker);

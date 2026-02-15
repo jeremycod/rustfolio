@@ -63,7 +63,7 @@ pub async fn get_true_performance(
         })?
         .ok_or_else(|| {
             error!("Account {} not found", account_id);
-            AppError::NotFound
+            AppError::NotFound(format!("Account {} not found", account_id))
         })?;
 
     Ok(Json(performance))
