@@ -170,11 +170,13 @@ export async function getPositionRisk(
 export async function getPortfolioRisk(
     portfolioId: string,
     days?: number,
-    benchmark?: string
+    benchmark?: string,
+    force?: boolean
 ): Promise<PortfolioRiskWithViolations> {
     const params = new URLSearchParams();
     if (days) params.append('days', days.toString());
     if (benchmark) params.append('benchmark', benchmark);
+    if (force) params.append('force', 'true');
 
     const queryString = params.toString();
     const url = `/api/risk/portfolios/${portfolioId}${queryString ? `?${queryString}` : ''}`;
@@ -257,10 +259,12 @@ export async function updateRiskThresholds(
 // Portfolio narrative endpoint
 export async function getPortfolioNarrative(
     portfolioId: string,
-    timePeriod?: string
+    timePeriod?: string,
+    force?: boolean
 ): Promise<PortfolioNarrative> {
     const params = new URLSearchParams();
     if (timePeriod) params.append('time_period', timePeriod);
+    if (force) params.append('force', 'true');
 
     const queryString = params.toString();
     const url = `/api/risk/portfolios/${portfolioId}/narrative${queryString ? `?${queryString}` : ''}`;

@@ -6,6 +6,8 @@ use axum::http::{header, StatusCode};
 use serde::Deserialize;
 use tracing::{error, info, warn};
 use uuid::Uuid;
+use sqlx::PgPool;
+use chrono::{Utc, Duration};
 
 use crate::errors::AppError;
 use crate::models::{RiskAssessment, CorrelationMatrix, CorrelationPair, RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams, PortfolioNarrative, GenerateNarrativeRequest};
@@ -37,6 +39,10 @@ pub struct RiskQueryParams {
     /// Benchmark ticker for beta calculation (default: "SPY")
     #[serde(default = "default_benchmark")]
     pub benchmark: String,
+
+    /// Force refresh, bypassing cache (default: false)
+    #[serde(default)]
+    pub force: bool,
 }
 
 fn default_days() -> i64 {
@@ -45,6 +51,148 @@ fn default_days() -> i64 {
 
 fn default_benchmark() -> String {
     "SPY".to_string()
+}
+
+/// Check if cached risk data exists and is still fresh (< 4 hours old)
+async fn get_cached_portfolio_risk(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    days: i64,
+    benchmark: &str,
+) -> Result<Option<PortfolioRiskWithViolations>, AppError> {
+    let result = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT risk_data
+        FROM portfolio_risk_cache
+        WHERE portfolio_id = $1 AND days = $2 AND benchmark = $3 AND expires_at > NOW()
+        "#
+    )
+    .bind(portfolio_id)
+    .bind(days as i32)
+    .bind(benchmark)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    if let Some(risk_data) = result {
+        info!("Found cached risk data for portfolio {} ({}d, {})", portfolio_id, days, benchmark);
+        let risk_result: PortfolioRiskWithViolations = serde_json::from_value(risk_data)
+            .map_err(|e| AppError::External(format!("Failed to deserialize cached risk: {}", e)))?;
+        Ok(Some(risk_result))
+    } else {
+        info!("No valid cache found for portfolio {} ({}d, {})", portfolio_id, days, benchmark);
+        Ok(None)
+    }
+}
+
+/// Store portfolio risk data in cache with 4-hour expiration
+async fn cache_portfolio_risk(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    days: i64,
+    benchmark: &str,
+    risk_data: &PortfolioRiskWithViolations,
+) -> Result<(), AppError> {
+    let risk_json = serde_json::to_value(risk_data)
+        .map_err(|e| AppError::External(format!("Failed to serialize risk for cache: {}", e)))?;
+
+    let calculated_at = Utc::now();
+    let expires_at = calculated_at + Duration::hours(4);
+
+    sqlx::query(
+        r#"
+        INSERT INTO portfolio_risk_cache (portfolio_id, days, benchmark, risk_data, calculated_at, expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (portfolio_id, days, benchmark)
+        DO UPDATE SET
+            risk_data = $4,
+            calculated_at = $5,
+            expires_at = $6,
+            updated_at = NOW()
+        "#
+    )
+    .bind(portfolio_id)
+    .bind(days as i32)
+    .bind(benchmark)
+    .bind(risk_json)
+    .bind(calculated_at)
+    .bind(expires_at)
+    .execute(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    info!("Cached risk data for portfolio {} (expires at {})", portfolio_id, expires_at);
+    Ok(())
+}
+
+/// Check if cached narrative exists and is still fresh
+async fn get_cached_narrative(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    time_period: &str,
+    _cache_hours: i32,
+) -> Result<Option<PortfolioNarrative>, AppError> {
+    let result = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT narrative_data
+        FROM portfolio_narrative_cache
+        WHERE portfolio_id = $1 AND time_period = $2 AND expires_at > NOW()
+        "#
+    )
+    .bind(portfolio_id)
+    .bind(time_period)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    if let Some(narrative_data) = result {
+        info!("Found cached narrative for portfolio {} ({})", portfolio_id, time_period);
+        let narrative: PortfolioNarrative = serde_json::from_value(narrative_data)
+            .map_err(|e| AppError::External(format!("Failed to deserialize cached narrative: {}", e)))?;
+        Ok(Some(narrative))
+    } else {
+        info!("No valid cache found for portfolio {} ({})", portfolio_id, time_period);
+        Ok(None)
+    }
+}
+
+/// Store portfolio narrative in cache with configurable expiration
+async fn cache_narrative(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    time_period: &str,
+    narrative: &PortfolioNarrative,
+    cache_hours: i32,
+) -> Result<(), AppError> {
+    let narrative_json = serde_json::to_value(narrative)
+        .map_err(|e| AppError::External(format!("Failed to serialize narrative for cache: {}", e)))?;
+
+    let generated_at = Utc::now();
+    let expires_at = generated_at + Duration::hours(cache_hours as i64);
+
+    sqlx::query(
+        r#"
+        INSERT INTO portfolio_narrative_cache (portfolio_id, time_period, narrative_data, generated_at, expires_at)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (portfolio_id, time_period)
+        DO UPDATE SET
+            narrative_data = $3,
+            generated_at = $4,
+            expires_at = $5,
+            updated_at = NOW()
+        "#
+    )
+    .bind(portfolio_id)
+    .bind(time_period)
+    .bind(narrative_json)
+    .bind(generated_at)
+    .bind(expires_at)
+    .execute(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    info!("Cached narrative for portfolio {} (expires at {})", portfolio_id, expires_at);
+    Ok(())
 }
 
 /// GET /api/risk/positions/:ticker
@@ -109,6 +257,7 @@ pub async fn get_position_risk(
 /// Query parameters:
 /// - `days`: Rolling window in days (default: 90)
 /// - `benchmark`: Benchmark ticker for beta (default: "SPY")
+/// - `force`: Force refresh, bypassing cache (default: false)
 ///
 /// Example: GET /api/risk/portfolios/{uuid}?days=60
 pub async fn get_portfolio_risk(
@@ -121,9 +270,17 @@ pub async fn get_portfolio_risk(
     use std::collections::HashMap;
 
     info!(
-        "GET /api/risk/portfolios/{} - Computing portfolio risk (days={}, benchmark={})",
-        portfolio_id, params.days, params.benchmark
+        "GET /api/risk/portfolios/{} - Computing portfolio risk (days={}, benchmark={}, force={})",
+        portfolio_id, params.days, params.benchmark, params.force
     );
+
+    // Check cache first if not forcing refresh
+    if !params.force {
+        if let Some(cached_risk) = get_cached_portfolio_risk(&state.pool, portfolio_id, params.days, &params.benchmark).await? {
+            info!("Returning cached risk data for portfolio {}", portfolio_id);
+            return Ok(Json(cached_risk));
+        }
+    }
 
     // 1. Fetch all latest holdings for the portfolio
     let holdings = holding_snapshot_queries::fetch_portfolio_latest_holdings(
@@ -275,11 +432,19 @@ pub async fn get_portfolio_risk(
         violations.len()
     );
 
-    Ok(Json(PortfolioRiskWithViolations {
+    let risk_with_violations = PortfolioRiskWithViolations {
         portfolio_risk,
         thresholds,
         violations,
-    }))
+    };
+
+    // Cache the results for future requests
+    if let Err(e) = cache_portfolio_risk(&state.pool, portfolio_id, params.days, &params.benchmark, &risk_with_violations).await {
+        error!("Failed to cache risk data for portfolio {}: {}", portfolio_id, e);
+        // Continue even if caching fails - don't fail the request
+    }
+
+    Ok(Json(risk_with_violations))
 }
 
 /// Detect threshold violations in portfolio risk data
@@ -1003,12 +1168,31 @@ pub async fn get_portfolio_narrative(
     use std::collections::HashMap;
 
     info!(
-        "GET /api/risk/portfolios/{}/narrative - Generating AI narrative (time_period: {:?})",
-        portfolio_id, params.time_period
+        "GET /api/risk/portfolios/{}/narrative - Generating AI narrative (time_period: {:?}, force: {})",
+        portfolio_id, params.time_period, params.force
     );
 
     // Use provided time_period or default to "90 days"
     let time_period = params.time_period.as_deref().unwrap_or("90 days");
+
+    // Get user preferences for cache duration (demo user for now)
+    let demo_user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")
+        .expect("Invalid demo user UUID");
+    let user_prefs = crate::db::user_preferences_queries::get_by_user_id(&state.pool, demo_user_id)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch user preferences: {}", e);
+            AppError::Db(e)
+        })?;
+    let cache_hours = user_prefs.as_ref().map(|p| p.narrative_cache_hours).unwrap_or(24);
+
+    // Check cache first if not forcing refresh
+    if !params.force {
+        if let Some(cached_narrative) = get_cached_narrative(&state.pool, portfolio_id, time_period, cache_hours).await? {
+            info!("Returning cached narrative for portfolio {}", portfolio_id);
+            return Ok(Json(cached_narrative));
+        }
+    }
 
     // Parse days from time_period for risk calculation
     let days = if time_period.contains("30") || time_period.contains("month") {
@@ -1170,6 +1354,12 @@ pub async fn get_portfolio_narrative(
         "Successfully generated narrative for portfolio {}",
         portfolio_id
     );
+
+    // Cache the narrative for future requests
+    if let Err(e) = cache_narrative(&state.pool, portfolio_id, time_period, &narrative, cache_hours).await {
+        error!("Failed to cache narrative for portfolio {}: {}", portfolio_id, e);
+        // Continue even if caching fails - don't fail the request
+    }
 
     Ok(Json(narrative))
 }

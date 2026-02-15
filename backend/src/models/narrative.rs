@@ -15,4 +15,6 @@ pub struct PortfolioNarrative {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateNarrativeRequest {
     pub time_period: Option<String>, // "30d", "90d", "1y"
+    #[serde(default)]
+    pub force: bool, // Force refresh, bypassing cache
 }

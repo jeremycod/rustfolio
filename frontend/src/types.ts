@@ -435,12 +435,14 @@ export type UserPreferences = {
     user_id: string;
     llm_enabled: boolean;
     consent_given_at: string | null;
+    narrative_cache_hours: number;
     created_at: string;
     updated_at: string;
 };
 
 export type UpdateUserPreferences = {
     llm_enabled: boolean;
+    narrative_cache_hours?: number;
 };
 
 export type LlmUsageStats = {

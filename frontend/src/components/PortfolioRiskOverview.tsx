@@ -25,7 +25,7 @@ import {
   Tabs,
   Tab,
 } from '@mui/material';
-import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera, Settings, Download, Warning, ErrorOutline, Psychology, Timeline, AutoAwesome, TipsAndUpdates } from '@mui/icons-material';
+import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera, Settings, Download, Warning, ErrorOutline, Psychology, Timeline, AutoAwesome, TipsAndUpdates, Refresh, Newspaper, QuestionAnswer } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPortfolioRisk, listPortfolios, createRiskSnapshot, exportPortfolioRiskCSV } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
@@ -67,7 +67,9 @@ export function PortfolioRiskOverview({
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [aiInsightsSubTab, setAiInsightsSubTab] = useState(0);
   const queryClient = useQueryClient();
 
   const portfoliosQ = useQuery({
@@ -77,9 +79,9 @@ export function PortfolioRiskOverview({
 
   const portfolioRiskQ = useQuery({
     queryKey: ['portfolioRisk', selectedPortfolioId],
-    queryFn: () => getPortfolioRisk(selectedPortfolioId!, 90, 'SPY'),
+    queryFn: () => getPortfolioRisk(selectedPortfolioId!, 90, 'SPY', false),
     enabled: !!selectedPortfolioId,
-    staleTime: 1000 * 60 * 30, // 30 minutes
+    staleTime: 4 * 60 * 60 * 1000, // 4 hours (matches backend cache)
   });
 
   // Extract data from response
@@ -117,6 +119,25 @@ export function PortfolioRiskOverview({
       setSnackbarOpen(true);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleRefreshRisk = async () => {
+    if (!selectedPortfolioId) return;
+
+    setIsRefreshing(true);
+    try {
+      // Force fetch new risk data
+      const freshRisk = await getPortfolioRisk(selectedPortfolioId, 90, 'SPY', true);
+      // Update the cache with fresh data
+      queryClient.setQueryData(['portfolioRisk', selectedPortfolioId], freshRisk);
+      setSnackbarMessage('Risk metrics refreshed successfully!');
+      setSnackbarOpen(true);
+    } catch (error) {
+      setSnackbarMessage(`Refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setSnackbarOpen(true);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -191,6 +212,24 @@ export function PortfolioRiskOverview({
           sx={{ height: 'fit-content' }}
         >
           {exporting ? 'Exporting...' : 'Export CSV'}
+        </Button>
+
+        <Button
+          variant="outlined"
+          startIcon={<Refresh
+            sx={{
+              animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+              '@keyframes spin': {
+                '0%': { transform: 'rotate(0deg)' },
+                '100%': { transform: 'rotate(360deg)' },
+              },
+            }}
+          />}
+          onClick={handleRefreshRisk}
+          disabled={!selectedPortfolioId || isRefreshing || portfolioRiskQ.isLoading}
+          sx={{ height: 'fit-content' }}
+        >
+          {isRefreshing ? 'Refreshing...' : 'Refresh Risk'}
         </Button>
 
         <Button
@@ -524,18 +563,33 @@ export function PortfolioRiskOverview({
 
             {/* Tab 3: AI Insights */}
             <TabPanel value={activeTab} index={2}>
-              {/* AI Portfolio Narrative */}
-              <Box sx={{ mb: 3 }}>
+              {/* Sub-tabs for AI Insights */}
+              <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+                <Tabs
+                  value={aiInsightsSubTab}
+                  onChange={(_, newValue) => setAiInsightsSubTab(newValue)}
+                  variant="fullWidth"
+                >
+                  <Tab icon={<Psychology />} label="AI Analysis" iconPosition="start" />
+                  <Tab icon={<Newspaper />} label="News & Sentiment" iconPosition="start" />
+                  <Tab icon={<QuestionAnswer />} label="Ask AI" iconPosition="start" />
+                </Tabs>
+              </Box>
+
+              {/* Sub-tab 1: AI Analysis */}
+              {aiInsightsSubTab === 0 && (
                 <PortfolioNarrative portfolioId={selectedPortfolioId!} timePeriod="90d" />
-              </Box>
+              )}
 
-              {/* Portfolio News & Insights */}
-              <Box sx={{ mb: 3 }}>
+              {/* Sub-tab 2: News & Sentiment */}
+              {aiInsightsSubTab === 1 && (
                 <PortfolioNews portfolioId={selectedPortfolioId!} />
-              </Box>
+              )}
 
-              {/* Portfolio Q&A Assistant */}
-              <PortfolioQA portfolioId={selectedPortfolioId!} />
+              {/* Sub-tab 3: Ask AI */}
+              {aiInsightsSubTab === 2 && (
+                <PortfolioQA portfolioId={selectedPortfolioId!} />
+              )}
             </TabPanel>
 
             {/* Tab 4: Optimization */}

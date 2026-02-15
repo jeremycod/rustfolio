@@ -34,6 +34,7 @@ pub struct UserPreferences {
     pub user_id: Uuid,
     pub llm_enabled: bool,
     pub consent_given_at: Option<DateTime<Utc>>,
+    pub narrative_cache_hours: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -42,6 +43,7 @@ pub struct UserPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateUserPreferences {
     pub llm_enabled: bool,
+    pub narrative_cache_hours: Option<i32>,
 }
 
 /// LLM usage statistics

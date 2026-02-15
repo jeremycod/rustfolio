@@ -43,6 +43,7 @@ pub async fn get_user_preferences(
                 user_id,
                 llm_enabled: false,
                 consent_given_at: None,
+                narrative_cache_hours: 24, // Default to 24 hours
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
             }))

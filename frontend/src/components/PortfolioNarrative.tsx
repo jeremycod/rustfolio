@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Box,
   Paper,
@@ -9,9 +10,11 @@ import {
   Skeleton,
   Divider,
   Chip,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import { Info, Psychology } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
+import { Info, Psychology, Refresh } from '@mui/icons-material';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPortfolioNarrative } from '../lib/endpoints';
 import AIBadge from './AIBadge';
 import AILoadingState from './AILoadingState';
@@ -23,12 +26,29 @@ type Props = {
 };
 
 export default function PortfolioNarrative({ portfolioId, timePeriod = '90d' }: Props) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+
   const { data: narrative, isLoading, error } = useQuery({
     queryKey: ['portfolioNarrative', portfolioId, timePeriod],
-    queryFn: () => getPortfolioNarrative(portfolioId, timePeriod),
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    queryFn: () => getPortfolioNarrative(portfolioId, timePeriod, false),
+    staleTime: 24 * 60 * 60 * 1000, // Cache for 24 hours (matches backend cache)
     retry: 1,
   });
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      // Force fetch new narrative
+      const freshNarrative = await getPortfolioNarrative(portfolioId, timePeriod, true);
+      // Update the cache with fresh data
+      queryClient.setQueryData(['portfolioNarrative', portfolioId, timePeriod], freshNarrative);
+    } catch (err) {
+      console.error('Failed to refresh narrative:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -70,10 +90,30 @@ export default function PortfolioNarrative({ portfolioId, timePeriod = '90d' }: 
   return (
     <Paper sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-        <Psychology color="primary" />
-        <Typography variant="h6">AI Portfolio Analysis</Typography>
-        <AIBadge />
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Psychology color="primary" />
+          <Typography variant="h6">AI Portfolio Analysis</Typography>
+          <AIBadge />
+        </Box>
+        <Tooltip title="Refresh analysis (bypasses cache)">
+          <IconButton
+            onClick={handleRefresh}
+            disabled={isRefreshing || isLoading}
+            color="primary"
+            size="small"
+          >
+            <Refresh
+              sx={{
+                animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                '@keyframes spin': {
+                  '0%': { transform: 'rotate(0deg)' },
+                  '100%': { transform: 'rotate(360deg)' },
+                },
+              }}
+            />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>

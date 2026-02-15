@@ -11,7 +11,7 @@ pub async fn get_by_user_id(
 ) -> Result<Option<UserPreferences>, sqlx::Error> {
     sqlx::query_as::<_, UserPreferences>(
         r#"
-        SELECT id, user_id, llm_enabled, consent_given_at, created_at, updated_at
+        SELECT id, user_id, llm_enabled, consent_given_at, narrative_cache_hours, created_at, updated_at
         FROM user_preferences
         WHERE user_id = $1
         "#
@@ -33,10 +33,12 @@ pub async fn upsert(
         None
     };
 
+    let narrative_cache_hours = preferences.narrative_cache_hours.unwrap_or(24);
+
     sqlx::query_as::<_, UserPreferences>(
         r#"
-        INSERT INTO user_preferences (user_id, llm_enabled, consent_given_at, updated_at)
-        VALUES ($1, $2, $3, NOW())
+        INSERT INTO user_preferences (user_id, llm_enabled, consent_given_at, narrative_cache_hours, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
         ON CONFLICT (user_id)
         DO UPDATE SET
             llm_enabled = EXCLUDED.llm_enabled,
@@ -45,13 +47,15 @@ pub async fn upsert(
                 THEN EXCLUDED.consent_given_at
                 ELSE user_preferences.consent_given_at
             END,
+            narrative_cache_hours = EXCLUDED.narrative_cache_hours,
             updated_at = NOW()
-        RETURNING id, user_id, llm_enabled, consent_given_at, created_at, updated_at
+        RETURNING id, user_id, llm_enabled, consent_given_at, narrative_cache_hours, created_at, updated_at
         "#
     )
     .bind(user_id)
     .bind(preferences.llm_enabled)
     .bind(consent_given_at)
+    .bind(narrative_cache_hours)
     .fetch_one(pool)
     .await
 }
@@ -81,7 +85,7 @@ pub async fn update_llm_consent(
                 ELSE user_preferences.consent_given_at
             END,
             updated_at = NOW()
-        RETURNING id, user_id, llm_enabled, consent_given_at, created_at, updated_at
+        RETURNING id, user_id, llm_enabled, consent_given_at, narrative_cache_hours, created_at, updated_at
         "#
     )
     .bind(user_id)
