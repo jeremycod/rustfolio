@@ -26,20 +26,22 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceDot,
+  ReferenceLine,
 } from 'recharts';
 import { Warning as WarningIcon } from '@mui/icons-material';
 import { getRiskHistory, getRiskAlerts } from '../lib/endpoints';
-import type { RiskSnapshot, RiskAlert } from '../types';
+import type { RiskSnapshot, RiskAlert, RiskThresholdSettings } from '../types';
 
 interface RiskHistoryChartProps {
   portfolioId: string;
   ticker?: string;
+  thresholds?: RiskThresholdSettings;
 }
 
 type TimeRange = 30 | 90 | 180 | 365;
 type MetricType = 'risk_score' | 'volatility' | 'max_drawdown' | 'sharpe' | 'beta';
 
-export function RiskHistoryChart({ portfolioId, ticker }: RiskHistoryChartProps) {
+export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistoryChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>(90);
   const [selectedMetrics, setSelectedMetrics] = useState<MetricType[]>(['risk_score']);
 
@@ -310,6 +312,93 @@ export function RiskHistoryChart({ portfolioId, ticker }: RiskHistoryChartProps)
                   yAxisId="left"
                 />
               ))}
+
+              {/* Threshold reference lines */}
+              {thresholds && (
+                <>
+                  {/* Risk Score thresholds */}
+                  {selectedMetrics.includes('risk_score') && (
+                    <>
+                      <ReferenceLine
+                        y={thresholds.risk_score_warning_threshold}
+                        stroke="#ff9800"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        yAxisId="left"
+                        label={{ value: 'Warning', position: 'insideTopRight', fill: '#ff9800', fontSize: 12 }}
+                      />
+                      <ReferenceLine
+                        y={thresholds.risk_score_critical_threshold}
+                        stroke="#f44336"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        yAxisId="left"
+                        label={{ value: 'Critical', position: 'insideTopRight', fill: '#f44336', fontSize: 12 }}
+                      />
+                    </>
+                  )}
+
+                  {/* Volatility thresholds */}
+                  {selectedMetrics.includes('volatility') && (
+                    <>
+                      <ReferenceLine
+                        y={thresholds.volatility_warning_threshold}
+                        stroke="#ff9800"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        yAxisId="left"
+                      />
+                      <ReferenceLine
+                        y={thresholds.volatility_critical_threshold}
+                        stroke="#f44336"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        yAxisId="left"
+                      />
+                    </>
+                  )}
+
+                  {/* Max Drawdown thresholds (negative values) */}
+                  {selectedMetrics.includes('max_drawdown') && (
+                    <>
+                      <ReferenceLine
+                        y={Math.abs(thresholds.drawdown_warning_threshold)}
+                        stroke="#ff9800"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        yAxisId="left"
+                      />
+                      <ReferenceLine
+                        y={Math.abs(thresholds.drawdown_critical_threshold)}
+                        stroke="#f44336"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        yAxisId="left"
+                      />
+                    </>
+                  )}
+
+                  {/* Beta thresholds */}
+                  {selectedMetrics.includes('beta') && (
+                    <>
+                      <ReferenceLine
+                        y={thresholds.beta_warning_threshold}
+                        stroke="#ff9800"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        yAxisId="right"
+                      />
+                      <ReferenceLine
+                        y={thresholds.beta_critical_threshold}
+                        stroke="#f44336"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        yAxisId="right"
+                      />
+                    </>
+                  )}
+                </>
+              )}
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -320,6 +409,9 @@ export function RiskHistoryChart({ portfolioId, ticker }: RiskHistoryChartProps)
               Showing {chartData.length} data points from the last {timeRange} days
               {!ticker && alertMarkers.length > 0 && (
                 <span> • Red dots indicate risk alerts</span>
+              )}
+              {thresholds && (
+                <span> • Dashed lines show warning (orange) and critical (red) thresholds</span>
               )}
             </Typography>
           </Box>

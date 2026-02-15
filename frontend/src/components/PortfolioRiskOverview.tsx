@@ -23,7 +23,7 @@ import {
   Button,
   Snackbar,
 } from '@mui/material';
-import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera, Settings, Download, Warning, ErrorOutline } from '@mui/icons-material';
+import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera, Settings, Download, Warning, ErrorOutline, Psychology } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPortfolioRisk, listPortfolios, createRiskSnapshot, exportPortfolioRiskCSV } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
@@ -31,6 +31,7 @@ import { RiskLevel } from '../types';
 import { TickerChip } from './TickerChip';
 import { RiskHistoryChart } from './RiskHistoryChart';
 import { RiskThresholdSettings } from './RiskThresholdSettings';
+import { OptimizationRecommendations } from './OptimizationRecommendations';
 
 interface PortfolioRiskOverviewProps {
   selectedPortfolioId: string | null;
@@ -62,8 +63,9 @@ export function PortfolioRiskOverview({
   });
 
   // Extract data from response
-  const riskData = riskData?.portfolio_risk;
-  const violations = riskData?.violations ?? [];
+  // Note: PortfolioRisk fields are flattened into the response (serde flatten)
+  const riskData = portfolioRiskQ.data;
+  const violations = portfolioRiskQ.data?.violations ?? [];
   const criticalViolations = violations.filter(v => v.threshold_type === 'critical');
   const warningViolations = violations.filter(v => v.threshold_type === 'warning');
 
@@ -444,7 +446,21 @@ export function PortfolioRiskOverview({
 
           {/* Risk History Chart */}
           <Box sx={{ mt: 3 }}>
-            <RiskHistoryChart portfolioId={selectedPortfolioId!} />
+            <RiskHistoryChart
+              portfolioId={selectedPortfolioId!}
+              thresholds={riskData?.thresholds}
+            />
+          </Box>
+
+          {/* Portfolio Optimization Suggestions */}
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Psychology /> Optimization Suggestions
+            </Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+              AI-powered recommendations to improve your portfolio's risk-return profile
+            </Typography>
+            <OptimizationRecommendations portfolioId={selectedPortfolioId!} />
           </Box>
 
           {/* Disclaimer */}

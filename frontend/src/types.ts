@@ -232,8 +232,9 @@ export type ThresholdViolation = {
     threshold_type: ViolationSeverity;
 };
 
-export type PortfolioRiskWithViolations = {
-    portfolio_risk: PortfolioRisk;
+// Note: Backend uses #[serde(flatten)] on portfolio_risk, so PortfolioRisk fields
+// are at the top level of the JSON, not nested under a "portfolio_risk" key
+export type PortfolioRiskWithViolations = PortfolioRisk & {
     thresholds: RiskThresholdSettings;
     violations: ThresholdViolation[];
 };
