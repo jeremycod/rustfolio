@@ -224,6 +224,10 @@ pub async fn get_portfolio_risk(
         volatility: weighted_volatility,
         max_drawdown: weighted_max_drawdown,
         beta: if beta_count > 0 { Some(weighted_beta) } else { None },
+        beta_spy: if beta_count > 0 { Some(weighted_beta) } else { None },
+        beta_qqq: None,
+        beta_iwm: None,
+        risk_decomposition: None,
         sharpe: if sharpe_count > 0 { Some(weighted_sharpe) } else { None },
         sortino: None,
         annualized_return: None,
@@ -674,10 +678,31 @@ pub async fn get_portfolio_correlations(
 
     info!("Successfully computed correlation matrix in {:?}", start.elapsed());
 
+    // Build 2D matrix for heatmap visualization
+    let n = tickers.len();
+    let mut matrix_2d = vec![vec![0.0; n]; n];
+
+    // Set diagonal to 1.0 (perfect self-correlation)
+    for i in 0..n {
+        matrix_2d[i][i] = 1.0;
+    }
+
+    // Fill in correlations from pairs
+    for pair in &correlations {
+        if let (Some(i), Some(j)) = (
+            tickers.iter().position(|t| t == &pair.ticker1),
+            tickers.iter().position(|t| t == &pair.ticker2),
+        ) {
+            matrix_2d[i][j] = pair.correlation;
+            matrix_2d[j][i] = pair.correlation; // Symmetric
+        }
+    }
+
     let matrix = CorrelationMatrix {
         portfolio_id: portfolio_id.to_string(),
         tickers,
         correlations,
+        matrix_2d,
     };
 
     Ok(Json(matrix))

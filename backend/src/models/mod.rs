@@ -20,7 +20,7 @@ pub use cash_flow::{CashFlow, CreateCashFlow, FlowType};
 pub use detected_transaction::{DetectedTransaction, CreateDetectedTransaction, TransactionType, AccountActivity, AccountTruePerformance};
 pub use risk::{
     PositionRisk, RiskAssessment, RiskLevel, PortfolioRisk, PositionRiskContribution,
-    CorrelationPair, CorrelationMatrix, ViolationSeverity, ThresholdViolation,
+    CorrelationPair, CorrelationMatrix, RiskDecomposition, ViolationSeverity, ThresholdViolation,
     PortfolioRiskWithViolations
 };
 pub use risk_snapshot::{RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams};

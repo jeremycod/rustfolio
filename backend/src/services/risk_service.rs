@@ -1,13 +1,13 @@
 use crate::db::price_queries;
 use crate::errors::AppError;
 use crate::external::price_provider::PriceProvider;
-use crate::models::risk::{PositionRisk, RiskAssessment, RiskLevel};
+use crate::models::risk::{PositionRisk, RiskAssessment, RiskLevel, RiskDecomposition};
 use crate::models::PricePoint;
 use crate::services::price_service;
 use crate::services::failure_cache::FailureCache;
 use bigdecimal::ToPrimitive;
 use sqlx::PgPool;
-use tracing::info;
+use tracing::{info, warn};
 
 /// Compute comprehensive risk metrics for a ticker over a rolling window.
 ///
@@ -85,10 +85,25 @@ pub async fn compute_risk_metrics(
     let (var_95, var_99) = compute_var_multi(&series);
     let (es_95, es_99) = compute_expected_shortfall(&series);
 
+    // Compute multi-benchmark betas
+    let (beta_spy, beta_qqq, beta_iwm) =
+        compute_multi_benchmark_beta(pool, &series, days, price_provider, failure_cache).await;
+
+    // Compute risk decomposition (requires benchmark data)
+    let risk_decomposition = if beta.is_some() {
+        compute_risk_decomposition(&series, &bench, volatility)
+    } else {
+        None
+    };
+
     let metrics = PositionRisk {
         volatility,
         max_drawdown,
         beta,
+        beta_spy,
+        beta_qqq,
+        beta_iwm,
+        risk_decomposition,
         sharpe,
         sortino,
         annualized_return,
@@ -648,6 +663,110 @@ pub fn compute_correlation(series1: &[PricePoint], series2: &[PricePoint]) -> Op
     Some(cov / (std1 * std2))
 }
 
+/// Compute beta against multiple benchmark indices (SPY, QQQ, IWM).
+///
+/// Returns a tuple of (beta_spy, beta_qqq, beta_iwm) where each beta measures
+/// the asset's systematic risk relative to that specific benchmark.
+///
+/// # Arguments
+/// * `pool` – Postgres connection pool
+/// * `ticker_series` – Price history for the ticker
+/// * `days` – Number of trading days to analyze
+/// * `price_provider` – External price data provider
+/// * `failure_cache` – Cache to avoid retrying known-bad tickers
+///
+/// # Returns
+/// Tuple of (beta_spy, beta_qqq, beta_iwm) where each is Option<f64>
+async fn compute_multi_benchmark_beta(
+    pool: &PgPool,
+    ticker_series: &[PricePoint],
+    days: i64,
+    price_provider: &dyn PriceProvider,
+    failure_cache: &FailureCache,
+) -> (Option<f64>, Option<f64>, Option<f64>) {
+    let benchmarks = ["SPY", "QQQ", "IWM"];
+    let mut betas = Vec::new();
+
+    for benchmark in &benchmarks {
+        // Ensure fresh benchmark data
+        if let Err(e) = price_service::refresh_from_api(pool, price_provider, benchmark, failure_cache).await {
+            warn!("Failed to refresh {} data: {}", benchmark, e);
+            betas.push(None);
+            continue;
+        }
+
+        // Fetch benchmark price history
+        match price_queries::fetch_window(pool, benchmark, days).await {
+            Ok(bench_series) => {
+                if bench_series.len() >= 2 {
+                    let beta = compute_beta(ticker_series, &bench_series);
+                    betas.push(beta);
+                } else {
+                    warn!("Insufficient data for benchmark {}", benchmark);
+                    betas.push(None);
+                }
+            }
+            Err(e) => {
+                warn!("Failed to fetch {} data: {}", benchmark, e);
+                betas.push(None);
+            }
+        }
+    }
+
+    (
+        betas.get(0).copied().flatten(),
+        betas.get(1).copied().flatten(),
+        betas.get(2).copied().flatten(),
+    )
+}
+
+/// Compute risk decomposition: systematic vs idiosyncratic risk.
+///
+/// Systematic risk is the portion of total risk explained by market movements (beta),
+/// while idiosyncratic risk is stock-specific and can be diversified away.
+///
+/// Formula:
+/// - R² = correlation² (% of variance explained by beta)
+/// - Systematic risk = R² * total_risk²
+/// - Idiosyncratic risk = (1 - R²) * total_risk²
+///
+/// # Arguments
+/// * `ticker_series` – Price history for the ticker
+/// * `benchmark_series` – Price history for the benchmark
+/// * `total_volatility` – Annualized volatility of the ticker (as %)
+///
+/// # Returns
+/// RiskDecomposition struct with systematic and idiosyncratic risk components
+fn compute_risk_decomposition(
+    ticker_series: &[PricePoint],
+    benchmark_series: &[PricePoint],
+    total_volatility: f64,
+) -> Option<RiskDecomposition> {
+    // Calculate correlation between ticker and benchmark
+    let correlation = compute_correlation(ticker_series, benchmark_series)?;
+
+    // R² = correlation²
+    let r_squared = correlation.powi(2);
+
+    // Total risk (variance)
+    let total_variance = (total_volatility / 100.0).powi(2);
+
+    // Systematic risk (explained by market/beta)
+    let systematic_variance = r_squared * total_variance;
+    let systematic_risk = (systematic_variance.sqrt() * 100.0).max(0.0);
+
+    // Idiosyncratic risk (stock-specific, diversifiable)
+    let idiosyncratic_variance = ((1.0 - r_squared) * total_variance).max(0.0);
+    let idiosyncratic_risk = (idiosyncratic_variance.sqrt() * 100.0).max(0.0);
+
+    Some(RiskDecomposition {
+        systematic_risk,
+        idiosyncratic_risk,
+        r_squared,
+        total_risk: total_volatility,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -699,6 +818,10 @@ mod tests {
             volatility: 0.0,
             max_drawdown: 0.0,
             beta: Some(0.0),
+            beta_spy: Some(0.0),
+            beta_qqq: None,
+            beta_iwm: None,
+            risk_decomposition: None,
             sharpe: Some(0.0),
             sortino: None,
             annualized_return: None,
@@ -719,6 +842,10 @@ mod tests {
             volatility: 50.0,     // High volatility
             max_drawdown: -50.0,  // Large drawdown
             beta: Some(2.0),      // High beta
+            beta_spy: Some(2.0),
+            beta_qqq: None,
+            beta_iwm: None,
+            risk_decomposition: None,
             sharpe: Some(1.0),    // Sharpe ratio doesn't affect score
             sortino: None,
             annualized_return: None,

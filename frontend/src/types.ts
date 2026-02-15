@@ -179,10 +179,21 @@ export type AccountTruePerformance = {
 // Risk Management Types
 export type RiskLevel = 'low' | 'moderate' | 'high';
 
+export type RiskDecomposition = {
+    systematic_risk: number;     // Variance explained by market
+    idiosyncratic_risk: number;  // Stock-specific variance
+    r_squared: number;           // % variance explained by beta
+    total_risk: number;          // Total volatility
+};
+
 export type PositionRisk = {
     volatility: number; // Annualized volatility as percentage
     max_drawdown: number; // Maximum drawdown as negative percentage
-    beta: number | null; // Beta coefficient relative to benchmark
+    beta: number | null; // Beta coefficient relative to SPY (legacy)
+    beta_spy: number | null; // Beta vs SPY
+    beta_qqq: number | null; // Beta vs Nasdaq 100
+    beta_iwm: number | null; // Beta vs Russell 2000
+    risk_decomposition: RiskDecomposition | null; // Systematic vs idiosyncratic risk
     sharpe: number | null; // Sharpe ratio (risk-adjusted return)
     sortino: number | null; // Sortino ratio (downside risk-adjusted return)
     annualized_return: number | null; // Annualized return as percentage

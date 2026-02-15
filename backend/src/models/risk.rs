@@ -11,8 +11,17 @@ pub struct PositionRisk {
     /// Maximum peak-to-trough decline, as a negative percentage
     pub max_drawdown: f64,
 
-    /// Beta coefficient relative to benchmark (correlation scaled to variance)
+    /// Beta coefficient relative to SPY benchmark (correlation scaled to variance)
+    /// Kept for backward compatibility
     pub beta: Option<f64>,
+
+    /// Multi-benchmark beta analysis (optional, computed on demand)
+    pub beta_spy: Option<f64>,
+    pub beta_qqq: Option<f64>,  // Nasdaq 100
+    pub beta_iwm: Option<f64>,  // Russell 2000
+
+    /// Risk decomposition (optional, computed on demand)
+    pub risk_decomposition: Option<RiskDecomposition>,
 
     /// Annualized Sharpe ratio (risk-adjusted return)
     pub sharpe: Option<f64>,
@@ -148,6 +157,23 @@ pub struct CorrelationMatrix {
     pub tickers: Vec<String>,
     /// Correlation pairs (only upper triangle, excluding diagonal)
     pub correlations: Vec<CorrelationPair>,
+    /// 2D correlation matrix for heatmap visualization
+    /// matrix_2d[i][j] = correlation between tickers[i] and tickers[j]
+    /// Diagonal values are 1.0 (perfect self-correlation)
+    pub matrix_2d: Vec<Vec<f64>>,
+}
+
+/// Risk decomposition into systematic and idiosyncratic components.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskDecomposition {
+    /// Systematic risk (variance explained by market/beta)
+    pub systematic_risk: f64,
+    /// Idiosyncratic risk (stock-specific variance)
+    pub idiosyncratic_risk: f64,
+    /// R-squared: proportion of variance explained by market
+    pub r_squared: f64,
+    /// Total risk (volatility)
+    pub total_risk: f64,
 }
 
 /// Risk threshold settings stored in database (per portfolio).

@@ -432,6 +432,80 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
           </Grid>
         )}
 
+        {risk.metrics.beta_spy !== null && (
+          <Grid item xs={12} sm={6} md={4}>
+            <MetricCard
+              icon={<Speed />}
+              label="Beta vs S&P 500"
+              value={risk.metrics.beta_spy.toFixed(2)}
+              subValue="vs SPY"
+              color={Math.abs(risk.metrics.beta_spy) > 1.2 ? '#ff9800' : '#4caf50'}
+              tooltip={`Beta vs S&P 500 (SPY). ${risk.metrics.beta_spy > 1 ? 'More' : 'Less'} volatile than the broad market.`}
+            />
+          </Grid>
+        )}
+
+        {risk.metrics.beta_qqq !== null && (
+          <Grid item xs={12} sm={6} md={4}>
+            <MetricCard
+              icon={<Speed />}
+              label="Beta vs Nasdaq 100"
+              value={risk.metrics.beta_qqq.toFixed(2)}
+              subValue="vs QQQ"
+              color={Math.abs(risk.metrics.beta_qqq) > 1.2 ? '#ff9800' : '#4caf50'}
+              tooltip={`Beta vs Nasdaq 100 (QQQ). ${risk.metrics.beta_qqq > 1 ? 'More' : 'Less'} volatile than tech-heavy index.`}
+            />
+          </Grid>
+        )}
+
+        {risk.metrics.beta_iwm !== null && (
+          <Grid item xs={12} sm={6} md={4}>
+            <MetricCard
+              icon={<Speed />}
+              label="Beta vs Russell 2000"
+              value={risk.metrics.beta_iwm.toFixed(2)}
+              subValue="vs IWM"
+              color={Math.abs(risk.metrics.beta_iwm) > 1.2 ? '#ff9800' : '#4caf50'}
+              tooltip={`Beta vs Russell 2000 (IWM). ${risk.metrics.beta_iwm > 1 ? 'More' : 'Less'} volatile than small-cap index.`}
+            />
+          </Grid>
+        )}
+
+        {risk.metrics.risk_decomposition && (
+          <>
+            <Grid item xs={12} sm={6} md={4}>
+              <MetricCard
+                icon={<AccountBalance />}
+                label="Systematic Risk"
+                value={`${risk.metrics.risk_decomposition.systematic_risk.toFixed(2)}%`}
+                subValue={`${(risk.metrics.risk_decomposition.r_squared * 100).toFixed(1)}% market-driven`}
+                color="#2196f3"
+                tooltip="Portion of risk from market movements (cannot be diversified away)."
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <MetricCard
+                icon={<ShowChart />}
+                label="Idiosyncratic Risk"
+                value={`${risk.metrics.risk_decomposition.idiosyncratic_risk.toFixed(2)}%`}
+                subValue={`${((1 - risk.metrics.risk_decomposition.r_squared) * 100).toFixed(1)}% stock-specific`}
+                color="#9c27b0"
+                tooltip="Stock-specific risk that can be reduced through diversification."
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <MetricCard
+                icon={<Speed />}
+                label="R² (Correlation)"
+                value={`${(risk.metrics.risk_decomposition.r_squared * 100).toFixed(1)}%`}
+                subValue="Variance explained by market"
+                color="#00897b"
+                tooltip="R-squared shows how much of the stock's movement is explained by the market. Higher R² means more market-driven."
+              />
+            </Grid>
+          </>
+        )}
+
         {risk.metrics.sharpe !== null && (
           <Grid item xs={12} sm={6} md={4}>
             <MetricCard
