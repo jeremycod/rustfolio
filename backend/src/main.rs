@@ -21,6 +21,7 @@ use crate::external::multi_provider::MultiProvider;
 use crate::state::AppState;
 use crate::services::failure_cache::FailureCache;
 use crate::services::llm_service::{LlmService, LlmConfig};
+use crate::services::news_service::{NewsService, NewsConfig};
 use crate::logging::{LoggingConfig, init_logging};
 
 #[tokio::main]
@@ -100,12 +101,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::info!("🤖 LLM service disabled");
     }
 
+    // Initialize News service
+    let news_config = NewsConfig::from_env();
+    let news_service = Arc::new(NewsService::new(news_config, llm_service.clone()));
+
+    if news_service.is_enabled() {
+        tracing::info!("📰 News service enabled");
+    } else {
+        tracing::info!("📰 News service disabled");
+    }
+
     let state = AppState {
         pool,
         price_provider: provider,
         failure_cache: FailureCache::new(),
         risk_free_rate,
         llm_service,
+        news_service,
     };
     let app = app::create_app(state);
 

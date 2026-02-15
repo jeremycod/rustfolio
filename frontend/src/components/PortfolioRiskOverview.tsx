@@ -33,6 +33,8 @@ import { RiskHistoryChart } from './RiskHistoryChart';
 import { RiskThresholdSettings } from './RiskThresholdSettings';
 import { OptimizationRecommendations } from './OptimizationRecommendations';
 import PortfolioNarrative from './PortfolioNarrative';
+import PortfolioNews from './PortfolioNews';
+import PortfolioQA from './PortfolioQA';
 
 interface PortfolioRiskOverviewProps {
   selectedPortfolioId: string | null;
@@ -486,6 +488,16 @@ export function PortfolioRiskOverview({
           {/* AI Portfolio Narrative */}
           <Box sx={{ mt: 3 }}>
             <PortfolioNarrative portfolioId={selectedPortfolioId!} timePeriod="90d" />
+          </Box>
+
+          {/* Portfolio News & Insights */}
+          <Box sx={{ mt: 3 }}>
+            <PortfolioNews portfolioId={selectedPortfolioId!} />
+          </Box>
+
+          {/* Portfolio Q&A Assistant */}
+          <Box sx={{ mt: 3 }}>
+            <PortfolioQA portfolioId={selectedPortfolioId!} />
           </Box>
 
           {/* Portfolio Optimization Suggestions */}

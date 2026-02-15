@@ -10,6 +10,8 @@ pub mod risk_snapshot;
 pub mod optimization;
 pub mod llm;
 pub mod narrative;
+pub mod news;
+pub mod qa;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -35,3 +37,5 @@ pub use llm::{
     LlmUsage, CreateLlmUsage, UserPreferences, UpdateUserPreferences, LlmUsageStats,
 };
 pub use narrative::{PortfolioNarrative, GenerateNarrativeRequest};
+pub use news::{NewsArticle, Sentiment, NewsTheme, PortfolioNewsAnalysis, NewsQueryParams};
+pub use qa::{PortfolioQuestion, PortfolioAnswer, Confidence, QAConversation};

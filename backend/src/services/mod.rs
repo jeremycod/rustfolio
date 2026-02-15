@@ -10,4 +10,6 @@ pub mod optimization_service;
 pub mod failure_cache;
 pub mod llm_service;
 pub mod narrative_service;
+pub mod news_service;
+pub mod qa_service;
 mod indicators;

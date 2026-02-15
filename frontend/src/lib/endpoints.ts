@@ -25,7 +25,11 @@ import type {
     UserPreferences,
     UpdateUserPreferences,
     LlmUsageStats,
-    PortfolioNarrative
+    PortfolioNarrative,
+    PortfolioNewsAnalysis,
+    NewsTheme,
+    PortfolioQuestion,
+    PortfolioAnswer
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -337,5 +341,43 @@ export async function updateLlmConsent(
 
 export async function getLlmUsageStats(userId: string): Promise<LlmUsageStats> {
     const res = await api.get(`/api/llm/users/${userId}/usage`);
+    return res.data;
+}
+
+// News endpoints
+export async function getPortfolioNews(
+    portfolioId: string,
+    days?: number
+): Promise<PortfolioNewsAnalysis> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+
+    const queryString = params.toString();
+    const url = `/api/news/portfolios/${portfolioId}/news${queryString ? `?${queryString}` : ''}`;
+
+    const res = await api.get(url);
+    return res.data;
+}
+
+export async function getTickerNews(
+    ticker: string,
+    days?: number
+): Promise<NewsTheme[]> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+
+    const queryString = params.toString();
+    const url = `/api/news/positions/${ticker}/news${queryString ? `?${queryString}` : ''}`;
+
+    const res = await api.get(url);
+    return res.data;
+}
+
+// Q&A endpoint
+export async function askPortfolioQuestion(
+    portfolioId: string,
+    question: PortfolioQuestion
+): Promise<PortfolioAnswer> {
+    const res = await api.post(`/api/qa/portfolios/${portfolioId}/ask`, question);
     return res.data;
 }

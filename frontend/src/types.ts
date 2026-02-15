@@ -458,3 +458,51 @@ export type PortfolioNarrative = {
     top_contributors: string[];
     generated_at: string; // ISO 8601 timestamp
 };
+
+// News & Sentiment Types
+export type NewsArticle = {
+    title: string;
+    url: string;
+    source: string;
+    published_at: string; // ISO 8601 timestamp
+    snippet: string;
+};
+
+export type Sentiment = 'positive' | 'neutral' | 'negative';
+
+export type NewsTheme = {
+    theme_name: string;
+    summary: string;
+    sentiment: Sentiment;
+    articles: NewsArticle[];
+    relevance_score: number;
+};
+
+export type PortfolioNewsAnalysis = {
+    portfolio_id: string;
+    themes: NewsTheme[];
+    position_news: Record<string, NewsTheme[]>; // ticker -> themes
+    overall_sentiment: Sentiment;
+    fetched_at: string; // ISO 8601 timestamp
+};
+
+// Q&A Types
+export type Confidence = 'high' | 'medium' | 'low';
+
+export type PortfolioQuestion = {
+    question: string;
+    context_hint?: string;
+};
+
+export type PortfolioAnswer = {
+    answer: string;
+    sources: string[];
+    confidence: Confidence;
+    follow_up_questions: string[];
+    generated_at: string; // ISO 8601 timestamp
+};
+
+export type QAConversation = {
+    question: PortfolioQuestion;
+    answer: PortfolioAnswer;
+};
