@@ -9,17 +9,21 @@ import {
     Alert,
     Divider,
     CircularProgress,
+    TextField,
+    Chip,
 } from '@mui/material';
-import { Psychology, TrendingUp } from '@mui/icons-material';
+import { Psychology, TrendingUp, Save } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     getUserPreferences,
     updateLlmConsent,
     getLlmUsageStats,
+    updateUserPreferences,
 } from '../lib/endpoints';
 import ConsentDialog from './ConsentDialog';
 import AIBadge from './AIBadge';
+import type { UpdateUserPreferences } from '../types';
 
 // Demo user ID - replace with actual auth when implemented
 const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -27,6 +31,8 @@ const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 export default function LlmSettings() {
     const queryClient = useQueryClient();
     const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+    const [narrativeCacheHours, setNarrativeCacheHours] = useState(24);
+    const [hasChanges, setHasChanges] = useState(false);
 
     // Fetch user preferences
     const { data: preferences, isLoading: prefsLoading } = useQuery({
@@ -41,12 +47,29 @@ export default function LlmSettings() {
         enabled: preferences?.llm_enabled === true,
     });
 
+    // Initialize cache hours from preferences
+    useEffect(() => {
+        if (preferences) {
+            setNarrativeCacheHours(preferences.narrative_cache_hours);
+            setHasChanges(false);
+        }
+    }, [preferences]);
+
     // Mutation for updating consent
     const updateConsentMutation = useMutation({
         mutationFn: (consent: boolean) => updateLlmConsent(DEMO_USER_ID, consent),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['userPreferences', DEMO_USER_ID] });
             queryClient.invalidateQueries({ queryKey: ['llmUsageStats', DEMO_USER_ID] });
+        },
+    });
+
+    // Mutation for updating preferences
+    const updatePreferencesMutation = useMutation({
+        mutationFn: (data: UpdateUserPreferences) => updateUserPreferences(DEMO_USER_ID, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['userPreferences', DEMO_USER_ID] });
+            setHasChanges(false);
         },
     });
 
@@ -67,6 +90,20 @@ export default function LlmSettings() {
 
     const handleDeclineConsent = () => {
         setConsentDialogOpen(false);
+    };
+
+    const handleCacheHoursChange = (value: number) => {
+        setNarrativeCacheHours(value);
+        setHasChanges(true);
+    };
+
+    const handleSavePreferences = () => {
+        if (preferences) {
+            updatePreferencesMutation.mutate({
+                llm_enabled: preferences.llm_enabled,
+                narrative_cache_hours: narrativeCacheHours,
+            });
+        }
     };
 
     if (prefsLoading) {
@@ -117,6 +154,80 @@ export default function LlmSettings() {
                             </Typography>
                             <Typography variant="body2" color="text.secondary" paragraph>
                                 Consent given: {preferences.consent_given_at ? new Date(preferences.consent_given_at).toLocaleString() : 'N/A'}
+                            </Typography>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            <Typography variant="subtitle2" gutterBottom fontWeight="bold">
+                                AI Analysis Cache Duration
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" paragraph>
+                                How long to cache AI-generated portfolio narratives before requiring a refresh
+                            </Typography>
+
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                                <TextField
+                                    type="number"
+                                    value={narrativeCacheHours}
+                                    onChange={(e) => handleCacheHoursChange(parseInt(e.target.value) || 1)}
+                                    inputProps={{ min: 1, max: 168 }}
+                                    sx={{ width: 120 }}
+                                    size="small"
+                                />
+                                <Typography variant="body2">hours</Typography>
+                            </Box>
+
+                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+                                <Chip
+                                    label="12 hours"
+                                    size="small"
+                                    onClick={() => handleCacheHoursChange(12)}
+                                    variant={narrativeCacheHours === 12 ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                    label="24 hours"
+                                    size="small"
+                                    onClick={() => handleCacheHoursChange(24)}
+                                    variant={narrativeCacheHours === 24 ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                    label="48 hours"
+                                    size="small"
+                                    onClick={() => handleCacheHoursChange(48)}
+                                    variant={narrativeCacheHours === 48 ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                    label="1 week"
+                                    size="small"
+                                    onClick={() => handleCacheHoursChange(168)}
+                                    variant={narrativeCacheHours === 168 ? 'filled' : 'outlined'}
+                                />
+                            </Box>
+
+                            <Button
+                                variant="contained"
+                                startIcon={<Save />}
+                                onClick={handleSavePreferences}
+                                disabled={!hasChanges || updatePreferencesMutation.isPending}
+                                size="small"
+                            >
+                                {updatePreferencesMutation.isPending ? 'Saving...' : 'Save Cache Settings'}
+                            </Button>
+
+                            {updatePreferencesMutation.isSuccess && (
+                                <Alert severity="success" sx={{ mt: 2 }}>
+                                    Cache settings saved successfully!
+                                </Alert>
+                            )}
+
+                            {updatePreferencesMutation.isError && (
+                                <Alert severity="error" sx={{ mt: 2 }}>
+                                    Failed to save settings: {updatePreferencesMutation.error instanceof Error ? updatePreferencesMutation.error.message : 'Unknown error'}
+                                </Alert>
+                            )}
+
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                                Shorter durations provide more up-to-date analysis but use more API calls. Longer durations reduce costs.
                             </Typography>
 
                             {statsLoading ? (

@@ -17,13 +17,16 @@ import {
   ListItemSecondaryAction,
   IconButton,
   Alert,
+  Card,
+  CardContent,
 } from '@mui/material';
-import { Delete, Warning, Settings as SettingsIcon } from '@mui/icons-material';
+import { Delete, Warning, Settings as SettingsIcon, Psychology, Tune } from '@mui/icons-material';
 import { useState } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { resetAllData, listPortfolios, deletePortfolio } from '../lib/endpoints';
+import { resetAllData, listPortfolios, deletePortfolio, getUserPreferences } from '../lib/endpoints';
 import { RiskThresholdSettings } from './RiskThresholdSettings';
-import LlmSettings from './LlmSettings';
+import UserSettingsDialog from './UserSettingsDialog';
+import AIBadge from './AIBadge';
 import type { Portfolio } from '../types';
 
 export function Settings() {
@@ -35,8 +38,15 @@ export function Settings() {
   const [portfolioToDelete, setPortfolioToDelete] = useState<Portfolio | null>(null);
   const [riskThresholdsDialogOpen, setRiskThresholdsDialogOpen] = useState(false);
   const [selectedPortfolioForThresholds, setSelectedPortfolioForThresholds] = useState<Portfolio | null>(null);
+  const [userSettingsDialogOpen, setUserSettingsDialogOpen] = useState(false);
 
   const queryClient = useQueryClient();
+  const userId = '00000000-0000-0000-0000-000000000001';
+
+  const { data: preferences } = useQuery({
+    queryKey: ['userPreferences', userId],
+    queryFn: () => getUserPreferences(userId),
+  });
 
   const portfoliosQ = useQuery({
     queryKey: ['portfolios'],
@@ -152,9 +162,47 @@ export function Settings() {
       </Paper>
 
       {/* AI Features Section */}
-      <Box sx={{ mb: 4 }}>
-        <LlmSettings />
-      </Box>
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <Psychology color="primary" fontSize="large" />
+            <Typography variant="h6">AI-Powered Features</Typography>
+            <AIBadge variant="experimental" />
+          </Box>
+
+          <Typography variant="body2" color="text.secondary" paragraph>
+            Configure AI-powered insights, cache settings, and view usage statistics.
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+            <Typography variant="body2" fontWeight="bold">
+              Status:
+            </Typography>
+            <Typography
+              variant="body2"
+              color={preferences?.llm_enabled ? 'success.main' : 'text.secondary'}
+            >
+              {preferences?.llm_enabled ? 'Enabled' : 'Disabled'}
+            </Typography>
+            {preferences?.llm_enabled && (
+              <>
+                <Divider orientation="vertical" flexItem />
+                <Typography variant="body2" color="text.secondary">
+                  Cache: {preferences.narrative_cache_hours}h
+                </Typography>
+              </>
+            )}
+          </Box>
+
+          <Button
+            variant="contained"
+            startIcon={<Tune />}
+            onClick={() => setUserSettingsDialogOpen(true)}
+          >
+            Configure AI Settings
+          </Button>
+        </CardContent>
+      </Card>
 
       <Paper sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>
@@ -321,6 +369,12 @@ export function Settings() {
           }}
         />
       )}
+
+      {/* User Settings Dialog */}
+      <UserSettingsDialog
+        open={userSettingsDialogOpen}
+        onClose={() => setUserSettingsDialogOpen(false)}
+      />
     </Box>
   );
 }
