@@ -33,7 +33,8 @@ impl IntoResponse for AppError {
                 headers.insert("Retry-After", HeaderValue::from_static("60"));
                 (StatusCode::TOO_MANY_REQUESTS, headers, "Rate limited").into_response()
             },
-            AppError::External(msg) => (StatusCode::BAD_GATEWAY, msg).into_response(),
+            // Use 503 Service Unavailable for external API failures (more appropriate than 502)
+            AppError::External(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg).into_response(),
             AppError::Db(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response(),
         }
     }

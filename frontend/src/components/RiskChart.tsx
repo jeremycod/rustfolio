@@ -252,7 +252,8 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
           Shows how price volatility changed over time. Higher values indicate more price fluctuation.
         </Typography>
 
-        <ResponsiveContainer width="100%" height={300}>
+        <Box sx={{ minHeight: 300 }}>
+          <ResponsiveContainer width="100%" height={300}>
           <LineChart data={rollingMetrics || []}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
@@ -279,6 +280,7 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
             />
           </LineChart>
         </ResponsiveContainer>
+        </Box>
       </Paper>
 
       {/* Underwater (Drawdown) Chart */}
@@ -290,7 +292,8 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
           Shows how far the price is below its previous peak. Negative values indicate the position is underwater.
         </Typography>
 
-        <ResponsiveContainer width="100%" height={300}>
+        <Box sx={{ minHeight: 300 }}>
+          <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={rollingMetrics || []}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
@@ -318,6 +321,7 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
             />
           </AreaChart>
         </ResponsiveContainer>
+        </Box>
 
         <Alert severity="info" sx={{ mt: 2 }}>
           <Typography variant="caption">

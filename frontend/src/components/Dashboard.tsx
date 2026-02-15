@@ -201,7 +201,7 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange }: DashboardP
                 Portfolio Allocation
               </Typography>
               {allocationData.length > 0 ? (
-                <Box sx={{ height: 300 }}>
+                <Box sx={{ height: 300, minHeight: 300 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie

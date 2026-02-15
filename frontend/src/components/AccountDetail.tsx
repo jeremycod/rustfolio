@@ -282,7 +282,7 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
               Account Value History
             </Typography>
             {chartData.length > 0 ? (
-              <Box sx={{ height: 400, mt: 2 }}>
+              <Box sx={{ height: 400, minHeight: 400, mt: 2 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" />

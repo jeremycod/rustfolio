@@ -220,7 +220,7 @@ export function PriceHistoryChart({ ticker, days, companyName }: PriceHistoryCha
           <Typography variant="h6" gutterBottom>
             Price History - Last {days} Days
           </Typography>
-          <Box sx={{ height: 400, mt: 2 }}>
+          <Box sx={{ height: 400, minHeight: 400, mt: 2 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -281,7 +281,7 @@ export function PriceHistoryChart({ ticker, days, companyName }: PriceHistoryCha
           <Typography variant="body2" color="text.secondary" mb={2}>
             Shows how far the price is below its previous peak. When the line is at 0%, the price is at a new all-time high. Negative values indicate the percentage decline from the peak.
           </Typography>
-          <Box sx={{ height: 300, mt: 2 }}>
+          <Box sx={{ height: 300, minHeight: 300, mt: 2 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />

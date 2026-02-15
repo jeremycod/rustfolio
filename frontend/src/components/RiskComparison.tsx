@@ -462,8 +462,9 @@ export function RiskComparison() {
                 <Typography variant="h6" gutterBottom>
                   Volatility Comparison
                 </Typography>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={volatilityData}>
+                <Box sx={{ minHeight: 250 }}>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={volatilityData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="ticker" />
                     <YAxis label={{ value: 'Volatility (%)', angle: -90, position: 'insideLeft' }} />
@@ -475,6 +476,7 @@ export function RiskComparison() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+                </Box>
                 <Typography variant="caption" color="text.secondary" display="block" textAlign="center" mt={1}>
                   Lower volatility indicates more stable prices
                 </Typography>
@@ -487,8 +489,9 @@ export function RiskComparison() {
                 <Typography variant="h6" gutterBottom>
                   Maximum Drawdown Comparison
                 </Typography>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={drawdownData}>
+                <Box sx={{ minHeight: 250 }}>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={drawdownData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="ticker" />
                     <YAxis label={{ value: 'Max Drawdown (%)', angle: -90, position: 'insideLeft' }} />
@@ -500,6 +503,7 @@ export function RiskComparison() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+                </Box>
                 <Typography variant="caption" color="text.secondary" display="block" textAlign="center" mt={1}>
                   Lower drawdown indicates smaller historical losses
                 </Typography>
@@ -513,8 +517,9 @@ export function RiskComparison() {
                   <Typography variant="h6" gutterBottom>
                     Beta Comparison (vs {benchmark})
                   </Typography>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={betaData}>
+                  <Box sx={{ minHeight: 250 }}>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={betaData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="ticker" />
                       <YAxis label={{ value: 'Beta', angle: -90, position: 'insideLeft' }} />
@@ -526,6 +531,7 @@ export function RiskComparison() {
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
+                  </Box>
                   <Typography variant="caption" color="text.secondary" display="block" textAlign="center" mt={1}>
                     Beta &gt; 1.0 is more volatile than market, &lt; 1.0 is less volatile
                   </Typography>
@@ -539,8 +545,9 @@ export function RiskComparison() {
                 <Typography variant="h6" gutterBottom>
                   Overall Risk Score Comparison
                 </Typography>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={riskScoreData}>
+                <Box sx={{ minHeight: 250 }}>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={riskScoreData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="ticker" />
                     <YAxis label={{ value: 'Risk Score', angle: -90, position: 'insideLeft' }} domain={[0, 100]} />
@@ -552,6 +559,7 @@ export function RiskComparison() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+                </Box>
                 <Typography variant="caption" color="text.secondary" display="block" textAlign="center" mt={1}>
                   0-40: Low Risk • 40-60: Moderate • 60-100: High Risk
                 </Typography>

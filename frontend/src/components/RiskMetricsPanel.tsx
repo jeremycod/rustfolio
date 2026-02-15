@@ -115,8 +115,11 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
   }
 
   if (error) {
-    // Parse error message to provide better feedback
-    const errorMsg = error instanceof Error ? error.message : String(error);
+    // Parse error message from axios error response
+    // Axios puts the backend error message in error.response.data
+    const axiosError = error as any;
+    const backendMsg = axiosError.response?.data || axiosError.message || String(error);
+    const errorMsg = typeof backendMsg === 'string' ? backendMsg : (error instanceof Error ? error.message : String(error));
 
     // Log error details for debugging
     console.error(`[RiskMetricsPanel] Failed to load risk data for ${ticker}:`, {
@@ -130,11 +133,16 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
     let message = `Failed to load risk metrics for ${ticker}`;
     let details = '';
 
-    if (errorMsg.includes('failure cache') || errorMsg.includes('not_found')) {
+    // Check for specific error patterns in the backend message
+    if (errorMsg.includes('No price data found') || errorMsg.includes('not available in your price provider')) {
+      severity = 'info';
+      message = `${ticker} is not available for risk analysis`;
+      details = 'This security is not available in the free tier of the price data API. It may be a mutual fund, Canadian security, or require a paid subscription.';
+    } else if (errorMsg.includes('failure cache') || errorMsg.includes('not_found')) {
       severity = 'info';
       message = `${ticker} is not available for risk analysis`;
       details = 'This security may be a mutual fund, bond, or other instrument without publicly available price data.';
-    } else if (errorMsg.includes('rate limit')) {
+    } else if (errorMsg.includes('rate limit') || errorMsg.includes('Rate limit')) {
       severity = 'warning';
       message = `Rate limit reached for ${ticker}`;
       details = 'Too many API requests. Risk data will be available after cooldown period.';
@@ -146,6 +154,11 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
       severity = 'info';
       message = `${ticker} is not a publicly traded security`;
       details = 'This appears to be a mutual fund or proprietary security code.';
+    } else if (axiosError.response?.status === 503) {
+      // Service Unavailable - typically means data provider doesn't have this ticker
+      severity = 'info';
+      message = `${ticker} data is unavailable`;
+      details = 'This security may not be available in the current data provider, or may be a mutual fund/private security without public market data.';
     } else {
       // Generic error - include ticker and actual error message
       details = `The ticker may not have sufficient price history, or the data provider is unavailable. Error: ${errorMsg}`;

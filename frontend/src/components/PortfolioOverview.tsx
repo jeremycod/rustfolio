@@ -73,8 +73,9 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
 
   // Fetch risk thresholds
   const thresholdsQ = useQuery({
-    queryKey: ['riskThresholds'],
-    queryFn: getRiskThresholds,
+    queryKey: ['riskThresholds', selectedPortfolioId],
+    queryFn: () => getRiskThresholds(selectedPortfolioId!),
+    enabled: !!selectedPortfolioId,
     staleTime: 1000 * 60 * 60, // 1 hour
   });
 

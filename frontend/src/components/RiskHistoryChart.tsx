@@ -274,7 +274,8 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
             No risk history data available. Create a snapshot to start tracking risk over time.
           </Alert>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
+          <Box sx={{ minHeight: 400 }}>
+            <ResponsiveContainer width="100%" height={400}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
@@ -419,6 +420,7 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
               )}
             </LineChart>
           </ResponsiveContainer>
+          </Box>
         )}
 
         {chartData.length > 0 && (
