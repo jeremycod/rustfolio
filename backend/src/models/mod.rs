@@ -18,7 +18,11 @@ pub use account::{Account, CreateAccount};
 pub use holding_snapshot::{HoldingSnapshot, CreateHoldingSnapshot, LatestAccountHolding, AccountValueHistory};
 pub use cash_flow::{CashFlow, CreateCashFlow, FlowType};
 pub use detected_transaction::{DetectedTransaction, CreateDetectedTransaction, TransactionType, AccountActivity, AccountTruePerformance};
-pub use risk::{PositionRisk, RiskAssessment, RiskLevel, PortfolioRisk, PositionRiskContribution, CorrelationPair, CorrelationMatrix};
+pub use risk::{
+    PositionRisk, RiskAssessment, RiskLevel, PortfolioRisk, PositionRiskContribution,
+    CorrelationPair, CorrelationMatrix, ViolationSeverity, ThresholdViolation,
+    PortfolioRiskWithViolations
+};
 pub use risk_snapshot::{RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams};
 pub use optimization::{
     OptimizationRecommendation, OptimizationAnalysis, PositionAdjustment, ExpectedImpact,

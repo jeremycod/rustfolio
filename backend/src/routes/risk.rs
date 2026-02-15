@@ -1,13 +1,15 @@
 use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
 use axum::routing::{get, post};
+use axum::response::Response;
+use axum::http::{header, StatusCode};
 use serde::Deserialize;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::models::{RiskAssessment, CorrelationMatrix, CorrelationPair, RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams};
-use crate::models::risk::{RiskThresholdSettings, UpdateRiskThresholds};
+use crate::models::risk::{RiskThresholdSettings, UpdateRiskThresholds, PortfolioRiskWithViolations, ThresholdViolation, ViolationSeverity};
 use crate::services::{risk_service, risk_snapshot_service};
 use crate::state::AppState;
 
@@ -21,6 +23,7 @@ pub fn router() -> Router<AppState> {
         .route("/portfolios/:portfolio_id/alerts", get(get_risk_alerts))
         .route("/portfolios/:portfolio_id/thresholds", get(get_thresholds))
         .route("/portfolios/:portfolio_id/thresholds", post(set_thresholds))
+        .route("/portfolios/:portfolio_id/export/csv", get(export_portfolio_risk_csv))
 }
 
 /// Query parameters for risk calculation
@@ -110,7 +113,7 @@ pub async fn get_portfolio_risk(
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<RiskQueryParams>,
     State(state): State<AppState>,
-) -> Result<Json<crate::models::PortfolioRisk>, AppError> {
+) -> Result<Json<PortfolioRiskWithViolations>, AppError> {
     use crate::db::holding_snapshot_queries;
     use crate::models::PositionRiskContribution;
     use std::collections::HashMap;
@@ -239,10 +242,156 @@ pub async fn get_portfolio_risk(
         portfolio_sharpe: if sharpe_count > 0 { Some(weighted_sharpe) } else { None },
         portfolio_risk_score,
         risk_level,
-        position_risks,
+        position_risks: position_risks.clone(),
     };
 
-    Ok(Json(portfolio_risk))
+    // Fetch risk thresholds
+    let thresholds = crate::db::risk_threshold_queries::get_thresholds(&state.pool, portfolio_id)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch risk thresholds: {}", e);
+            AppError::Db(e)
+        })?;
+
+    // Detect threshold violations
+    let violations = detect_violations(&portfolio_risk, &thresholds);
+
+    info!(
+        "Portfolio {} has {} threshold violations",
+        portfolio_id,
+        violations.len()
+    );
+
+    Ok(Json(PortfolioRiskWithViolations {
+        portfolio_risk,
+        thresholds,
+        violations,
+    }))
+}
+
+/// Detect threshold violations in portfolio risk data
+fn detect_violations(
+    portfolio_risk: &crate::models::PortfolioRisk,
+    thresholds: &RiskThresholdSettings,
+) -> Vec<ThresholdViolation> {
+    let mut violations = Vec::new();
+
+    // Check each position for violations
+    for position in &portfolio_risk.position_risks {
+        let metrics = &position.risk_assessment.metrics;
+
+        // Check volatility
+        if metrics.volatility >= thresholds.volatility_critical_threshold {
+            violations.push(ThresholdViolation {
+                ticker: position.ticker.clone(),
+                holding_name: None,
+                metric_name: "Volatility".to_string(),
+                metric_value: metrics.volatility,
+                threshold_value: thresholds.volatility_critical_threshold,
+                threshold_type: ViolationSeverity::Critical,
+            });
+        } else if metrics.volatility >= thresholds.volatility_warning_threshold {
+            violations.push(ThresholdViolation {
+                ticker: position.ticker.clone(),
+                holding_name: None,
+                metric_name: "Volatility".to_string(),
+                metric_value: metrics.volatility,
+                threshold_value: thresholds.volatility_warning_threshold,
+                threshold_type: ViolationSeverity::Warning,
+            });
+        }
+
+        // Check max drawdown (more negative is worse)
+        if metrics.max_drawdown <= thresholds.drawdown_critical_threshold {
+            violations.push(ThresholdViolation {
+                ticker: position.ticker.clone(),
+                holding_name: None,
+                metric_name: "Max Drawdown".to_string(),
+                metric_value: metrics.max_drawdown,
+                threshold_value: thresholds.drawdown_critical_threshold,
+                threshold_type: ViolationSeverity::Critical,
+            });
+        } else if metrics.max_drawdown <= thresholds.drawdown_warning_threshold {
+            violations.push(ThresholdViolation {
+                ticker: position.ticker.clone(),
+                holding_name: None,
+                metric_name: "Max Drawdown".to_string(),
+                metric_value: metrics.max_drawdown,
+                threshold_value: thresholds.drawdown_warning_threshold,
+                threshold_type: ViolationSeverity::Warning,
+            });
+        }
+
+        // Check beta
+        if let Some(beta) = metrics.beta {
+            if beta >= thresholds.beta_critical_threshold {
+                violations.push(ThresholdViolation {
+                    ticker: position.ticker.clone(),
+                    holding_name: None,
+                    metric_name: "Beta".to_string(),
+                    metric_value: beta,
+                    threshold_value: thresholds.beta_critical_threshold,
+                    threshold_type: ViolationSeverity::Critical,
+                });
+            } else if beta >= thresholds.beta_warning_threshold {
+                violations.push(ThresholdViolation {
+                    ticker: position.ticker.clone(),
+                    holding_name: None,
+                    metric_name: "Beta".to_string(),
+                    metric_value: beta,
+                    threshold_value: thresholds.beta_warning_threshold,
+                    threshold_type: ViolationSeverity::Warning,
+                });
+            }
+        }
+
+        // Check risk score
+        let risk_score = position.risk_assessment.risk_score;
+        if risk_score >= thresholds.risk_score_critical_threshold {
+            violations.push(ThresholdViolation {
+                ticker: position.ticker.clone(),
+                holding_name: None,
+                metric_name: "Risk Score".to_string(),
+                metric_value: risk_score,
+                threshold_value: thresholds.risk_score_critical_threshold,
+                threshold_type: ViolationSeverity::Critical,
+            });
+        } else if risk_score >= thresholds.risk_score_warning_threshold {
+            violations.push(ThresholdViolation {
+                ticker: position.ticker.clone(),
+                holding_name: None,
+                metric_name: "Risk Score".to_string(),
+                metric_value: risk_score,
+                threshold_value: thresholds.risk_score_warning_threshold,
+                threshold_type: ViolationSeverity::Warning,
+            });
+        }
+
+        // Check VaR (more negative is worse)
+        if let Some(var) = metrics.value_at_risk {
+            if var <= thresholds.var_critical_threshold {
+                violations.push(ThresholdViolation {
+                    ticker: position.ticker.clone(),
+                    holding_name: None,
+                    metric_name: "Value at Risk".to_string(),
+                    metric_value: var,
+                    threshold_value: thresholds.var_critical_threshold,
+                    threshold_type: ViolationSeverity::Critical,
+                });
+            } else if var <= thresholds.var_warning_threshold {
+                violations.push(ThresholdViolation {
+                    ticker: position.ticker.clone(),
+                    holding_name: None,
+                    metric_name: "Value at Risk".to_string(),
+                    metric_value: var,
+                    threshold_value: thresholds.var_warning_threshold,
+                    threshold_type: ViolationSeverity::Warning,
+                });
+            }
+        }
+    }
+
+    violations
 }
 
 /// GET /api/risk/portfolios/:portfolio_id/thresholds
@@ -631,4 +780,169 @@ pub async fn get_risk_alerts(
     );
 
     Ok(Json(alerts))
+}
+
+/// GET /api/risk/portfolios/:portfolio_id/export/csv
+///
+/// Export portfolio risk analysis to CSV format
+///
+/// Query parameters:
+/// - `days`: Rolling window in days (default: 90)
+/// - `benchmark`: Benchmark ticker for beta (default: "SPY")
+///
+/// Returns CSV file with portfolio summary and position-level risk metrics
+pub async fn export_portfolio_risk_csv(
+    Path(portfolio_id): Path<Uuid>,
+    Query(params): Query<RiskQueryParams>,
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
+    info!(
+        "GET /api/risk/portfolios/{}/export/csv - Exporting risk data to CSV",
+        portfolio_id
+    );
+
+    // Get portfolio risk data (same as get_portfolio_risk)
+    use crate::db::{holding_snapshot_queries, portfolio_queries};
+    use std::collections::HashMap;
+
+    // Fetch portfolio name
+    let portfolio = portfolio_queries::fetch_one(&state.pool, portfolio_id)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch portfolio: {}", e);
+            AppError::Db(e)
+        })?
+        .ok_or_else(|| AppError::External("Portfolio not found".to_string()))?;
+
+    // Fetch holdings
+    let holdings = holding_snapshot_queries::fetch_portfolio_latest_holdings(
+        &state.pool,
+        portfolio_id
+    ).await.map_err(|e| {
+        error!("Failed to fetch portfolio holdings: {}", e);
+        AppError::Db(e)
+    })?;
+
+    if holdings.is_empty() {
+        return Err(AppError::External(
+            "Portfolio has no holdings to export".to_string()
+        ));
+    }
+
+    // Aggregate holdings by ticker
+    let mut ticker_aggregates: HashMap<String, (f64, Option<String>)> = HashMap::new();
+    let mut total_value = 0.0;
+
+    for holding in &holdings {
+        let market_value = holding.market_value.to_string().parse::<f64>().unwrap_or(0.0);
+        total_value += market_value;
+
+        ticker_aggregates
+            .entry(holding.ticker.clone())
+            .and_modify(|(mv, _)| *mv += market_value)
+            .or_insert((market_value, holding.holding_name.clone()));
+    }
+
+    // Build CSV
+    let mut csv_writer = csv::Writer::from_writer(vec![]);
+
+    // Write header
+    csv_writer.write_record(&[
+        "Ticker",
+        "Holding Name",
+        "Market Value",
+        "Portfolio Weight %",
+        "Volatility %",
+        "Max Drawdown %",
+        "Beta",
+        "Sharpe Ratio",
+        "Value at Risk %",
+        "Risk Score",
+        "Risk Level",
+    ]).map_err(|e| {
+        error!("Failed to write CSV header: {}", e);
+        AppError::External(format!("CSV generation error: {}", e))
+    })?;
+
+    // Process each ticker
+    let mut rows_written = 0;
+    for (ticker, (market_value, holding_name)) in ticker_aggregates {
+        let weight = (market_value / total_value) * 100.0;
+
+        // Compute risk metrics
+        match risk_service::compute_risk_metrics(
+            &state.pool,
+            &ticker,
+            params.days,
+            &params.benchmark,
+            state.price_provider.as_ref(),
+            &state.failure_cache,
+        ).await {
+            Ok(assessment) => {
+                csv_writer.write_record(&[
+                    ticker,
+                    holding_name.unwrap_or_else(|| "—".to_string()),
+                    format!("{:.2}", market_value),
+                    format!("{:.2}", weight),
+                    format!("{:.2}", assessment.metrics.volatility),
+                    format!("{:.2}", assessment.metrics.max_drawdown),
+                    assessment.metrics.beta.map(|b| format!("{:.2}", b)).unwrap_or_else(|| "—".to_string()),
+                    assessment.metrics.sharpe.map(|s| format!("{:.2}", s)).unwrap_or_else(|| "—".to_string()),
+                    assessment.metrics.value_at_risk.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "—".to_string()),
+                    format!("{:.2}", assessment.risk_score),
+                    assessment.risk_level.to_string().to_uppercase(),
+                ]).map_err(|e| {
+                    error!("Failed to write CSV row: {}", e);
+                    AppError::External(format!("CSV generation error: {}", e))
+                })?;
+                rows_written += 1;
+            },
+            Err(e) => {
+                warn!("Skipping {} due to error: {}", ticker, e);
+                // Write row with error indication
+                csv_writer.write_record(&[
+                    ticker,
+                    holding_name.unwrap_or_else(|| "—".to_string()),
+                    format!("{:.2}", market_value),
+                    format!("{:.2}", weight),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "ERROR".to_string(),
+                ]).map_err(|e| {
+                    error!("Failed to write CSV row: {}", e);
+                    AppError::External(format!("CSV generation error: {}", e))
+                })?;
+            }
+        }
+    }
+
+    let csv_data = csv_writer.into_inner().map_err(|e| {
+        error!("Failed to finalize CSV: {}", e);
+        AppError::External(format!("CSV generation error: {}", e))
+    })?;
+
+    info!("Successfully exported {} positions to CSV", rows_written);
+
+    // Generate filename with date
+    let filename = format!(
+        "portfolio_risk_{}_{}_{}.csv",
+        portfolio.name.replace(' ', "_"),
+        portfolio_id,
+        chrono::Utc::now().format("%Y%m%d")
+    );
+
+    // Build response with proper headers
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", filename)
+        )
+        .body(csv_data.into())
+        .unwrap())
 }

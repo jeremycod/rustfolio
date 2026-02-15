@@ -172,3 +172,31 @@ pub struct UpdateRiskThresholds {
     pub var_critical_threshold: Option<f64>,
 }
 
+/// Severity level for threshold violations.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ViolationSeverity {
+    Warning,
+    Critical,
+}
+
+/// A position that violates risk thresholds.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThresholdViolation {
+    pub ticker: String,
+    pub holding_name: Option<String>,
+    pub metric_name: String,
+    pub metric_value: f64,
+    pub threshold_value: f64,
+    pub threshold_type: ViolationSeverity,
+}
+
+/// Enhanced portfolio risk response with threshold violations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioRiskWithViolations {
+    #[serde(flatten)]
+    pub portfolio_risk: PortfolioRisk,
+    pub thresholds: RiskThresholdSettings,
+    pub violations: Vec<ThresholdViolation>,
+}
+

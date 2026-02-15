@@ -221,6 +221,23 @@ export type PortfolioRisk = {
     position_risks: PositionRiskContribution[];
 };
 
+export type ViolationSeverity = 'warning' | 'critical';
+
+export type ThresholdViolation = {
+    ticker: string;
+    holding_name: string | null;
+    metric_name: string;
+    metric_value: number;
+    threshold_value: number;
+    threshold_type: ViolationSeverity;
+};
+
+export type PortfolioRiskWithViolations = {
+    portfolio_risk: PortfolioRisk;
+    thresholds: RiskThresholdSettings;
+    violations: ThresholdViolation[];
+};
+
 export type CorrelationPair = {
     ticker1: string;
     ticker2: string;

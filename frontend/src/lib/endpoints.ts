@@ -15,6 +15,7 @@ import type {
     AccountTruePerformance,
     RiskAssessment,
     PortfolioRisk,
+    PortfolioRiskWithViolations,
     CorrelationMatrix,
     RiskSnapshot,
     RiskAlert,
@@ -162,7 +163,7 @@ export async function getPortfolioRisk(
     portfolioId: string,
     days?: number,
     benchmark?: string
-): Promise<PortfolioRisk> {
+): Promise<PortfolioRiskWithViolations> {
     const params = new URLSearchParams();
     if (days) params.append('days', days.toString());
     if (benchmark) params.append('benchmark', benchmark);
@@ -243,6 +244,47 @@ export async function updateRiskThresholds(
 ): Promise<RiskThresholdSettings> {
     const res = await api.post(`/api/risk/portfolios/${portfolioId}/thresholds`, thresholds);
     return res.data;
+}
+
+// Risk export endpoints
+export async function exportPortfolioRiskCSV(
+    portfolioId: string,
+    days?: number,
+    benchmark?: string
+): Promise<void> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+    if (benchmark) params.append('benchmark', benchmark);
+
+    const queryString = params.toString();
+    const url = `/api/risk/portfolios/${portfolioId}/export/csv${queryString ? `?${queryString}` : ''}`;
+
+    // Download CSV file
+    const res = await api.get(url, {
+        responseType: 'blob',
+        timeout: 120000, // 2 minutes for large portfolios
+    });
+
+    // Extract filename from Content-Disposition header
+    const contentDisposition = res.headers['content-disposition'];
+    let filename = 'portfolio_risk_export.csv';
+    if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match) {
+            filename = match[1];
+        }
+    }
+
+    // Create download link
+    const blob = new Blob([res.data], { type: 'text/csv' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
 }
 
 // Portfolio optimization endpoints
