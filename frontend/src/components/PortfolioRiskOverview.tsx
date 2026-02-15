@@ -23,13 +23,14 @@ import {
   Button,
   Snackbar,
 } from '@mui/material';
-import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera } from '@mui/icons-material';
+import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera, Settings } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPortfolioRisk, listPortfolios, createRiskSnapshot } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
 import { RiskLevel } from '../types';
 import { TickerChip } from './TickerChip';
 import { RiskHistoryChart } from './RiskHistoryChart';
+import { RiskThresholdSettings } from './RiskThresholdSettings';
 
 interface PortfolioRiskOverviewProps {
   selectedPortfolioId: string | null;
@@ -44,6 +45,7 @@ export function PortfolioRiskOverview({
 }: PortfolioRiskOverviewProps) {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const portfoliosQ = useQuery({
@@ -125,6 +127,16 @@ export function PortfolioRiskOverview({
             ))}
           </Select>
         </FormControl>
+
+        <Button
+          variant="outlined"
+          startIcon={<Settings />}
+          onClick={() => setSettingsOpen(true)}
+          disabled={!selectedPortfolioId}
+          sx={{ height: 'fit-content' }}
+        >
+          Settings
+        </Button>
 
         <Button
           variant="contained"
@@ -392,6 +404,15 @@ export function PortfolioRiskOverview({
         message={snackbarMessage}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       />
+
+      {/* Risk Threshold Settings Dialog */}
+      {selectedPortfolioId && (
+        <RiskThresholdSettings
+          portfolioId={selectedPortfolioId}
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </Box>
   );
 }

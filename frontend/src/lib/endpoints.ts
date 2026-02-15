@@ -14,11 +14,12 @@ import type {
     AccountActivity,
     AccountTruePerformance,
     RiskAssessment,
-    RiskThresholds,
     PortfolioRisk,
     CorrelationMatrix,
     RiskSnapshot,
     RiskAlert,
+    RiskThresholdSettings,
+    UpdateRiskThresholds,
     OptimizationAnalysis
 } from "../types";
 
@@ -173,15 +174,6 @@ export async function getPortfolioRisk(
     return res.data;
 }
 
-export async function getRiskThresholds(): Promise<RiskThresholds> {
-    const res = await api.get('/api/risk/thresholds');
-    return res.data;
-}
-
-export async function setRiskThresholds(thresholds: RiskThresholds): Promise<void> {
-    await api.post('/api/risk/thresholds', { thresholds });
-}
-
 export async function getPortfolioCorrelations(
     portfolioId: string,
     days?: number
@@ -234,6 +226,22 @@ export async function getRiskAlerts(
     const url = `/api/risk/portfolios/${portfolioId}/alerts${queryString ? `?${queryString}` : ''}`;
 
     const res = await api.get(url);
+    return res.data;
+}
+
+// Risk threshold settings endpoints
+export async function getRiskThresholds(
+    portfolioId: string
+): Promise<RiskThresholdSettings> {
+    const res = await api.get(`/api/risk/portfolios/${portfolioId}/thresholds`);
+    return res.data;
+}
+
+export async function updateRiskThresholds(
+    portfolioId: string,
+    thresholds: UpdateRiskThresholds
+): Promise<RiskThresholdSettings> {
+    const res = await api.post(`/api/risk/portfolios/${portfolioId}/thresholds`, thresholds);
     return res.data;
 }
 

@@ -7,7 +7,8 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{RiskAssessment, RiskThresholds, SetThresholdsRequest, CorrelationMatrix, CorrelationPair, RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams};
+use crate::models::{RiskAssessment, CorrelationMatrix, CorrelationPair, RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams};
+use crate::models::risk::{RiskThresholdSettings, UpdateRiskThresholds};
 use crate::services::{risk_service, risk_snapshot_service};
 use crate::state::AppState;
 
@@ -19,8 +20,8 @@ pub fn router() -> Router<AppState> {
         .route("/portfolios/:portfolio_id/snapshot", post(create_portfolio_snapshot))
         .route("/portfolios/:portfolio_id/history", get(get_risk_history))
         .route("/portfolios/:portfolio_id/alerts", get(get_risk_alerts))
-        .route("/thresholds", get(get_thresholds))
-        .route("/thresholds", post(set_thresholds))
+        .route("/portfolios/:portfolio_id/thresholds", get(get_thresholds))
+        .route("/portfolios/:portfolio_id/thresholds", post(set_thresholds))
 }
 
 /// Query parameters for risk calculation
@@ -245,37 +246,47 @@ pub async fn get_portfolio_risk(
     Ok(Json(portfolio_risk))
 }
 
-/// GET /api/risk/thresholds
+/// GET /api/risk/portfolios/:portfolio_id/thresholds
 ///
-/// Retrieve user-configured risk warning thresholds.
+/// Retrieve risk warning thresholds for a portfolio.
 ///
-/// Returns default thresholds if none are configured.
+/// Returns default thresholds if none are configured yet.
 pub async fn get_thresholds(
-    State(_state): State<AppState>,
-) -> Result<Json<RiskThresholds>, AppError> {
-    info!("GET /api/risk/thresholds - Retrieving risk thresholds");
+    Path(portfolio_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Json<RiskThresholdSettings>, AppError> {
+    info!("GET /api/risk/portfolios/{}/thresholds - Retrieving risk thresholds", portfolio_id);
 
-    // TODO: Fetch from database when risk_thresholds table is created
-    // For now, return default thresholds
-    Ok(Json(RiskThresholds::default()))
+    let settings = crate::db::risk_threshold_queries::get_thresholds(&state.pool, portfolio_id)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch risk thresholds: {}", e);
+            AppError::Db(e)
+        })?;
+
+    Ok(Json(settings))
 }
 
-/// POST /api/risk/thresholds
+/// POST /api/risk/portfolios/:portfolio_id/thresholds
 ///
-/// Set user-configured risk warning thresholds.
+/// Update risk warning thresholds for a portfolio.
 ///
-/// Request body: SetThresholdsRequest containing RiskThresholds
+/// Request body: UpdateRiskThresholds with optional fields
 pub async fn set_thresholds(
-    State(_state): State<AppState>,
-    Json(request): Json<SetThresholdsRequest>,
-) -> Result<StatusCode, AppError> {
-    info!("POST /api/risk/thresholds - Setting risk thresholds");
+    Path(portfolio_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(request): Json<UpdateRiskThresholds>,
+) -> Result<Json<RiskThresholdSettings>, AppError> {
+    info!("POST /api/risk/portfolios/{}/thresholds - Updating risk thresholds", portfolio_id);
 
-    // TODO: Save to database when risk_thresholds table is created
-    // For now, just log and return success
-    info!("Would save thresholds: {:?}", request.thresholds);
+    let settings = crate::db::risk_threshold_queries::upsert_thresholds(&state.pool, portfolio_id, &request)
+        .await
+        .map_err(|e| {
+            error!("Failed to update risk thresholds: {}", e);
+            AppError::Db(e)
+        })?;
 
-    Ok(StatusCode::OK)
+    Ok(Json(settings))
 }
 
 /// GET /api/risk/portfolios/:portfolio_id/correlations

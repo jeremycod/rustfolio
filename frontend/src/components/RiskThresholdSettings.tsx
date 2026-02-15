@@ -1,611 +1,437 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
   Box,
   Typography,
-  Paper,
-  TextField,
-  Button,
-  Alert,
+  Slider,
   Grid,
-  Card,
-  CardContent,
-  Divider,
+  Alert,
   CircularProgress,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Collapse,
-  List,
-  ListItem,
-  ListItemText,
-  Chip,
+  Paper,
 } from '@mui/material';
-import { Security, Save, RestartAlt, Warning, ExpandMore, ExpandLess } from '@mui/icons-material';
+import { Settings, Save, RestartAlt } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getRiskThresholds, setRiskThresholds, listPortfolios, getPortfolioRisk } from '../lib/endpoints';
-import { RiskThresholds } from '../types';
+import { getRiskThresholds, updateRiskThresholds } from '../lib/endpoints';
+import type { RiskThresholdSettings as ThresholdSettings, UpdateRiskThresholds } from '../types';
 
-export function RiskThresholdSettings() {
+interface RiskThresholdSettingsProps {
+  portfolioId: string;
+  open: boolean;
+  onClose: () => void;
+}
+
+const DEFAULT_THRESHOLDS = {
+  volatility_warning_threshold: 30.0,
+  volatility_critical_threshold: 50.0,
+  drawdown_warning_threshold: -20.0,
+  drawdown_critical_threshold: -35.0,
+  beta_warning_threshold: 1.5,
+  beta_critical_threshold: 2.0,
+  risk_score_warning_threshold: 60.0,
+  risk_score_critical_threshold: 80.0,
+  var_warning_threshold: -5.0,
+  var_critical_threshold: -10.0,
+};
+
+export function RiskThresholdSettings({
+  portfolioId,
+  open,
+  onClose,
+}: RiskThresholdSettingsProps) {
   const queryClient = useQueryClient();
 
-  const thresholdsQ = useQuery({
-    queryKey: ['riskThresholds'],
-    queryFn: getRiskThresholds,
+  // Local state for threshold values
+  const [volatilityWarning, setVolatilityWarning] = useState(30.0);
+  const [volatilityCritical, setVolatilityCritical] = useState(50.0);
+  const [drawdownWarning, setDrawdownWarning] = useState(-20.0);
+  const [drawdownCritical, setDrawdownCritical] = useState(-35.0);
+  const [betaWarning, setBetaWarning] = useState(1.5);
+  const [betaCritical, setBetaCritical] = useState(2.0);
+  const [riskScoreWarning, setRiskScoreWarning] = useState(60.0);
+  const [riskScoreCritical, setRiskScoreCritical] = useState(80.0);
+  const [varWarning, setVarWarning] = useState(-5.0);
+  const [varCritical, setVarCritical] = useState(-10.0);
+
+  // Fetch current thresholds
+  const { data: thresholds, isLoading } = useQuery({
+    queryKey: ['riskThresholds', portfolioId],
+    queryFn: () => getRiskThresholds(portfolioId),
+    enabled: open && !!portfolioId,
   });
 
-  const portfoliosQ = useQuery({
-    queryKey: ['portfolios'],
-    queryFn: listPortfolios,
-  });
-
-  const [formValues, setFormValues] = useState<RiskThresholds>({
-    volatility_threshold: null,
-    drawdown_threshold: null,
-    beta_threshold: null,
-    var_threshold: null,
-    risk_score_threshold: null,
-  });
-
-  const [hasChanges, setHasChanges] = useState(false);
-  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
-  const [expandedWarnings, setExpandedWarnings] = useState<Record<string, boolean>>({});
-
-  const portfolioRiskQ = useQuery({
-    queryKey: ['portfolioRisk', selectedPortfolioId],
-    queryFn: () => getPortfolioRisk(selectedPortfolioId!, 90, 'SPY'),
-    enabled: !!selectedPortfolioId,
-  });
-
-  // Initialize form values when data loads
-  useEffect(() => {
-    if (thresholdsQ.data && !hasChanges) {
-      setFormValues(thresholdsQ.data);
-    }
-  }, [thresholdsQ.data, hasChanges]);
-
-  // Calculate which positions would trigger warnings
-  const warningPreview = useMemo(() => {
-    if (!portfolioRiskQ.data) return null;
-
-    const warnings: Record<string, string[]> = {
-      volatility: [],
-      drawdown: [],
-      beta: [],
-      var: [],
-      riskScore: [],
-    };
-
-    portfolioRiskQ.data.position_risks.forEach((position) => {
-      const metrics = position.risk_assessment.metrics;
-      const riskScore = position.risk_assessment.risk_score;
-
-      if (formValues.volatility_threshold !== null && metrics.volatility > formValues.volatility_threshold) {
-        warnings.volatility.push(position.ticker);
-      }
-
-      if (formValues.drawdown_threshold !== null && metrics.max_drawdown < formValues.drawdown_threshold) {
-        warnings.drawdown.push(position.ticker);
-      }
-
-      if (formValues.beta_threshold !== null && metrics.beta !== null && metrics.beta > formValues.beta_threshold) {
-        warnings.beta.push(position.ticker);
-      }
-
-      if (formValues.var_threshold !== null && metrics.value_at_risk !== null && metrics.value_at_risk < formValues.var_threshold) {
-        warnings.var.push(position.ticker);
-      }
-
-      if (formValues.risk_score_threshold !== null && riskScore > formValues.risk_score_threshold) {
-        warnings.riskScore.push(position.ticker);
-      }
-    });
-
-    const totalWarnings = Object.values(warnings).reduce((sum, arr) => sum + arr.length, 0);
-
-    return {
-      warnings,
-      totalWarnings,
-      totalPositions: portfolioRiskQ.data.position_risks.length,
-    };
-  }, [portfolioRiskQ.data, formValues]);
-
-  const saveMutation = useMutation({
-    mutationFn: (thresholds: RiskThresholds) => setRiskThresholds(thresholds),
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: (updates: UpdateRiskThresholds) =>
+      updateRiskThresholds(portfolioId, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['riskThresholds'] });
-      setHasChanges(false);
+      queryClient.invalidateQueries({ queryKey: ['riskThresholds', portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ['portfolioRisk', portfolioId] });
+      onClose();
     },
   });
 
-  const handleFieldChange = (field: keyof RiskThresholds, value: string) => {
-    const numValue = value === '' ? null : parseFloat(value);
-    setFormValues((prev) => ({
-      ...prev,
-      [field]: numValue,
-    }));
-    setHasChanges(true);
-  };
+  // Initialize local state when thresholds are loaded
+  useEffect(() => {
+    if (thresholds) {
+      setVolatilityWarning(thresholds.volatility_warning_threshold);
+      setVolatilityCritical(thresholds.volatility_critical_threshold);
+      setDrawdownWarning(thresholds.drawdown_warning_threshold);
+      setDrawdownCritical(thresholds.drawdown_critical_threshold);
+      setBetaWarning(thresholds.beta_warning_threshold);
+      setBetaCritical(thresholds.beta_critical_threshold);
+      setRiskScoreWarning(thresholds.risk_score_warning_threshold);
+      setRiskScoreCritical(thresholds.risk_score_critical_threshold);
+      setVarWarning(thresholds.var_warning_threshold);
+      setVarCritical(thresholds.var_critical_threshold);
+    }
+  }, [thresholds]);
 
   const handleSave = () => {
-    saveMutation.mutate(formValues);
+    const updates: UpdateRiskThresholds = {
+      volatility_warning_threshold: volatilityWarning,
+      volatility_critical_threshold: volatilityCritical,
+      drawdown_warning_threshold: drawdownWarning,
+      drawdown_critical_threshold: drawdownCritical,
+      beta_warning_threshold: betaWarning,
+      beta_critical_threshold: betaCritical,
+      risk_score_warning_threshold: riskScoreWarning,
+      risk_score_critical_threshold: riskScoreCritical,
+      var_warning_threshold: varWarning,
+      var_critical_threshold: varCritical,
+    };
+    updateMutation.mutate(updates);
   };
 
   const handleReset = () => {
-    const defaults: RiskThresholds = {
-      volatility_threshold: 30.0,
-      drawdown_threshold: -20.0,
-      beta_threshold: 1.5,
-      var_threshold: -10.0,
-      risk_score_threshold: 70.0,
-    };
-    setFormValues(defaults);
-    setHasChanges(true);
+    setVolatilityWarning(DEFAULT_THRESHOLDS.volatility_warning_threshold);
+    setVolatilityCritical(DEFAULT_THRESHOLDS.volatility_critical_threshold);
+    setDrawdownWarning(DEFAULT_THRESHOLDS.drawdown_warning_threshold);
+    setDrawdownCritical(DEFAULT_THRESHOLDS.drawdown_critical_threshold);
+    setBetaWarning(DEFAULT_THRESHOLDS.beta_warning_threshold);
+    setBetaCritical(DEFAULT_THRESHOLDS.beta_critical_threshold);
+    setRiskScoreWarning(DEFAULT_THRESHOLDS.risk_score_warning_threshold);
+    setRiskScoreCritical(DEFAULT_THRESHOLDS.risk_score_critical_threshold);
+    setVarWarning(DEFAULT_THRESHOLDS.var_warning_threshold);
+    setVarCritical(DEFAULT_THRESHOLDS.var_critical_threshold);
   };
-
-  const toggleWarningExpansion = (key: string) => {
-    setExpandedWarnings((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
-
-  if (thresholdsQ.isLoading) {
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 3 }}>
-        <CircularProgress size={24} />
-        <Typography>Loading risk threshold settings...</Typography>
-      </Box>
-    );
-  }
 
   return (
-    <Box>
-      <Box display="flex" alignItems="center" gap={2} mb={3}>
-        <Security sx={{ fontSize: 32, color: 'primary.main' }} />
-        <Typography variant="h4" fontWeight="bold">
-          Risk Threshold Settings
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>
+        <Box display="flex" alignItems="center" gap={1}>
+          <Settings />
+          <Typography variant="h6">Risk Threshold Settings</Typography>
+        </Box>
+        <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+          Customize risk warning and critical thresholds for this portfolio
         </Typography>
-      </Box>
+      </DialogTitle>
 
-      <Alert severity="info" sx={{ mb: 3 }}>
-        Configure custom thresholds for risk warnings. Positions exceeding these thresholds will be
-        flagged as high risk. Leave blank to use default values.
-      </Alert>
+      <DialogContent>
+        {isLoading && (
+          <Box display="flex" justifyContent="center" py={4}>
+            <CircularProgress />
+          </Box>
+        )}
 
-      {saveMutation.isSuccess && (
-        <Alert severity="success" sx={{ mb: 3 }}>
-          Risk thresholds saved successfully!
-        </Alert>
-      )}
+        {updateMutation.isError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Failed to save threshold settings. Please try again.
+          </Alert>
+        )}
 
-      {saveMutation.isError && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          Failed to save risk thresholds. Please try again.
-        </Alert>
-      )}
-
-      <Grid container spacing={3}>
-        {/* Threshold Configuration */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Threshold Configuration
-            </Typography>
-            <Divider sx={{ mb: 3 }} />
-
-            <Box display="flex" flexDirection="column" gap={3}>
-              <TextField
-                label="Volatility Threshold (%)"
-                type="number"
-                value={formValues.volatility_threshold ?? ''}
-                onChange={(e) => handleFieldChange('volatility_threshold', e.target.value)}
-                helperText="Annualized volatility above this level triggers a warning (default: 30%)"
-                fullWidth
-                inputProps={{ step: 0.1, min: 0, max: 100 }}
-              />
-
-              <TextField
-                label="Max Drawdown Threshold (%)"
-                type="number"
-                value={formValues.drawdown_threshold ?? ''}
-                onChange={(e) => handleFieldChange('drawdown_threshold', e.target.value)}
-                helperText="Maximum drawdown below this level triggers a warning (default: -20%)"
-                fullWidth
-                inputProps={{ step: 0.1, max: 0 }}
-              />
-
-              <TextField
-                label="Beta Threshold"
-                type="number"
-                value={formValues.beta_threshold ?? ''}
-                onChange={(e) => handleFieldChange('beta_threshold', e.target.value)}
-                helperText="Beta above this level triggers a warning (default: 1.5)"
-                fullWidth
-                inputProps={{ step: 0.1, min: 0 }}
-              />
-
-              <TextField
-                label="Value at Risk (VaR) Threshold (%)"
-                type="number"
-                value={formValues.var_threshold ?? ''}
-                onChange={(e) => handleFieldChange('var_threshold', e.target.value)}
-                helperText="5% VaR below this level triggers a warning (default: -10%)"
-                fullWidth
-                inputProps={{ step: 0.1, max: 0 }}
-              />
-
-              <TextField
-                label="Risk Score Threshold"
-                type="number"
-                value={formValues.risk_score_threshold ?? ''}
-                onChange={(e) => handleFieldChange('risk_score_threshold', e.target.value)}
-                helperText="Overall risk score above this level triggers a warning (default: 70)"
-                fullWidth
-                inputProps={{ step: 1, min: 0, max: 100 }}
-              />
-            </Box>
-
-            <Box display="flex" gap={2} mt={4}>
-              <Button
-                variant="contained"
-                startIcon={<Save />}
-                onClick={handleSave}
-                disabled={!hasChanges || saveMutation.isPending}
-              >
-                {saveMutation.isPending ? 'Saving...' : 'Save Thresholds'}
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<RestartAlt />}
-                onClick={handleReset}
-              >
-                Reset to Defaults
-              </Button>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Threshold Explanation */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Understanding Risk Metrics
-            </Typography>
-            <Divider sx={{ mb: 3 }} />
-
-            <Box display="flex" flexDirection="column" gap={2}>
-              <Card>
-                <CardContent>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                    Volatility
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Measures how much an asset's price fluctuates. Higher volatility means more
-                    price swings and potentially higher risk. Values typically range from 10-50%
-                    for stocks.
-                  </Typography>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                    Maximum Drawdown
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    The largest peak-to-trough decline in value. Shows the worst-case loss
-                    historically. A -20% drawdown means the position lost 20% from its peak.
-                  </Typography>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                    Beta
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Measures sensitivity to market movements (vs SPY benchmark). Beta of 1.0 moves
-                    with the market, &gt;1.0 is more volatile, &lt;1.0 is less volatile.
-                  </Typography>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                    Value at Risk (VaR)
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Estimates the maximum expected loss at 95% confidence. A VaR of -10% means
-                    there's a 5% chance of losing more than 10% in a given period.
-                  </Typography>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                    Risk Score
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    A composite score (0-100) combining all risk metrics. Scores below 40 are low
-                    risk, 40-60 are moderate, and above 60 are high risk.
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Position Warning Preview */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
-            <Box display="flex" alignItems="center" gap={2} mb={3}>
-              <Warning sx={{ fontSize: 28, color: 'warning.main' }} />
-              <Typography variant="h6" fontWeight="bold">
-                Preview Impact
+        {!isLoading && (
+          <Box>
+            {/* Volatility Thresholds */}
+            <Paper elevation={1} sx={{ p: 3, mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Volatility Thresholds (%)
               </Typography>
-            </Box>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Annualized volatility percentage thresholds
+              </Typography>
 
-            <Alert severity="info" sx={{ mb: 3 }}>
-              Select a portfolio to see which positions would exceed your configured thresholds. This preview updates in real-time as you adjust threshold values.
+              <Grid container spacing={3} sx={{ mt: 1 }}>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Warning: {volatilityWarning.toFixed(1)}%
+                  </Typography>
+                  <Slider
+                    value={volatilityWarning}
+                    onChange={(_, val) => setVolatilityWarning(val as number)}
+                    min={10}
+                    max={100}
+                    step={1}
+                    marks={[
+                      { value: 10, label: '10%' },
+                      { value: 50, label: '50%' },
+                      { value: 100, label: '100%' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="warning"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Critical: {volatilityCritical.toFixed(1)}%
+                  </Typography>
+                  <Slider
+                    value={volatilityCritical}
+                    onChange={(_, val) => setVolatilityCritical(val as number)}
+                    min={20}
+                    max={150}
+                    step={1}
+                    marks={[
+                      { value: 20, label: '20%' },
+                      { value: 75, label: '75%' },
+                      { value: 150, label: '150%' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="error"
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Drawdown Thresholds */}
+            <Paper elevation={1} sx={{ p: 3, mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Maximum Drawdown Thresholds (%)
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Peak-to-trough decline percentage thresholds (negative values)
+              </Typography>
+
+              <Grid container spacing={3} sx={{ mt: 1 }}>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Warning: {drawdownWarning.toFixed(1)}%
+                  </Typography>
+                  <Slider
+                    value={drawdownWarning}
+                    onChange={(_, val) => setDrawdownWarning(val as number)}
+                    min={-50}
+                    max={0}
+                    step={1}
+                    marks={[
+                      { value: -50, label: '-50%' },
+                      { value: -25, label: '-25%' },
+                      { value: 0, label: '0%' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="warning"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Critical: {drawdownCritical.toFixed(1)}%
+                  </Typography>
+                  <Slider
+                    value={drawdownCritical}
+                    onChange={(_, val) => setDrawdownCritical(val as number)}
+                    min={-70}
+                    max={-10}
+                    step={1}
+                    marks={[
+                      { value: -70, label: '-70%' },
+                      { value: -40, label: '-40%' },
+                      { value: -10, label: '-10%' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="error"
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Beta Thresholds */}
+            <Paper elevation={1} sx={{ p: 3, mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Beta Thresholds
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Volatility relative to market benchmark (1.0 = market volatility)
+              </Typography>
+
+              <Grid container spacing={3} sx={{ mt: 1 }}>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Warning: {betaWarning.toFixed(2)}
+                  </Typography>
+                  <Slider
+                    value={betaWarning}
+                    onChange={(_, val) => setBetaWarning(val as number)}
+                    min={0.5}
+                    max={3.0}
+                    step={0.1}
+                    marks={[
+                      { value: 0.5, label: '0.5' },
+                      { value: 1.5, label: '1.5' },
+                      { value: 3.0, label: '3.0' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="warning"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Critical: {betaCritical.toFixed(2)}
+                  </Typography>
+                  <Slider
+                    value={betaCritical}
+                    onChange={(_, val) => setBetaCritical(val as number)}
+                    min={1.0}
+                    max={5.0}
+                    step={0.1}
+                    marks={[
+                      { value: 1.0, label: '1.0' },
+                      { value: 3.0, label: '3.0' },
+                      { value: 5.0, label: '5.0' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="error"
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Risk Score Thresholds */}
+            <Paper elevation={1} sx={{ p: 3, mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Risk Score Thresholds (0-100)
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Overall risk score thresholds (higher = riskier)
+              </Typography>
+
+              <Grid container spacing={3} sx={{ mt: 1 }}>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Warning: {riskScoreWarning.toFixed(0)}
+                  </Typography>
+                  <Slider
+                    value={riskScoreWarning}
+                    onChange={(_, val) => setRiskScoreWarning(val as number)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    marks={[
+                      { value: 0, label: '0' },
+                      { value: 50, label: '50' },
+                      { value: 100, label: '100' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="warning"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Critical: {riskScoreCritical.toFixed(0)}
+                  </Typography>
+                  <Slider
+                    value={riskScoreCritical}
+                    onChange={(_, val) => setRiskScoreCritical(val as number)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    marks={[
+                      { value: 0, label: '0' },
+                      { value: 50, label: '50' },
+                      { value: 100, label: '100' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="error"
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* VaR Thresholds */}
+            <Paper elevation={1} sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Value at Risk (VaR) Thresholds (%)
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Maximum expected loss at 95% confidence (negative values)
+              </Typography>
+
+              <Grid container spacing={3} sx={{ mt: 1 }}>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Warning: {varWarning.toFixed(1)}%
+                  </Typography>
+                  <Slider
+                    value={varWarning}
+                    onChange={(_, val) => setVarWarning(val as number)}
+                    min={-15}
+                    max={0}
+                    step={0.5}
+                    marks={[
+                      { value: -15, label: '-15%' },
+                      { value: -7.5, label: '-7.5%' },
+                      { value: 0, label: '0%' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="warning"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Critical: {varCritical.toFixed(1)}%
+                  </Typography>
+                  <Slider
+                    value={varCritical}
+                    onChange={(_, val) => setVarCritical(val as number)}
+                    min={-25}
+                    max={-5}
+                    step={0.5}
+                    marks={[
+                      { value: -25, label: '-25%' },
+                      { value: -15, label: '-15%' },
+                      { value: -5, label: '-5%' },
+                    ]}
+                    valueLabelDisplay="auto"
+                    color="error"
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Warning thresholds</strong> will highlight positions in yellow.{' '}
+                <strong>Critical thresholds</strong> will highlight positions in red.
+                These thresholds help you identify positions that may require attention based on your risk tolerance.
+              </Typography>
             </Alert>
+          </Box>
+        )}
+      </DialogContent>
 
-            {/* Portfolio Selector */}
-            <FormControl fullWidth sx={{ mb: 3 }}>
-              <InputLabel>Select Portfolio</InputLabel>
-              <Select
-                value={selectedPortfolioId ?? ''}
-                onChange={(e) => setSelectedPortfolioId(e.target.value || null)}
-                label="Select Portfolio"
-              >
-                <MenuItem value="">
-                  <em>None</em>
-                </MenuItem>
-                {(portfoliosQ.data ?? []).map((p) => (
-                  <MenuItem key={p.id} value={p.id}>
-                    {p.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {/* Loading State */}
-            {portfolioRiskQ.isLoading && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
-                <CircularProgress size={20} />
-                <Typography>Loading portfolio risk data...</Typography>
-              </Box>
-            )}
-
-            {/* Error State */}
-            {portfolioRiskQ.isError && (
-              <Alert severity="error">
-                Failed to load portfolio risk data. Please try again.
-              </Alert>
-            )}
-
-            {/* Warning Preview Results */}
-            {warningPreview && (
-              <Box>
-                <Divider sx={{ mb: 3 }} />
-
-                {/* Summary */}
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="body1" fontWeight="bold" gutterBottom>
-                    Summary
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {warningPreview.totalWarnings === 0 ? (
-                      <>No positions would exceed your thresholds.</>
-                    ) : (
-                      <>
-                        <strong>{warningPreview.totalWarnings}</strong> warning{warningPreview.totalWarnings !== 1 ? 's' : ''} would be triggered across{' '}
-                        <strong>{warningPreview.totalPositions}</strong> position{warningPreview.totalPositions !== 1 ? 's' : ''}.
-                      </>
-                    )}
-                  </Typography>
-                </Box>
-
-                {/* Detailed Warnings */}
-                <Box display="flex" flexDirection="column" gap={2}>
-                  {/* Volatility Warnings */}
-                  {formValues.volatility_threshold !== null && (
-                    <Card variant="outlined">
-                      <CardContent>
-                        <Box
-                          display="flex"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          sx={{ cursor: warningPreview.warnings.volatility.length > 0 ? 'pointer' : 'default' }}
-                          onClick={() => warningPreview.warnings.volatility.length > 0 && toggleWarningExpansion('volatility')}
-                        >
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="body2" fontWeight="bold">
-                              Volatility Threshold ({formValues.volatility_threshold}%)
-                            </Typography>
-                            <Chip
-                              label={warningPreview.warnings.volatility.length}
-                              size="small"
-                              color={warningPreview.warnings.volatility.length > 0 ? 'warning' : 'default'}
-                            />
-                          </Box>
-                          {warningPreview.warnings.volatility.length > 0 && (
-                            expandedWarnings.volatility ? <ExpandLess /> : <ExpandMore />
-                          )}
-                        </Box>
-                        <Collapse in={expandedWarnings.volatility}>
-                          <List dense>
-                            {warningPreview.warnings.volatility.map((ticker) => (
-                              <ListItem key={ticker}>
-                                <ListItemText primary={ticker} />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Collapse>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Drawdown Warnings */}
-                  {formValues.drawdown_threshold !== null && (
-                    <Card variant="outlined">
-                      <CardContent>
-                        <Box
-                          display="flex"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          sx={{ cursor: warningPreview.warnings.drawdown.length > 0 ? 'pointer' : 'default' }}
-                          onClick={() => warningPreview.warnings.drawdown.length > 0 && toggleWarningExpansion('drawdown')}
-                        >
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="body2" fontWeight="bold">
-                              Max Drawdown Threshold ({formValues.drawdown_threshold}%)
-                            </Typography>
-                            <Chip
-                              label={warningPreview.warnings.drawdown.length}
-                              size="small"
-                              color={warningPreview.warnings.drawdown.length > 0 ? 'warning' : 'default'}
-                            />
-                          </Box>
-                          {warningPreview.warnings.drawdown.length > 0 && (
-                            expandedWarnings.drawdown ? <ExpandLess /> : <ExpandMore />
-                          )}
-                        </Box>
-                        <Collapse in={expandedWarnings.drawdown}>
-                          <List dense>
-                            {warningPreview.warnings.drawdown.map((ticker) => (
-                              <ListItem key={ticker}>
-                                <ListItemText primary={ticker} />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Collapse>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Beta Warnings */}
-                  {formValues.beta_threshold !== null && (
-                    <Card variant="outlined">
-                      <CardContent>
-                        <Box
-                          display="flex"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          sx={{ cursor: warningPreview.warnings.beta.length > 0 ? 'pointer' : 'default' }}
-                          onClick={() => warningPreview.warnings.beta.length > 0 && toggleWarningExpansion('beta')}
-                        >
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="body2" fontWeight="bold">
-                              Beta Threshold ({formValues.beta_threshold})
-                            </Typography>
-                            <Chip
-                              label={warningPreview.warnings.beta.length}
-                              size="small"
-                              color={warningPreview.warnings.beta.length > 0 ? 'warning' : 'default'}
-                            />
-                          </Box>
-                          {warningPreview.warnings.beta.length > 0 && (
-                            expandedWarnings.beta ? <ExpandLess /> : <ExpandMore />
-                          )}
-                        </Box>
-                        <Collapse in={expandedWarnings.beta}>
-                          <List dense>
-                            {warningPreview.warnings.beta.map((ticker) => (
-                              <ListItem key={ticker}>
-                                <ListItemText primary={ticker} />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Collapse>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* VaR Warnings */}
-                  {formValues.var_threshold !== null && (
-                    <Card variant="outlined">
-                      <CardContent>
-                        <Box
-                          display="flex"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          sx={{ cursor: warningPreview.warnings.var.length > 0 ? 'pointer' : 'default' }}
-                          onClick={() => warningPreview.warnings.var.length > 0 && toggleWarningExpansion('var')}
-                        >
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="body2" fontWeight="bold">
-                              VaR Threshold ({formValues.var_threshold}%)
-                            </Typography>
-                            <Chip
-                              label={warningPreview.warnings.var.length}
-                              size="small"
-                              color={warningPreview.warnings.var.length > 0 ? 'warning' : 'default'}
-                            />
-                          </Box>
-                          {warningPreview.warnings.var.length > 0 && (
-                            expandedWarnings.var ? <ExpandLess /> : <ExpandMore />
-                          )}
-                        </Box>
-                        <Collapse in={expandedWarnings.var}>
-                          <List dense>
-                            {warningPreview.warnings.var.map((ticker) => (
-                              <ListItem key={ticker}>
-                                <ListItemText primary={ticker} />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Collapse>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Risk Score Warnings */}
-                  {formValues.risk_score_threshold !== null && (
-                    <Card variant="outlined">
-                      <CardContent>
-                        <Box
-                          display="flex"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          sx={{ cursor: warningPreview.warnings.riskScore.length > 0 ? 'pointer' : 'default' }}
-                          onClick={() => warningPreview.warnings.riskScore.length > 0 && toggleWarningExpansion('riskScore')}
-                        >
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="body2" fontWeight="bold">
-                              Risk Score Threshold ({formValues.risk_score_threshold})
-                            </Typography>
-                            <Chip
-                              label={warningPreview.warnings.riskScore.length}
-                              size="small"
-                              color={warningPreview.warnings.riskScore.length > 0 ? 'warning' : 'default'}
-                            />
-                          </Box>
-                          {warningPreview.warnings.riskScore.length > 0 && (
-                            expandedWarnings.riskScore ? <ExpandLess /> : <ExpandMore />
-                          )}
-                        </Box>
-                        <Collapse in={expandedWarnings.riskScore}>
-                          <List dense>
-                            {warningPreview.warnings.riskScore.map((ticker) => (
-                              <ListItem key={ticker}>
-                                <ListItemText primary={ticker} />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Collapse>
-                      </CardContent>
-                    </Card>
-                  )}
-                </Box>
-              </Box>
-            )}
-          </Paper>
-        </Grid>
-      </Grid>
-    </Box>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose} disabled={updateMutation.isPending}>
+          Cancel
+        </Button>
+        <Button
+          onClick={handleReset}
+          startIcon={<RestartAlt />}
+          disabled={updateMutation.isPending}
+        >
+          Reset to Defaults
+        </Button>
+        <Button
+          onClick={handleSave}
+          variant="contained"
+          startIcon={<Save />}
+          disabled={updateMutation.isPending}
+        >
+          {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }

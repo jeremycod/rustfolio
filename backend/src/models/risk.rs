@@ -162,3 +162,67 @@ pub struct CorrelationMatrix {
     /// Correlation pairs (only upper triangle, excluding diagonal)
     pub correlations: Vec<CorrelationPair>,
 }
+
+/// Risk threshold settings stored in database (per portfolio).
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct RiskThresholdSettings {
+    pub id: String,
+    pub portfolio_id: String,
+
+    // Volatility thresholds
+    pub volatility_warning_threshold: f64,
+    pub volatility_critical_threshold: f64,
+
+    // Drawdown thresholds
+    pub drawdown_warning_threshold: f64,
+    pub drawdown_critical_threshold: f64,
+
+    // Beta thresholds
+    pub beta_warning_threshold: f64,
+    pub beta_critical_threshold: f64,
+
+    // Risk score thresholds
+    pub risk_score_warning_threshold: f64,
+    pub risk_score_critical_threshold: f64,
+
+    // VaR thresholds
+    pub var_warning_threshold: f64,
+    pub var_critical_threshold: f64,
+
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Request to update risk threshold settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateRiskThresholds {
+    pub volatility_warning_threshold: Option<f64>,
+    pub volatility_critical_threshold: Option<f64>,
+    pub drawdown_warning_threshold: Option<f64>,
+    pub drawdown_critical_threshold: Option<f64>,
+    pub beta_warning_threshold: Option<f64>,
+    pub beta_critical_threshold: Option<f64>,
+    pub risk_score_warning_threshold: Option<f64>,
+    pub risk_score_critical_threshold: Option<f64>,
+    pub var_warning_threshold: Option<f64>,
+    pub var_critical_threshold: Option<f64>,
+}
+
+/// Severity level for threshold violations.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ViolationSeverity {
+    Warning,
+    Critical,
+}
+
+/// A position that violates risk thresholds.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThresholdViolation {
+    pub ticker: String,
+    pub holding_name: Option<String>,
+    pub metric_name: String,
+    pub metric_value: f64,
+    pub threshold_value: f64,
+    pub threshold_type: ViolationSeverity,
+}

@@ -346,3 +346,44 @@ export type OptimizationAnalysis = {
     recommendations: OptimizationRecommendation[];
     summary: AnalysisSummary;
 };
+// Risk Threshold Settings
+export type RiskThresholdSettings = {
+    id: string;
+    portfolio_id: string;
+    volatility_warning_threshold: number;
+    volatility_critical_threshold: number;
+    drawdown_warning_threshold: number;
+    drawdown_critical_threshold: number;
+    beta_warning_threshold: number;
+    beta_critical_threshold: number;
+    risk_score_warning_threshold: number;
+    risk_score_critical_threshold: number;
+    var_warning_threshold: number;
+    var_critical_threshold: number;
+    created_at: string;
+    updated_at: string;
+};
+
+export type UpdateRiskThresholds = {
+    volatility_warning_threshold?: number;
+    volatility_critical_threshold?: number;
+    drawdown_warning_threshold?: number;
+    drawdown_critical_threshold?: number;
+    beta_warning_threshold?: number;
+    beta_critical_threshold?: number;
+    risk_score_warning_threshold?: number;
+    risk_score_critical_threshold?: number;
+    var_warning_threshold?: number;
+    var_critical_threshold?: number;
+};
+
+export type ViolationSeverity = 'warning' | 'critical';
+
+export type ThresholdViolation = {
+    ticker: string;
+    holding_name: string | null;
+    metric_name: string;
+    metric_value: number;
+    threshold_value: number;
+    threshold_type: ViolationSeverity;
+};
