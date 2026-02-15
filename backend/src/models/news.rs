@@ -58,4 +58,6 @@ pub struct NewsQueryParams {
     pub days: Option<i32>,
     /// Filter by ticker (optional)
     pub ticker: Option<String>,
+    /// Force refresh, bypassing cache (default: false)
+    pub force: Option<bool>,
 }

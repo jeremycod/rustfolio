@@ -12,9 +12,11 @@ import {
   Tabs,
   Tab,
   Chip,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import { Newspaper, Info } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
+import { Newspaper, Info, Refresh } from '@mui/icons-material';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPortfolioNews } from '../lib/endpoints';
 import NewsThemeCard from './NewsThemeCard';
 import SentimentBadge from './SentimentBadge';
@@ -28,13 +30,29 @@ type Props = {
 export default function PortfolioNews({ portfolioId }: Props) {
   const [days, setDays] = useState(7);
   const [activeTab, setActiveTab] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: newsAnalysis, isLoading, error } = useQuery({
     queryKey: ['portfolioNews', portfolioId, days],
-    queryFn: () => getPortfolioNews(portfolioId, days),
-    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+    queryFn: () => getPortfolioNews(portfolioId, days, false),
+    staleTime: 24 * 60 * 60 * 1000, // Cache for 24 hours (matches backend cache)
     retry: 1,
   });
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      // Force fetch new data
+      const freshNews = await getPortfolioNews(portfolioId, days, true);
+      // Update the cache with fresh data
+      queryClient.setQueryData(['portfolioNews', portfolioId, days], freshNews);
+    } catch (err) {
+      console.error('Failed to refresh news:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -96,18 +114,38 @@ export default function PortfolioNews({ portfolioId }: Props) {
           <Typography variant="h6">Portfolio News & Insights</Typography>
           <AIBadge />
         </Box>
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Time Period</InputLabel>
-          <Select
-            value={days}
-            label="Time Period"
-            onChange={(e) => setDays(Number(e.target.value))}
-          >
-            <MenuItem value={7}>7 Days</MenuItem>
-            <MenuItem value={14}>14 Days</MenuItem>
-            <MenuItem value={30}>30 Days</MenuItem>
-          </Select>
-        </FormControl>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Time Period</InputLabel>
+            <Select
+              value={days}
+              label="Time Period"
+              onChange={(e) => setDays(Number(e.target.value))}
+            >
+              <MenuItem value={7}>7 Days</MenuItem>
+              <MenuItem value={14}>14 Days</MenuItem>
+              <MenuItem value={30}>30 Days</MenuItem>
+            </Select>
+          </FormControl>
+          <Tooltip title="Refresh news (bypasses cache)">
+            <IconButton
+              onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+              color="primary"
+              size="small"
+            >
+              <Refresh
+                sx={{
+                  animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                  '@keyframes spin': {
+                    '0%': { transform: 'rotate(0deg)' },
+                    '100%': { transform: 'rotate(360deg)' },
+                  },
+                }}
+              />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
 
       {/* Overall Sentiment */}

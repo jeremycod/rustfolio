@@ -22,8 +22,10 @@ import {
   LinearProgress,
   Button,
   Snackbar,
+  Tabs,
+  Tab,
 } from '@mui/material';
-import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera, Settings, Download, Warning, ErrorOutline, Psychology } from '@mui/icons-material';
+import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera, Settings, Download, Warning, ErrorOutline, Psychology, Timeline, AutoAwesome, TipsAndUpdates } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPortfolioRisk, listPortfolios, createRiskSnapshot, exportPortfolioRiskCSV } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
@@ -42,6 +44,20 @@ interface PortfolioRiskOverviewProps {
   onTickerNavigate: (ticker: string) => void;
 }
 
+interface TabPanelProps {
+  children?: React.ReactNode;
+  value: number;
+  index: number;
+}
+
+function TabPanel({ children, value, index }: TabPanelProps) {
+  return (
+    <div role="tabpanel" hidden={value !== index}>
+      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
 export function PortfolioRiskOverview({
   selectedPortfolioId,
   onPortfolioChange,
@@ -51,6 +67,7 @@ export function PortfolioRiskOverview({
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
   const queryClient = useQueryClient();
 
   const portfoliosQ = useQuery({
@@ -237,54 +254,73 @@ export function PortfolioRiskOverview({
 
       {riskData && (
         <>
-          {/* Overall Portfolio Risk Score */}
-          <Card sx={{ mb: 3, bgcolor: riskColorForScore, color: 'white' }}>
-            <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Box>
-                  <Typography variant="h6" gutterBottom>
-                    Overall Portfolio Risk
-                  </Typography>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <Typography variant="h3" fontWeight="bold">
-                      {riskData.risk_level.toUpperCase()}
-                    </Typography>
-                    {getRiskIcon(riskData.risk_level)}
-                  </Box>
-                  <Typography variant="body2" sx={{ opacity: 0.9, mt: 1 }}>
-                    Risk Score: {riskData.portfolio_risk_score.toFixed(1)}/100
-                  </Typography>
-                </Box>
-                <Box textAlign="right">
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    Total Portfolio Value
-                  </Typography>
-                  <Typography variant="h4" fontWeight="bold">
-                    {formatCurrency(riskData.total_value)}
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9, mt: 1 }}>
-                    {riskData.position_risks.length} positions analyzed
-                  </Typography>
-                </Box>
-              </Box>
+          {/* Tabs */}
+          <Paper sx={{ mb: 3 }}>
+            <Tabs
+              value={activeTab}
+              onChange={(_, newValue) => setActiveTab(newValue)}
+              variant="fullWidth"
+              sx={{
+                borderBottom: 1,
+                borderColor: 'divider',
+              }}
+            >
+              <Tab icon={<Assessment />} label="Overview" iconPosition="start" />
+              <Tab icon={<Timeline />} label="Analysis" iconPosition="start" />
+              <Tab icon={<AutoAwesome />} label="AI Insights" iconPosition="start" />
+              <Tab icon={<TipsAndUpdates />} label="Optimization" iconPosition="start" />
+            </Tabs>
 
-              {/* Risk Score Progress Bar */}
-              <Box sx={{ mt: 2 }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={riskData.portfolio_risk_score}
-                  sx={{
-                    height: 10,
-                    borderRadius: 5,
-                    bgcolor: 'rgba(255,255,255,0.3)',
-                    '& .MuiLinearProgress-bar': {
-                      bgcolor: 'white',
-                    },
-                  }}
-                />
-              </Box>
-            </CardContent>
-          </Card>
+            {/* Tab 1: Overview */}
+            <TabPanel value={activeTab} index={0}>
+              {/* Overall Portfolio Risk Score */}
+              <Card sx={{ mb: 3, bgcolor: riskColorForScore, color: 'white' }}>
+                <CardContent>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Box>
+                      <Typography variant="h6" gutterBottom>
+                        Overall Portfolio Risk
+                      </Typography>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <Typography variant="h3" fontWeight="bold">
+                          {riskData.risk_level.toUpperCase()}
+                        </Typography>
+                        {getRiskIcon(riskData.risk_level)}
+                      </Box>
+                      <Typography variant="body2" sx={{ opacity: 0.9, mt: 1 }}>
+                        Risk Score: {riskData.portfolio_risk_score.toFixed(1)}/100
+                      </Typography>
+                    </Box>
+                    <Box textAlign="right">
+                      <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                        Total Portfolio Value
+                      </Typography>
+                      <Typography variant="h4" fontWeight="bold">
+                        {formatCurrency(riskData.total_value)}
+                      </Typography>
+                      <Typography variant="body2" sx={{ opacity: 0.9, mt: 1 }}>
+                        {riskData.position_risks.length} positions analyzed
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Risk Score Progress Bar */}
+                  <Box sx={{ mt: 2 }}>
+                    <LinearProgress
+                      variant="determinate"
+                      value={riskData.portfolio_risk_score}
+                      sx={{
+                        height: 10,
+                        borderRadius: 5,
+                        bgcolor: 'rgba(255,255,255,0.3)',
+                        '& .MuiLinearProgress-bar': {
+                          bgcolor: 'white',
+                        },
+                      }}
+                    />
+                  </Box>
+                </CardContent>
+              </Card>
 
           {/* Portfolio-Wide Metrics */}
           <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -354,162 +390,165 @@ export function PortfolioRiskOverview({
           </Grid>
 
           {/* Position Risk Contributions */}
-          <Paper>
-            <Box sx={{ p: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                Risk Contribution by Position
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Positions sorted by risk score (highest risk first)
-              </Typography>
-            </Box>
+              <Paper>
+                <Box sx={{ p: 2 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Risk Contribution by Position
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Positions sorted by risk score (highest risk first)
+                  </Typography>
+                </Box>
 
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Ticker</TableCell>
-                    <TableCell align="right">Market Value</TableCell>
-                    <TableCell align="right">Weight</TableCell>
-                    <TableCell align="right">Risk Score</TableCell>
-                    <TableCell align="center">Risk Level</TableCell>
-                    <TableCell align="right">Volatility</TableCell>
-                    <TableCell align="right">Drawdown</TableCell>
-                    <TableCell align="right">VaR 95%</TableCell>
-                    <TableCell align="right">VaR 99%</TableCell>
-                    <TableCell align="right">ES 95%</TableCell>
-                    <TableCell align="right">Beta</TableCell>
-                    <TableCell align="right">Sharpe</TableCell>
-                    <TableCell align="right">Sortino</TableCell>
-                    <TableCell align="right">Ann. Return</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {riskData.position_risks.map((position) => {
-                    const riskColor = getRiskColor(position.risk_assessment.risk_level);
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Ticker</TableCell>
+                        <TableCell align="right">Market Value</TableCell>
+                        <TableCell align="right">Weight</TableCell>
+                        <TableCell align="right">Risk Score</TableCell>
+                        <TableCell align="center">Risk Level</TableCell>
+                        <TableCell align="right">Volatility</TableCell>
+                        <TableCell align="right">Drawdown</TableCell>
+                        <TableCell align="right">VaR 95%</TableCell>
+                        <TableCell align="right">VaR 99%</TableCell>
+                        <TableCell align="right">ES 95%</TableCell>
+                        <TableCell align="right">Beta</TableCell>
+                        <TableCell align="right">Sharpe</TableCell>
+                        <TableCell align="right">Sortino</TableCell>
+                        <TableCell align="right">Ann. Return</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {riskData.position_risks.map((position) => {
+                        const riskColor = getRiskColor(position.risk_assessment.risk_level);
 
-                    return (
-                      <TableRow key={position.ticker} hover>
-                        <TableCell>
-                          <TickerChip ticker={position.ticker} onNavigate={onTickerNavigate} />
-                        </TableCell>
-                        <TableCell align="right">
-                          {formatCurrency(position.market_value)}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box display="flex" alignItems="center" justifyContent="flex-end" gap={1}>
-                            <Typography variant="body2">
-                              {formatPercentage(position.weight * 100)}
-                            </Typography>
-                            <Box
-                              sx={{
-                                width: 60,
-                                height: 6,
-                                bgcolor: '#e0e0e0',
-                                borderRadius: 3,
-                                overflow: 'hidden',
-                              }}
-                            >
-                              <Box
+                        return (
+                          <TableRow key={position.ticker} hover>
+                            <TableCell>
+                              <TickerChip ticker={position.ticker} onNavigate={onTickerNavigate} />
+                            </TableCell>
+                            <TableCell align="right">
+                              {formatCurrency(position.market_value)}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Box display="flex" alignItems="center" justifyContent="flex-end" gap={1}>
+                                <Typography variant="body2">
+                                  {formatPercentage(position.weight * 100)}
+                                </Typography>
+                                <Box
+                                  sx={{
+                                    width: 60,
+                                    height: 6,
+                                    bgcolor: '#e0e0e0',
+                                    borderRadius: 3,
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  <Box
+                                    sx={{
+                                      width: `${position.weight * 100}%`,
+                                      height: '100%',
+                                      bgcolor: 'primary.main',
+                                    }}
+                                  />
+                                </Box>
+                              </Box>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Typography variant="body2" fontWeight="bold" color={riskColor}>
+                                {position.risk_assessment.risk_score.toFixed(1)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip
+                                label={position.risk_assessment.risk_level.toUpperCase()}
+                                size="small"
                                 sx={{
-                                  width: `${position.weight * 100}%`,
-                                  height: '100%',
-                                  bgcolor: 'primary.main',
+                                  bgcolor: riskColor,
+                                  color: 'white',
+                                  fontWeight: 'bold',
                                 }}
                               />
-                            </Box>
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight="bold" color={riskColor}>
-                            {position.risk_assessment.risk_score.toFixed(1)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Chip
-                            label={position.risk_assessment.risk_level.toUpperCase()}
-                            size="small"
-                            sx={{
-                              bgcolor: riskColor,
-                              color: 'white',
-                              fontWeight: 'bold',
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          {position.risk_assessment.metrics.volatility.toFixed(2)}%
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: 'error.main' }}>
-                          {position.risk_assessment.metrics.max_drawdown.toFixed(2)}%
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: 'warning.main' }}>
-                          {position.risk_assessment.metrics.var_95?.toFixed(2) ?? '—'}
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: 'error.main' }}>
-                          {position.risk_assessment.metrics.var_99?.toFixed(2) ?? '—'}
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: 'error.dark' }}>
-                          {position.risk_assessment.metrics.expected_shortfall_95?.toFixed(2) ?? '—'}
-                        </TableCell>
-                        <TableCell align="right">
-                          {position.risk_assessment.metrics.beta?.toFixed(2) ?? '—'}
-                        </TableCell>
-                        <TableCell align="right">
-                          {position.risk_assessment.metrics.sharpe?.toFixed(2) ?? '—'}
-                        </TableCell>
-                        <TableCell align="right">
-                          {position.risk_assessment.metrics.sortino?.toFixed(2) ?? '—'}
-                        </TableCell>
-                        <TableCell align="right" sx={{
-                          color: position.risk_assessment.metrics.annualized_return !== null && position.risk_assessment.metrics.annualized_return > 0
-                            ? 'success.main'
-                            : position.risk_assessment.metrics.annualized_return !== null && position.risk_assessment.metrics.annualized_return < 0
-                            ? 'error.main'
-                            : 'text.primary'
-                        }}>
-                          {position.risk_assessment.metrics.annualized_return?.toFixed(2) ? `${position.risk_assessment.metrics.annualized_return.toFixed(2)}%` : '—'}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                            </TableCell>
+                            <TableCell align="right">
+                              {position.risk_assessment.metrics.volatility.toFixed(2)}%
+                            </TableCell>
+                            <TableCell align="right" sx={{ color: 'error.main' }}>
+                              {position.risk_assessment.metrics.max_drawdown.toFixed(2)}%
+                            </TableCell>
+                            <TableCell align="right" sx={{ color: 'warning.main' }}>
+                              {position.risk_assessment.metrics.var_95?.toFixed(2) ?? '—'}
+                            </TableCell>
+                            <TableCell align="right" sx={{ color: 'error.main' }}>
+                              {position.risk_assessment.metrics.var_99?.toFixed(2) ?? '—'}
+                            </TableCell>
+                            <TableCell align="right" sx={{ color: 'error.dark' }}>
+                              {position.risk_assessment.metrics.expected_shortfall_95?.toFixed(2) ?? '—'}
+                            </TableCell>
+                            <TableCell align="right">
+                              {position.risk_assessment.metrics.beta?.toFixed(2) ?? '—'}
+                            </TableCell>
+                            <TableCell align="right">
+                              {position.risk_assessment.metrics.sharpe?.toFixed(2) ?? '—'}
+                            </TableCell>
+                            <TableCell align="right">
+                              {position.risk_assessment.metrics.sortino?.toFixed(2) ?? '—'}
+                            </TableCell>
+                            <TableCell align="right" sx={{
+                              color: position.risk_assessment.metrics.annualized_return !== null && position.risk_assessment.metrics.annualized_return > 0
+                                ? 'success.main'
+                                : position.risk_assessment.metrics.annualized_return !== null && position.risk_assessment.metrics.annualized_return < 0
+                                ? 'error.main'
+                                : 'text.primary'
+                            }}>
+                              {position.risk_assessment.metrics.annualized_return?.toFixed(2) ? `${position.risk_assessment.metrics.annualized_return.toFixed(2)}%` : '—'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </TabPanel>
+
+            {/* Tab 2: Analysis */}
+            <TabPanel value={activeTab} index={1}>
+              <RiskHistoryChart
+                portfolioId={selectedPortfolioId!}
+                thresholds={riskData?.thresholds}
+              />
+            </TabPanel>
+
+            {/* Tab 3: AI Insights */}
+            <TabPanel value={activeTab} index={2}>
+              {/* AI Portfolio Narrative */}
+              <Box sx={{ mb: 3 }}>
+                <PortfolioNarrative portfolioId={selectedPortfolioId!} timePeriod="90d" />
+              </Box>
+
+              {/* Portfolio News & Insights */}
+              <Box sx={{ mb: 3 }}>
+                <PortfolioNews portfolioId={selectedPortfolioId!} />
+              </Box>
+
+              {/* Portfolio Q&A Assistant */}
+              <PortfolioQA portfolioId={selectedPortfolioId!} />
+            </TabPanel>
+
+            {/* Tab 4: Optimization */}
+            <TabPanel value={activeTab} index={3}>
+              <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Psychology /> Optimization Suggestions
+              </Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                AI-powered recommendations to improve your portfolio's risk-return profile
+              </Typography>
+              <OptimizationRecommendations portfolioId={selectedPortfolioId!} />
+            </TabPanel>
           </Paper>
-
-          {/* Risk History Chart */}
-          <Box sx={{ mt: 3 }}>
-            <RiskHistoryChart
-              portfolioId={selectedPortfolioId!}
-              thresholds={riskData?.thresholds}
-            />
-          </Box>
-
-          {/* AI Portfolio Narrative */}
-          <Box sx={{ mt: 3 }}>
-            <PortfolioNarrative portfolioId={selectedPortfolioId!} timePeriod="90d" />
-          </Box>
-
-          {/* Portfolio News & Insights */}
-          <Box sx={{ mt: 3 }}>
-            <PortfolioNews portfolioId={selectedPortfolioId!} />
-          </Box>
-
-          {/* Portfolio Q&A Assistant */}
-          <Box sx={{ mt: 3 }}>
-            <PortfolioQA portfolioId={selectedPortfolioId!} />
-          </Box>
-
-          {/* Portfolio Optimization Suggestions */}
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Psychology /> Optimization Suggestions
-            </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-              AI-powered recommendations to improve your portfolio's risk-return profile
-            </Typography>
-            <OptimizationRecommendations portfolioId={selectedPortfolioId!} />
-          </Box>
 
           {/* Disclaimer */}
           <Alert severity="info" sx={{ mt: 3 }}>

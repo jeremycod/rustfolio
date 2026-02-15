@@ -347,10 +347,12 @@ export async function getLlmUsageStats(userId: string): Promise<LlmUsageStats> {
 // News endpoints
 export async function getPortfolioNews(
     portfolioId: string,
-    days?: number
+    days?: number,
+    force?: boolean
 ): Promise<PortfolioNewsAnalysis> {
     const params = new URLSearchParams();
     if (days) params.append('days', days.toString());
+    if (force) params.append('force', 'true');
 
     const queryString = params.toString();
     const url = `/api/news/portfolios/${portfolioId}/news${queryString ? `?${queryString}` : ''}`;

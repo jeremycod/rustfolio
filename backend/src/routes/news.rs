@@ -1,10 +1,11 @@
 use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
 use axum::routing::get;
-use serde::Deserialize;
 use tracing::{error, info};
 use uuid::Uuid;
 use std::collections::HashMap;
+use sqlx::PgPool;
+use chrono::{Utc, Duration};
 
 use crate::errors::AppError;
 use crate::models::{NewsQueryParams, PortfolioNewsAnalysis, NewsTheme, Sentiment};
@@ -16,12 +17,77 @@ pub fn router() -> Router<AppState> {
         .route("/positions/:ticker/news", get(get_ticker_news))
 }
 
+/// Check if cached news exists and is still fresh (< 24 hours old)
+async fn get_cached_news(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+) -> Result<Option<PortfolioNewsAnalysis>, AppError> {
+    let result = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT news_data
+        FROM portfolio_news_cache
+        WHERE portfolio_id = $1 AND expires_at > NOW()
+        "#
+    )
+    .bind(portfolio_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    if let Some(news_data) = result {
+        info!("Found cached news for portfolio {}", portfolio_id);
+        let news_analysis: PortfolioNewsAnalysis = serde_json::from_value(news_data)
+            .map_err(|e| AppError::External(format!("Failed to deserialize cached news: {}", e)))?;
+        Ok(Some(news_analysis))
+    } else {
+        info!("No valid cache found for portfolio {}", portfolio_id);
+        Ok(None)
+    }
+}
+
+/// Store news analysis in cache with 24-hour expiration
+async fn cache_news(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    news_analysis: &PortfolioNewsAnalysis,
+) -> Result<(), AppError> {
+    let news_data = serde_json::to_value(news_analysis)
+        .map_err(|e| AppError::External(format!("Failed to serialize news for cache: {}", e)))?;
+
+    let fetched_at = Utc::now();
+    let expires_at = fetched_at + Duration::hours(24);
+
+    sqlx::query(
+        r#"
+        INSERT INTO portfolio_news_cache (portfolio_id, news_data, fetched_at, expires_at)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (portfolio_id)
+        DO UPDATE SET
+            news_data = $2,
+            fetched_at = $3,
+            expires_at = $4,
+            updated_at = NOW()
+        "#
+    )
+    .bind(portfolio_id)
+    .bind(news_data)
+    .bind(fetched_at)
+    .bind(expires_at)
+    .execute(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    info!("Cached news for portfolio {} (expires at {})", portfolio_id, expires_at);
+    Ok(())
+}
+
 /// GET /api/news/portfolios/:portfolio_id/news
 ///
 /// Fetch and analyze news for all positions in a portfolio
 ///
 /// Query parameters:
 /// - `days`: Number of days to look back (default: 7)
+/// - `force`: Force refresh, bypassing cache (default: false)
 ///
 /// Returns themed news analysis with sentiment
 async fn get_portfolio_news(
@@ -30,11 +96,20 @@ async fn get_portfolio_news(
     State(state): State<AppState>,
 ) -> Result<Json<PortfolioNewsAnalysis>, AppError> {
     let days = params.days.unwrap_or(7);
+    let force = params.force.unwrap_or(false);
 
     info!(
-        "GET /api/news/portfolios/{}/news - Fetching portfolio news (days={})",
-        portfolio_id, days
+        "GET /api/news/portfolios/{}/news - Fetching portfolio news (days={}, force={})",
+        portfolio_id, days, force
     );
+
+    // Check cache first if not forcing refresh
+    if !force {
+        if let Some(cached_news) = get_cached_news(&state.pool, portfolio_id).await? {
+            info!("Returning cached news for portfolio {}", portfolio_id);
+            return Ok(Json(cached_news));
+        }
+    }
 
     // 1. Get all positions in the portfolio
     let holdings = crate::db::holding_snapshot_queries::fetch_portfolio_latest_holdings(
@@ -101,13 +176,21 @@ async fn get_portfolio_news(
         overall_sentiment
     );
 
-    Ok(Json(PortfolioNewsAnalysis {
+    let news_analysis = PortfolioNewsAnalysis {
         portfolio_id: portfolio_id.to_string(),
         themes: all_themes,
         position_news,
         overall_sentiment,
         fetched_at: chrono::Utc::now(),
-    }))
+    };
+
+    // Cache the results for future requests
+    if let Err(e) = cache_news(&state.pool, portfolio_id, &news_analysis).await {
+        error!("Failed to cache news for portfolio {}: {}", portfolio_id, e);
+        // Continue even if caching fails - don't fail the request
+    }
+
+    Ok(Json(news_analysis))
 }
 
 /// GET /api/news/positions/:ticker/news
