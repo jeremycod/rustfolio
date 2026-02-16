@@ -14,7 +14,8 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { getPortfolioCorrelations, listPortfolios } from '../lib/endpoints';
-import { CorrelationMatrix } from '../types';
+import { CorrelationMatrix, CorrelationMatrixWithStats } from '../types';
+import CorrelationStatsCard from './CorrelationStatsCard';
 
 type CorrelationHeatmapProps = {
   portfolioId: string;
@@ -175,6 +176,13 @@ export function CorrelationHeatmap({ portfolioId: initialPortfolioId }: Correlat
         together). High positive correlations indicate concentration risk. Analysis includes positions
         representing at least 1% of portfolio value (limited to top 10 positions for performance).
       </Alert>
+
+      {/* Correlation Statistics Card */}
+      {matrix.statistics && (
+        <Box sx={{ mb: 3 }}>
+          <CorrelationStatsCard statistics={matrix.statistics} />
+        </Box>
+      )}
 
       {tickers.length < 2 ? (
         <Alert severity="warning">

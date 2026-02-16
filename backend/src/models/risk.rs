@@ -249,3 +249,60 @@ pub struct PortfolioRiskWithViolations {
     pub violations: Vec<ThresholdViolation>,
 }
 
+/// Portfolio-level correlation statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrelationStatistics {
+    /// Average correlation across all pairs
+    pub average_correlation: f64,
+    /// Maximum correlation in portfolio
+    pub max_correlation: f64,
+    /// Minimum correlation in portfolio
+    pub min_correlation: f64,
+    /// Standard deviation of correlations
+    pub correlation_std_dev: f64,
+    /// Number of high correlation pairs (> 0.7)
+    pub high_correlation_pairs: usize,
+    /// Correlation-adjusted diversification score (0-10)
+    pub adjusted_diversification_score: f64,
+}
+
+/// Correlation matrix with statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrelationMatrixWithStats {
+    #[serde(flatten)]
+    pub matrix: CorrelationMatrix,
+    pub statistics: CorrelationStatistics,
+}
+
+/// Single point in rolling beta time series
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BetaPoint {
+    /// Date of the beta calculation
+    pub date: String,
+    /// Beta coefficient for this window
+    pub beta: f64,
+    /// R-squared (variance explained by benchmark)
+    pub r_squared: f64,
+    /// Alpha (excess return), optional
+    pub alpha: Option<f64>,
+}
+
+/// Rolling beta analysis with multiple window sizes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RollingBetaAnalysis {
+    /// Ticker symbol being analyzed
+    pub ticker: String,
+    /// Benchmark ticker (e.g., SPY, QQQ)
+    pub benchmark: String,
+    /// 30-day rolling beta time series
+    pub beta_30d: Vec<BetaPoint>,
+    /// 60-day rolling beta time series
+    pub beta_60d: Vec<BetaPoint>,
+    /// 90-day rolling beta time series
+    pub beta_90d: Vec<BetaPoint>,
+    /// Current beta (most recent value)
+    pub current_beta: f64,
+    /// Beta volatility (standard deviation of 90d beta)
+    pub beta_volatility: f64,
+}
+

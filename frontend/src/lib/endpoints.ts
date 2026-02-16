@@ -17,6 +17,8 @@ import type {
     PortfolioRisk,
     PortfolioRiskWithViolations,
     CorrelationMatrix,
+    CorrelationMatrixWithStats,
+    RollingBetaAnalysis,
     RiskSnapshot,
     RiskAlert,
     RiskThresholdSettings,
@@ -188,7 +190,7 @@ export async function getPortfolioRisk(
 export async function getPortfolioCorrelations(
     portfolioId: string,
     days?: number
-): Promise<CorrelationMatrix> {
+): Promise<CorrelationMatrixWithStats> {
     const params = new URLSearchParams();
     if (days) params.append('days', days.toString());
 
@@ -196,6 +198,23 @@ export async function getPortfolioCorrelations(
     const url = `/api/risk/portfolios/${portfolioId}/correlations${queryString ? `?${queryString}` : ''}`;
 
     // Use longer timeout for correlation calculation (2 minutes)
+    const res = await api.get(url, { timeout: 120000 });
+    return res.data;
+}
+
+export async function getRollingBeta(
+    ticker: string,
+    days: number = 180,
+    benchmark: string = 'SPY'
+): Promise<RollingBetaAnalysis> {
+    const params = new URLSearchParams();
+    params.append('days', days.toString());
+    params.append('benchmark', benchmark);
+
+    const queryString = params.toString();
+    const url = `/api/risk/positions/${ticker}/rolling-beta${queryString ? `?${queryString}` : ''}`;
+
+    // Use longer timeout for rolling beta calculation (2 minutes)
     const res = await api.get(url, { timeout: 120000 });
     return res.data;
 }

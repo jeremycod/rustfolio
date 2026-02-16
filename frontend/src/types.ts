@@ -266,6 +266,42 @@ export type CorrelationMatrix = {
     portfolio_id: string;
     tickers: string[];
     correlations: CorrelationPair[];
+    matrix_2d: number[][];
+};
+
+export type CorrelationStatistics = {
+    average_correlation: number;
+    max_correlation: number;
+    min_correlation: number;
+    correlation_std_dev: number;
+    high_correlation_pairs: number;
+    adjusted_diversification_score: number;
+};
+
+export type CorrelationMatrixWithStats = {
+    portfolio_id: string;
+    tickers: string[];
+    correlations: CorrelationPair[];
+    matrix_2d: number[][];
+    statistics: CorrelationStatistics;
+};
+
+// Rolling Beta Analysis Types
+export type BetaPoint = {
+    date: string;
+    beta: number;
+    r_squared: number;
+    alpha?: number;
+};
+
+export type RollingBetaAnalysis = {
+    ticker: string;
+    benchmark: string;
+    beta_30d: BetaPoint[];
+    beta_60d: BetaPoint[];
+    beta_90d: BetaPoint[];
+    current_beta: number;
+    beta_volatility: number;
 };
 
 // Historical Risk Tracking Types

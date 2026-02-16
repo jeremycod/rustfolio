@@ -18,6 +18,7 @@ use crate::state::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/positions/:ticker", get(get_position_risk))
+        .route("/positions/:ticker/rolling-beta", get(get_rolling_beta))
         .route("/portfolios/:portfolio_id", get(get_portfolio_risk))
         .route("/portfolios/:portfolio_id/correlations", get(get_portfolio_correlations))
         .route("/portfolios/:portfolio_id/snapshot", post(create_portfolio_snapshot))
@@ -248,6 +249,54 @@ pub async fn get_position_risk(
     })?;
 
     Ok(Json(risk_assessment))
+}
+
+/// GET /api/risk/positions/:ticker/rolling-beta
+///
+/// Calculate rolling beta analysis for a position across multiple time windows.
+/// Tracks how beta changes over time to identify beta stability and market regime changes.
+///
+/// Query parameters:
+/// - `days`: Total days of history to analyze (default: 180, max: 365)
+/// - `benchmark`: Benchmark ticker for beta calculation (default: "SPY")
+///
+/// Returns rolling beta for 30, 60, and 90-day windows plus beta volatility.
+/// Results are cached for 24 hours.
+///
+/// Example: GET /api/risk/positions/AAPL/rolling-beta?days=180&benchmark=SPY
+pub async fn get_rolling_beta(
+    Path(ticker): Path<String>,
+    Query(params): Query<RiskQueryParams>,
+    State(state): State<AppState>,
+) -> Result<Json<crate::models::risk::RollingBetaAnalysis>, AppError> {
+    use std::time::Instant;
+
+    let days = params.days.min(365); // Cap at 1 year
+
+    let start = Instant::now();
+    info!(
+        "GET /api/risk/positions/{}/rolling-beta - Computing rolling beta (days={}, benchmark={})",
+        ticker, days, params.benchmark
+    );
+
+    // Compute rolling beta using risk service
+    let analysis = risk_service::compute_rolling_beta(
+        &state.pool,
+        &ticker,
+        &params.benchmark,
+        days,
+        state.price_provider.as_ref(),
+        &state.failure_cache,
+    )
+    .await?;
+
+    info!(
+        "Successfully computed rolling beta for {} in {:?}",
+        ticker,
+        start.elapsed()
+    );
+
+    Ok(Json(analysis))
 }
 
 /// GET /api/risk/portfolios/:portfolio_id
@@ -627,7 +676,7 @@ pub async fn get_portfolio_correlations(
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<RiskQueryParams>,
     State(state): State<AppState>,
-) -> Result<Json<CorrelationMatrix>, AppError> {
+) -> Result<Json<crate::models::risk::CorrelationMatrixWithStats>, AppError> {
     use crate::db::{holding_snapshot_queries, price_queries};
     use std::collections::HashMap;
     use std::time::Instant;
@@ -866,12 +915,21 @@ pub async fn get_portfolio_correlations(
 
     let matrix = CorrelationMatrix {
         portfolio_id: portfolio_id.to_string(),
-        tickers,
+        tickers: tickers.clone(),
         correlations,
         matrix_2d,
     };
 
-    Ok(Json(matrix))
+    // Calculate correlation statistics
+    let position_count = tickers.len();
+    let statistics = risk_service::calculate_correlation_statistics(&matrix, position_count);
+
+    let response = crate::models::risk::CorrelationMatrixWithStats {
+        matrix,
+        statistics,
+    };
+
+    Ok(Json(response))
 }
 
 /// POST /api/risk/portfolios/:portfolio_id/snapshot

@@ -767,6 +767,360 @@ fn compute_risk_decomposition(
     })
 }
 
+/// Calculate portfolio-level correlation statistics from a correlation matrix.
+///
+/// This function computes:
+/// - Average correlation across all pairs
+/// - Maximum and minimum correlations
+/// - Standard deviation of correlations
+/// - Count of high correlation pairs (> 0.7)
+/// - Correlation-adjusted diversification score (0-10)
+///
+/// The adjusted diversification score combines:
+/// - Base score (0-6): Based on HHI concentration and position count
+/// - Correlation bonus (0-4): Rewards low average correlation
+pub fn calculate_correlation_statistics(
+    matrix: &crate::models::risk::CorrelationMatrix,
+    position_count: usize,
+) -> crate::models::risk::CorrelationStatistics {
+    use crate::models::risk::CorrelationStatistics;
+
+    // Extract all correlation values (excluding self-correlation)
+    let correlations: Vec<f64> = matrix.correlations
+        .iter()
+        .map(|pair| pair.correlation)
+        .collect();
+
+    // Handle edge case: no correlations (0 or 1 position)
+    if correlations.is_empty() {
+        return CorrelationStatistics {
+            average_correlation: 0.0,
+            max_correlation: 0.0,
+            min_correlation: 0.0,
+            correlation_std_dev: 0.0,
+            high_correlation_pairs: 0,
+            adjusted_diversification_score: if position_count == 0 { 0.0 } else { 10.0 },
+        };
+    }
+
+    // Calculate basic statistics
+    let n = correlations.len() as f64;
+    let average_correlation = correlations.iter().sum::<f64>() / n;
+    let max_correlation = correlations.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let min_correlation = correlations.iter().cloned().fold(f64::INFINITY, f64::min);
+
+    // Calculate standard deviation
+    let variance = correlations.iter()
+        .map(|&c| (c - average_correlation).powi(2))
+        .sum::<f64>() / n;
+    let correlation_std_dev = variance.sqrt();
+
+    // Count high correlation pairs (> 0.7)
+    let high_correlation_pairs = correlations.iter()
+        .filter(|&&c| c > 0.7)
+        .count();
+
+    // Calculate correlation-adjusted diversification score
+    let adjusted_diversification_score = calculate_adjusted_diversification_score(
+        position_count,
+        average_correlation,
+    );
+
+    CorrelationStatistics {
+        average_correlation,
+        max_correlation,
+        min_correlation,
+        correlation_std_dev,
+        high_correlation_pairs,
+        adjusted_diversification_score,
+    }
+}
+
+/// Calculate correlation-adjusted diversification score (0-10).
+///
+/// Formula:
+/// - Base score (0-6): Based on position count and concentration (Herfindahl index)
+/// - Correlation bonus (0-4): (1 - avg_correlation) * 4
+///
+/// For simplicity, if we don't have HHI, we use position count:
+/// - 1 position = 1 point
+/// - 2-3 positions = 2 points
+/// - 4-5 positions = 3 points
+/// - 6-7 positions = 4 points
+/// - 8-9 positions = 5 points
+/// - 10+ positions = 6 points
+fn calculate_adjusted_diversification_score(
+    position_count: usize,
+    average_correlation: f64,
+) -> f64 {
+    // Base score from position count (0-6)
+    let base_score = match position_count {
+        0 => 0.0,
+        1 => 1.0,
+        2..=3 => 2.0,
+        4..=5 => 3.0,
+        6..=7 => 4.0,
+        8..=9 => 5.0,
+        _ => 6.0,
+    };
+
+    // Correlation bonus (0-4): rewards low correlation
+    // If avg correlation is 0, bonus is 4
+    // If avg correlation is 1, bonus is 0
+    let correlation_bonus = (1.0 - average_correlation.max(0.0).min(1.0)) * 4.0;
+
+    // Total score (0-10)
+    (base_score + correlation_bonus).min(10.0).max(0.0)
+}
+
+/// Compute rolling beta over multiple window sizes (30, 60, 90 days).
+///
+/// This function calculates how beta changes over time by sliding windows
+/// through the price data. Results are cached for 24 hours to avoid expensive
+/// recalculations.
+///
+/// # Arguments
+/// * `pool` - Database connection pool
+/// * `ticker` - Ticker symbol to analyze
+/// * `benchmark` - Benchmark ticker (e.g., SPY, QQQ, IWM)
+/// * `total_days` - Total days of history to analyze (e.g., 180)
+/// * `price_provider` - Provider for fetching price data
+/// * `failure_cache` - Cache to avoid repeated failed fetches
+///
+/// # Returns
+/// RollingBetaAnalysis with time series for each window size
+pub async fn compute_rolling_beta(
+    pool: &sqlx::PgPool,
+    ticker: &str,
+    benchmark: &str,
+    total_days: i64,
+    _price_provider: &dyn crate::external::price_provider::PriceProvider,
+    _failure_cache: &crate::services::failure_cache::FailureCache,
+) -> Result<crate::models::risk::RollingBetaAnalysis, crate::errors::AppError> {
+    use crate::db::price_queries;
+    use crate::models::risk::{BetaPoint, RollingBetaAnalysis};
+    use chrono::Utc;
+    use sqlx::Row;
+
+    // Check cache first
+    let cache_result = sqlx::query(
+        r#"
+        SELECT beta_30d, beta_60d, beta_90d, current_beta, beta_volatility, expires_at
+        FROM rolling_beta_cache
+        WHERE ticker = $1 AND benchmark = $2 AND total_days = $3
+        "#
+    )
+    .bind(ticker)
+    .bind(benchmark)
+    .bind(total_days as i32)
+    .fetch_optional(pool)
+    .await;
+
+    // If cached and not expired, return cached data
+    if let Ok(Some(cached)) = cache_result {
+        let expires_at: chrono::NaiveDateTime = cached.try_get("expires_at").unwrap_or_else(|_| Utc::now().naive_utc());
+
+        if expires_at > Utc::now().naive_utc() {
+            let beta_30d_json: serde_json::Value = cached.try_get("beta_30d").unwrap_or(serde_json::json!([]));
+            let beta_60d_json: serde_json::Value = cached.try_get("beta_60d").unwrap_or(serde_json::json!([]));
+            let beta_90d_json: serde_json::Value = cached.try_get("beta_90d").unwrap_or(serde_json::json!([]));
+
+            let beta_30d: Vec<BetaPoint> = serde_json::from_value(beta_30d_json).unwrap_or_default();
+            let beta_60d: Vec<BetaPoint> = serde_json::from_value(beta_60d_json).unwrap_or_default();
+            let beta_90d: Vec<BetaPoint> = serde_json::from_value(beta_90d_json).unwrap_or_default();
+
+            let current_beta: f64 = cached.try_get("current_beta").unwrap_or(0.0);
+            let beta_volatility: f64 = cached.try_get("beta_volatility").unwrap_or(0.0);
+
+            return Ok(RollingBetaAnalysis {
+                ticker: ticker.to_string(),
+                benchmark: benchmark.to_string(),
+                beta_30d,
+                beta_60d,
+                beta_90d,
+                current_beta,
+                beta_volatility,
+            });
+        }
+    }
+
+    // Fetch price data for both ticker and benchmark
+    let ticker_prices = price_queries::fetch_window(pool, ticker, total_days)
+        .await
+        .map_err(|e| AppError::Db(e))?;
+
+    let benchmark_prices = price_queries::fetch_window(pool, benchmark, total_days)
+        .await
+        .map_err(|e| AppError::Db(e))?;
+
+    if ticker_prices.len() < 90 || benchmark_prices.len() < 90 {
+        return Err(AppError::External(
+            format!("Insufficient price data for rolling beta analysis. Need at least 90 days, got {} for {} and {} for {}",
+                ticker_prices.len(), ticker, benchmark_prices.len(), benchmark)
+        ));
+    }
+
+    // Convert to vectors of (date, price)
+    let ticker_data: Vec<(chrono::NaiveDate, f64)> = ticker_prices
+        .iter()
+        .filter_map(|p| {
+            p.close_price.to_f64().map(|price| (p.date, price))
+        })
+        .collect();
+
+    let benchmark_data: Vec<(chrono::NaiveDate, f64)> = benchmark_prices
+        .iter()
+        .filter_map(|p| {
+            p.close_price.to_f64().map(|price| (p.date, price))
+        })
+        .collect();
+
+    // Calculate rolling beta for each window size
+    let beta_30d = calculate_rolling_beta_window(&ticker_data, &benchmark_data, 30);
+    let beta_60d = calculate_rolling_beta_window(&ticker_data, &benchmark_data, 60);
+    let beta_90d = calculate_rolling_beta_window(&ticker_data, &benchmark_data, 90);
+
+    // Calculate current beta and beta volatility from 90d window
+    let current_beta = beta_90d.last().map(|p| p.beta).unwrap_or(0.0);
+
+    let beta_values: Vec<f64> = beta_90d.iter().map(|p| p.beta).collect();
+    let beta_volatility = if beta_values.len() > 1 {
+        let mean = beta_values.iter().sum::<f64>() / beta_values.len() as f64;
+        let variance = beta_values.iter()
+            .map(|&b| (b - mean).powi(2))
+            .sum::<f64>() / beta_values.len() as f64;
+        variance.sqrt()
+    } else {
+        0.0
+    };
+
+    let result = RollingBetaAnalysis {
+        ticker: ticker.to_string(),
+        benchmark: benchmark.to_string(),
+        beta_30d: beta_30d.clone(),
+        beta_60d: beta_60d.clone(),
+        beta_90d: beta_90d.clone(),
+        current_beta,
+        beta_volatility,
+    };
+
+    // Cache the result (24 hour TTL)
+    let calculated_at = Utc::now().naive_utc();
+    let expires_at = calculated_at + chrono::Duration::hours(24);
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO rolling_beta_cache
+        (ticker, benchmark, total_days, calculated_at, expires_at, beta_30d, beta_60d, beta_90d, current_beta, beta_volatility)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (ticker, benchmark, total_days)
+        DO UPDATE SET
+            calculated_at = $4,
+            expires_at = $5,
+            beta_30d = $6,
+            beta_60d = $7,
+            beta_90d = $8,
+            current_beta = $9,
+            beta_volatility = $10
+        "#
+    )
+    .bind(ticker)
+    .bind(benchmark)
+    .bind(total_days as i32)
+    .bind(calculated_at)
+    .bind(expires_at)
+    .bind(serde_json::to_value(&beta_30d).unwrap())
+    .bind(serde_json::to_value(&beta_60d).unwrap())
+    .bind(serde_json::to_value(&beta_90d).unwrap())
+    .bind(current_beta)
+    .bind(beta_volatility)
+    .execute(pool)
+    .await;
+
+    Ok(result)
+}
+
+/// Calculate rolling beta for a specific window size.
+///
+/// Slides a window through the price data and calculates beta for each position.
+fn calculate_rolling_beta_window(
+    ticker_data: &[(chrono::NaiveDate, f64)],
+    benchmark_data: &[(chrono::NaiveDate, f64)],
+    window_days: usize,
+) -> Vec<crate::models::risk::BetaPoint> {
+    use crate::models::risk::BetaPoint;
+
+    let mut beta_points = Vec::new();
+
+    // Need at least window_days + 1 points to calculate returns for window_days
+    if ticker_data.len() < window_days + 1 || benchmark_data.len() < window_days + 1 {
+        return beta_points;
+    }
+
+    // Slide window through the data
+    for i in window_days..ticker_data.len() {
+        let window_start = i - window_days;
+        let ticker_window = &ticker_data[window_start..=i];
+        let benchmark_window = &benchmark_data[window_start..=i];
+
+        // Calculate returns for this window
+        let ticker_returns: Vec<f64> = ticker_window
+            .windows(2)
+            .map(|w| (w[1].1 - w[0].1) / w[0].1)
+            .collect();
+
+        let benchmark_returns: Vec<f64> = benchmark_window
+            .windows(2)
+            .map(|w| (w[1].1 - w[0].1) / w[0].1)
+            .collect();
+
+        if ticker_returns.len() != benchmark_returns.len() || ticker_returns.is_empty() {
+            continue;
+        }
+
+        // Calculate beta and r-squared for this window
+        let mean_ticker = ticker_returns.iter().sum::<f64>() / ticker_returns.len() as f64;
+        let mean_bench = benchmark_returns.iter().sum::<f64>() / benchmark_returns.len() as f64;
+
+        let mut covariance = 0.0;
+        let mut var_bench = 0.0;
+        let mut var_ticker = 0.0;
+
+        for (tr, br) in ticker_returns.iter().zip(benchmark_returns.iter()) {
+            let diff_ticker = tr - mean_ticker;
+            let diff_bench = br - mean_bench;
+            covariance += diff_ticker * diff_bench;
+            var_bench += diff_bench * diff_bench;
+            var_ticker += diff_ticker * diff_ticker;
+        }
+
+        if var_bench.abs() < f64::EPSILON {
+            continue;
+        }
+
+        let beta = covariance / var_bench;
+
+        // Calculate r-squared (correlation^2)
+        let correlation = if var_ticker.abs() < f64::EPSILON || var_bench.abs() < f64::EPSILON {
+            0.0
+        } else {
+            covariance / (var_ticker.sqrt() * var_bench.sqrt())
+        };
+        let r_squared = correlation * correlation;
+
+        // Alpha is mean_ticker - beta * mean_bench (annualized)
+        let alpha = Some((mean_ticker - beta * mean_bench) * 252.0 * 100.0);
+
+        beta_points.push(BetaPoint {
+            date: ticker_data[i].0.format("%Y-%m-%d").to_string(),
+            beta,
+            r_squared,
+            alpha,
+        });
+    }
+
+    beta_points
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
