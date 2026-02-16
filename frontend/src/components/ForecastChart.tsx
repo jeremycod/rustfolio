@@ -39,10 +39,10 @@ interface ForecastChartProps {
   portfolioId: string;
 }
 
-type TimeRange = 30 | 60 | 90;
+type TimeRange = 30 | 90 | 365 | 1825 | 3650 | 5475 | 7300; // 30d, 90d, 1y, 5y, 10y, 15y, 20y
 
 export function ForecastChart({ portfolioId }: ForecastChartProps) {
-  const [timeRange, setTimeRange] = useState<TimeRange>(30);
+  const [timeRange, setTimeRange] = useState<TimeRange>(365);
   const [method, setMethod] = useState<ForecastMethod>('ensemble');
 
   // Fetch forecast data
@@ -183,7 +183,7 @@ export function ForecastChart({ portfolioId }: ForecastChartProps) {
               />
               {lastPoint && (
                 <Chip
-                  label={`${timeRange}d Forecast: ${formatCurrency(lastPoint.predicted_value)} (${forecastChange >= 0 ? '+' : ''}${forecastChange.toFixed(1)}%)`}
+                  label={`${timeRange >= 365 ? `${(timeRange / 365).toFixed(0)}y` : `${timeRange}d`} Forecast: ${formatCurrency(lastPoint.predicted_value)} (${forecastChange >= 0 ? '+' : ''}${forecastChange.toFixed(1)}%)`}
                   color={forecastChange >= 0 ? 'success' : 'error'}
                   size="small"
                 />
@@ -192,16 +192,20 @@ export function ForecastChart({ portfolioId }: ForecastChartProps) {
           </Box>
 
           <Box display="flex" gap={2} alignItems="center">
-            <FormControl size="small" sx={{ minWidth: 120 }}>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
               <InputLabel>Time Range</InputLabel>
               <Select
                 value={timeRange}
                 label="Time Range"
                 onChange={(e) => setTimeRange(e.target.value as TimeRange)}
               >
-                <MenuItem value={30}>30 Days</MenuItem>
-                <MenuItem value={60}>60 Days</MenuItem>
-                <MenuItem value={90}>90 Days</MenuItem>
+                <MenuItem value={30}>1 Month</MenuItem>
+                <MenuItem value={90}>3 Months</MenuItem>
+                <MenuItem value={365}>1 Year</MenuItem>
+                <MenuItem value={1825}>5 Years</MenuItem>
+                <MenuItem value={3650}>10 Years</MenuItem>
+                <MenuItem value={5475}>15 Years</MenuItem>
+                <MenuItem value={7300}>20 Years</MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -341,7 +345,7 @@ export function ForecastChart({ portfolioId }: ForecastChartProps) {
         {/* Summary */}
         <Box mt={2}>
           <Typography variant="caption" color="text.secondary">
-            Showing {forecast.forecast_points.length} forecast points over {timeRange} days
+            Showing {forecast.forecast_points.length} forecast points over {timeRange >= 365 ? `${(timeRange / 365).toFixed(1)} years` : `${timeRange} days`}
             {' • '}
             {forecast.confidence_level * 100}% confidence interval
             {' • '}
@@ -356,10 +360,16 @@ export function ForecastChart({ portfolioId }: ForecastChartProps) {
         </Box>
 
         {/* Disclaimer */}
-        <Alert severity="info" sx={{ mt: 2 }}>
+        <Alert severity={timeRange >= 1825 ? 'warning' : 'info'} sx={{ mt: 2 }}>
           <Typography variant="caption">
             <strong>Disclaimer:</strong> This forecast is a statistical projection based on historical data and is not a guarantee of future performance.
             Actual results may vary significantly due to market conditions, economic factors, and other variables not captured by the model.
+            {timeRange >= 1825 && (
+              <>
+                {' '}
+                <strong>Long-term forecasts (5+ years) are highly speculative and should be used for general planning purposes only.</strong>
+              </>
+            )}
           </Typography>
         </Alert>
       </CardContent>

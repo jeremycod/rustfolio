@@ -34,21 +34,25 @@ async fn get_portfolio_forecast(
     Query(params): Query<ForecastQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<PortfolioForecast>, AppError> {
-    let days_ahead = params.days.unwrap_or(30).min(90); // Cap at 90 days
+    let days_ahead = params.days.unwrap_or(30).min(7300); // Cap at 20 years (7300 days)
 
     let method = params.method.as_ref().and_then(|m| match m.as_str() {
-        "linear" => Some(ForecastMethod::LinearRegression),
-        "exponential" => Some(ForecastMethod::ExponentialSmoothing),
+        "linear_regression" => Some(ForecastMethod::LinearRegression),
+        "exponential_smoothing" => Some(ForecastMethod::ExponentialSmoothing),
         "moving_average" => Some(ForecastMethod::MovingAverage),
         "ensemble" => Some(ForecastMethod::Ensemble),
         _ => None,
     });
 
-    services::forecasting_service::generate_portfolio_forecast(
+    // Use benchmark-based forecasting (uses current holdings + benchmark price history)
+    // This approach works even without historical portfolio snapshots
+    services::forecasting_service::generate_benchmark_based_forecast(
         &state.pool,
         portfolio_id,
         days_ahead,
         method,
+        state.price_provider.as_ref(),
+        &state.failure_cache,
     )
     .await
     .map(Json)
