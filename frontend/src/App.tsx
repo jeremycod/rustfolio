@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Box, Typography, Alert } from "@mui/material";
 import { listPortfolios } from "./lib/endpoints";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./components/Dashboard";
@@ -12,6 +13,7 @@ import { RiskAnalysis } from "./components/RiskAnalysis";
 import { PortfolioRiskOverview } from "./components/PortfolioRiskOverview";
 import { RiskComparison } from "./components/RiskComparison";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
+import { RollingBetaPage } from "./components/RollingBetaPage";
 
 export default function App() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
@@ -89,6 +91,14 @@ export default function App() {
                 return selectedPortfolioId ? (
                     <CorrelationHeatmap portfolioId={selectedPortfolioId} />
                 ) : null;
+            case 'rolling-beta':
+                return (
+                    <RollingBetaPage
+                        selectedPortfolioId={selectedPortfolioId}
+                        onPortfolioChange={setSelectedPortfolioId}
+                        initialTicker={selectedTicker || undefined}
+                    />
+                );
             case 'settings':
                 return <Settings />;
             default:

@@ -140,7 +140,7 @@ export default function CorrelationStatsCard({ statistics }: CorrelationStatsCar
 
       {statistics.high_correlation_pairs > 3 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Portfolio has {statistics.high_correlation_pairs} highly correlated pairs (>70%).
+          Portfolio has {statistics.high_correlation_pairs} highly correlated pairs (&gt;70%).
           Consider diversifying across less correlated assets to reduce concentration risk.
         </Alert>
       )}

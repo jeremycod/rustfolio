@@ -117,7 +117,8 @@ pub async fn refresh_from_api(
     let max_retries = 3;
 
     loop {
-        match provider.fetch_daily_history(ticker, 60).await {
+        // Fetch 365 days of history to support rolling beta analysis (needs 180 days + 90-day window)
+        match provider.fetch_daily_history(ticker, 365).await {
             Ok(external_points) => {
                 db::price_queries::upsert_external_points(pool, ticker, &external_points).await
                     .map_err(|e| {

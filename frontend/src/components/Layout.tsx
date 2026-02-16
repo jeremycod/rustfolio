@@ -21,6 +21,7 @@ import {
   Security,
   Compare,
   GridOn,
+  Timeline,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -34,6 +35,7 @@ const menuItems = [
   { text: 'Risk Analysis', icon: <Assessment />, path: 'risk' },
   { text: 'Risk Comparison', icon: <Compare />, path: 'risk-comparison' },
   { text: 'Correlations', icon: <GridOn />, path: 'correlations' },
+  { text: 'Rolling Beta', icon: <Timeline />, path: 'rolling-beta' },
   { text: 'Settings', icon: <Settings />, path: 'settings' },
 ];
 

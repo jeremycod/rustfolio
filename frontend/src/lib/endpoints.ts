@@ -219,6 +219,11 @@ export async function getRollingBeta(
     return res.data;
 }
 
+export async function updatePriceHistory(ticker: string): Promise<void> {
+    const res = await api.post(`/api/prices/${ticker}/update`, {}, { timeout: 60000 });
+    return res.data;
+}
+
 // Risk snapshot endpoints
 export async function createRiskSnapshot(
     portfolioId: string

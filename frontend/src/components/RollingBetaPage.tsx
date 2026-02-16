@@ -1,0 +1,208 @@
+import { useState, useMemo } from 'react';
+import {
+  Box,
+  Typography,
+  Paper,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Grid,
+  Alert,
+  FormHelperText,
+} from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { listPortfolios, listAccounts, getLatestHoldings } from '../lib/endpoints';
+import { RollingBetaChart } from './RollingBetaChart';
+
+interface RollingBetaPageProps {
+  selectedPortfolioId: string | null;
+  onPortfolioChange: (id: string) => void;
+  initialTicker?: string;
+}
+
+const BENCHMARKS = [
+  { value: 'SPY', label: 'SPY - S&P 500' },
+  { value: 'QQQ', label: 'QQQ - Nasdaq 100' },
+  { value: 'IWM', label: 'IWM - Russell 2000' },
+  { value: 'DIA', label: 'DIA - Dow Jones' },
+  { value: 'VTI', label: 'VTI - Total Stock Market' },
+  { value: 'AGG', label: 'AGG - Total Bond Market' },
+];
+
+export function RollingBetaPage({
+  selectedPortfolioId,
+  onPortfolioChange,
+  initialTicker
+}: RollingBetaPageProps) {
+  const [selectedTicker, setSelectedTicker] = useState<string>(initialTicker || '');
+  const [selectedBenchmark, setSelectedBenchmark] = useState<string>('SPY');
+  const [days] = useState<number>(180);
+
+  const portfoliosQ = useQuery({
+    queryKey: ['portfolios'],
+    queryFn: listPortfolios,
+  });
+
+  const accountsQ = useQuery({
+    queryKey: ['accounts', selectedPortfolioId],
+    queryFn: () => listAccounts(selectedPortfolioId!),
+    enabled: !!selectedPortfolioId,
+  });
+
+  // Fetch holdings for all accounts to get list of tickers
+  const holdingsQueries = useQuery({
+    queryKey: ['allHoldings', selectedPortfolioId, accountsQ.data],
+    queryFn: async () => {
+      if (!accountsQ.data || accountsQ.data.length === 0) return [];
+
+      const holdingsPromises = accountsQ.data.map(async (account) => {
+        try {
+          const holdings = await getLatestHoldings(account.id);
+          return holdings;
+        } catch (error) {
+          console.error(`Failed to fetch holdings for account ${account.id}:`, error);
+          return [];
+        }
+      });
+
+      const allHoldings = await Promise.all(holdingsPromises);
+      return allHoldings.flat();
+    },
+    enabled: !!selectedPortfolioId && !!accountsQ.data && accountsQ.data.length > 0,
+  });
+
+  // Get unique tickers from holdings
+  const availableTickers = useMemo(() => {
+    if (!holdingsQueries.data) return [];
+
+    const tickerSet = new Set<string>();
+    holdingsQueries.data.forEach((holding) => {
+      if (holding.ticker) {
+        tickerSet.add(holding.ticker);
+      }
+    });
+
+    return Array.from(tickerSet).sort();
+  }, [holdingsQueries.data]);
+
+  // Check if selected ticker might be unsupported
+  const getTickerWarning = (ticker: string): string | null => {
+    if (!holdingsQueries.data) return null;
+
+    const holding = holdingsQueries.data.find(h => h.ticker === ticker);
+    if (!holding) return null;
+
+    const category = holding.asset_category?.toLowerCase() || '';
+    const name = holding.holding_name?.toLowerCase() || '';
+
+    // Check for mutual funds, money market, bonds, etc.
+    if (category.includes('mutual') || category.includes('fund') ||
+        name.includes('money market') || name.includes('mutual fund') ||
+        category.includes('bond') || category.includes('fixed income')) {
+      return 'This ticker appears to be a mutual fund, bond, or money market fund. Historical price data may not be available.';
+    }
+
+    return null;
+  };
+
+  // Auto-select first ticker if none selected
+  useMemo(() => {
+    if (!selectedTicker && availableTickers.length > 0) {
+      setSelectedTicker(availableTickers[0]);
+    }
+  }, [availableTickers, selectedTicker]);
+
+  return (
+    <Box>
+      <Typography variant="h4" gutterBottom>
+        Rolling Beta Analysis
+      </Typography>
+
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Grid container spacing={3}>
+          {/* Portfolio Selector */}
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth>
+              <InputLabel>Portfolio</InputLabel>
+              <Select
+                value={selectedPortfolioId ?? ''}
+                onChange={(e) => onPortfolioChange(e.target.value)}
+                label="Portfolio"
+              >
+                {(portfoliosQ.data ?? []).map((p) => (
+                  <MenuItem key={p.id} value={p.id}>
+                    {p.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Ticker Selector */}
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth disabled={availableTickers.length === 0}>
+              <InputLabel>Ticker</InputLabel>
+              <Select
+                value={selectedTicker}
+                onChange={(e) => setSelectedTicker(e.target.value)}
+                label="Ticker"
+              >
+                {availableTickers.map((ticker) => (
+                  <MenuItem key={ticker} value={ticker}>
+                    {ticker}
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>
+                Best results with stocks and ETFs
+              </FormHelperText>
+            </FormControl>
+          </Grid>
+
+          {/* Benchmark Selector */}
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth>
+              <InputLabel>Benchmark</InputLabel>
+              <Select
+                value={selectedBenchmark}
+                onChange={(e) => setSelectedBenchmark(e.target.value)}
+                label="Benchmark"
+              >
+                {BENCHMARKS.map((benchmark) => (
+                  <MenuItem key={benchmark.value} value={benchmark.value}>
+                    {benchmark.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+
+        <Alert severity="info" sx={{ mt: 2 }}>
+          Rolling beta shows how a stock's correlation with a benchmark changes over time.
+          Select a ticker from your portfolio and a benchmark to analyze.
+        </Alert>
+
+        {selectedTicker && getTickerWarning(selectedTicker) && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            {getTickerWarning(selectedTicker)}
+          </Alert>
+        )}
+      </Paper>
+
+      {/* Render Rolling Beta Chart */}
+      {selectedPortfolioId && selectedTicker ? (
+        <RollingBetaChart
+          ticker={selectedTicker}
+          benchmark={selectedBenchmark}
+          days={days}
+        />
+      ) : (
+        <Alert severity="info">
+          Please select a portfolio to view rolling beta analysis.
+        </Alert>
+      )}
+    </Box>
+  );
+}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   Card,
@@ -12,6 +12,13 @@ import {
   Chip,
   Stack,
   Tooltip as MuiTooltip,
+  Button,
+  LinearProgress,
+  Paper,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   LineChart,
@@ -24,8 +31,15 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { TrendingUp, ShowChart } from '@mui/icons-material';
-import { getRollingBeta } from '../lib/endpoints';
+import {
+  TrendingUp,
+  ShowChart,
+  Download,
+  CheckCircle,
+  Info,
+  Timeline
+} from '@mui/icons-material';
+import { getRollingBeta, updatePriceHistory } from '../lib/endpoints';
 import type { RollingBetaAnalysis, BetaPoint } from '../types';
 
 interface RollingBetaChartProps {
@@ -38,6 +52,7 @@ type WindowSize = '30d' | '60d' | '90d';
 
 export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: RollingBetaChartProps) {
   const [selectedWindow, setSelectedWindow] = useState<WindowSize>('90d');
+  const queryClient = useQueryClient();
 
   // Fetch rolling beta data
   const rollingBetaQuery = useQuery({
@@ -45,6 +60,15 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
     queryFn: () => getRollingBeta(ticker, days, benchmark),
     staleTime: 1000 * 60 * 60, // 1 hour
     retry: 1,
+  });
+
+  // Mutation for fetching price history
+  const fetchPriceMutation = useMutation({
+    mutationFn: (ticker: string) => updatePriceHistory(ticker),
+    onSuccess: () => {
+      // Invalidate and refetch rolling beta after price update
+      queryClient.invalidateQueries({ queryKey: ['rolling-beta', ticker, days, benchmark] });
+    },
   });
 
   const handleWindowToggle = (
@@ -55,6 +79,27 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
       setSelectedWindow(newWindow);
     }
   };
+
+  const handleFetchData = async () => {
+    // Fetch both ticker and benchmark data
+    try {
+      await fetchPriceMutation.mutateAsync(ticker);
+      if (benchmark && benchmark !== ticker) {
+        await fetchPriceMutation.mutateAsync(benchmark);
+      }
+    } catch (error) {
+      console.error('Error fetching price data:', error);
+    }
+  };
+
+  // Debug logging
+  console.log('RollingBetaChart state:', {
+    isLoading: rollingBetaQuery.isLoading,
+    isError: rollingBetaQuery.isError,
+    error: rollingBetaQuery.error,
+    data: rollingBetaQuery.data,
+    status: rollingBetaQuery.status
+  });
 
   if (rollingBetaQuery.isLoading) {
     return (
@@ -67,15 +112,156 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
     );
   }
 
-  if (rollingBetaQuery.error) {
-    const errorMessage = (rollingBetaQuery.error as any)?.response?.data?.error
-      || (rollingBetaQuery.error as Error).message
-      || 'Unknown error';
+  if (rollingBetaQuery.isError || rollingBetaQuery.error) {
+    // Extract error message from various possible locations
+    const error = rollingBetaQuery.error as any;
+    const errorMessage =
+      error?.response?.data?.error ||  // Standard error format
+      error?.response?.data ||         // Plain text error (503 case)
+      error?.message ||                // Error object message
+      'Unknown error';
 
+    console.log('Error details:', { error, errorMessage });
+
+    const isInsufficientData = errorMessage.includes('Insufficient price data');
+
+    if (isInsufficientData) {
+      // Extract days information from error message
+      const match = errorMessage.match(/got (\d+) for (\w+)/g);
+      const tickerDays = errorMessage.match(/got (\d+) for (\w+)/)?.[1] || '?';
+
+      return (
+        <Card elevation={2}>
+          <CardContent>
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Timeline sx={{ fontSize: 80, color: 'primary.main', mb: 2 }} />
+
+              <Typography variant="h5" gutterBottom>
+                Setup Required: Historical Price Data
+              </Typography>
+
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 600, mx: 'auto' }}>
+                Rolling beta analysis requires at least 90 days of historical price data to calculate
+                how {ticker}'s volatility correlates with {benchmark} over time.
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 3, maxWidth: 700, mx: 'auto', textAlign: 'left' }}>
+                <Typography variant="body2" gutterBottom>
+                  <strong>Current Status:</strong>
+                </Typography>
+                <Typography variant="body2">
+                  • {ticker}: {tickerDays} days (need 90+)<br/>
+                  • {benchmark}: Available ✓
+                </Typography>
+              </Alert>
+
+              <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.default', mb: 3, maxWidth: 600, mx: 'auto' }}>
+                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                  What is Rolling Beta?
+                </Typography>
+                <List dense>
+                  <ListItem>
+                    <ListItemIcon><CheckCircle color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText
+                      primary="Measures how a stock moves relative to the market"
+                      secondary="Beta = 1.0 means moves with the market, >1.0 more volatile, <1.0 less volatile"
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><ShowChart color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText
+                      primary="Shows how correlation changes over time"
+                      secondary="Helps identify regime changes and market dynamics"
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><TrendingUp color="secondary" fontSize="small" /></ListItemIcon>
+                    <ListItemText
+                      primary="Analyzes 30, 60, and 90-day windows"
+                      secondary="Multiple timeframes reveal short and long-term trends"
+                    />
+                  </ListItem>
+                </List>
+              </Paper>
+
+              <Box sx={{ mb: 2 }}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  startIcon={fetchPriceMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <Download />}
+                  onClick={handleFetchData}
+                  disabled={fetchPriceMutation.isPending}
+                  sx={{ minWidth: 250 }}
+                >
+                  {fetchPriceMutation.isPending ? 'Fetching Data...' : `Fetch Price History for ${ticker}`}
+                </Button>
+              </Box>
+
+              {fetchPriceMutation.isPending && (
+                <Box sx={{ maxWidth: 400, mx: 'auto', mb: 2 }}>
+                  <LinearProgress />
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                    Downloading historical price data from API...
+                  </Typography>
+                </Box>
+              )}
+
+              {fetchPriceMutation.isError && (
+                <Alert severity="error" sx={{ maxWidth: 500, mx: 'auto' }}>
+                  <Typography variant="body2" gutterBottom>
+                    <strong>Failed to fetch price data for {ticker}</strong>
+                  </Typography>
+                  <Typography variant="body2">
+                    {(() => {
+                      const error = fetchPriceMutation.error as any;
+                      const errorMessage = error?.response?.data || error?.message || 'Unknown error';
+
+                      // Check if it's a ticker not found error
+                      if (errorMessage.includes('not_found') || errorMessage.includes('not found')) {
+                        return `Ticker "${ticker}" may not be supported by the price provider. This often happens with mutual funds, bonds, or invalid tickers.`;
+                      }
+
+                      // Check if it's a failure cache error
+                      if (errorMessage.includes('failure cache')) {
+                        return `Ticker "${ticker}" is temporarily blocked due to previous failures. Please try again later or contact support.`;
+                      }
+
+                      return errorMessage;
+                    })()}
+                  </Typography>
+                </Alert>
+              )}
+
+              {fetchPriceMutation.isSuccess && !rollingBetaQuery.isLoading && (
+                <Alert severity="success" sx={{ maxWidth: 500, mx: 'auto' }}>
+                  ✓ Price data fetched successfully! Refreshing analysis...
+                </Alert>
+              )}
+
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 3 }}>
+                <Info fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
+                This is a one-time setup. Data will be cached and updated automatically.
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Other errors
     return (
-      <Alert severity="error">
-        Failed to load rolling beta analysis: {errorMessage}
-      </Alert>
+      <Card elevation={2}>
+        <CardContent>
+          <Alert severity="error">
+            <Typography variant="body1" gutterBottom>
+              <strong>Error loading rolling beta</strong>
+            </Typography>
+            <Typography variant="body2">
+              {errorMessage}
+            </Typography>
+          </Alert>
+        </CardContent>
+      </Card>
     );
   }
 
