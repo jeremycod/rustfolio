@@ -398,6 +398,8 @@ export type CurrentMetrics = {
     max_drawdown: number;
     sharpe_ratio?: number;
     diversification_score: number;
+    correlation_adjusted_diversification_score?: number;
+    average_correlation?: number;
     position_count: number;
     largest_position_weight: number;
     top_3_concentration: number;

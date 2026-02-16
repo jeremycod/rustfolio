@@ -21,6 +21,7 @@ import {
   CircularProgress,
   Divider,
   Stack,
+  Tooltip,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -130,12 +131,28 @@ export function OptimizationRecommendations({ portfolioId }: OptimizationRecomme
               </Typography>
             </Grid>
             <Grid item xs={12} sm={3}>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                Diversification
-              </Typography>
-              <Typography variant="h6" color="white">
-                {analysis.current_metrics.diversification_score.toFixed(1)}/10
-              </Typography>
+              <Tooltip
+                title={
+                  analysis.current_metrics.correlation_adjusted_diversification_score
+                    ? `Base Score: ${analysis.current_metrics.diversification_score.toFixed(1)} | Correlation-Adjusted: ${analysis.current_metrics.correlation_adjusted_diversification_score.toFixed(1)} (Avg Correlation: ${((analysis.current_metrics.average_correlation || 0) * 100).toFixed(0)}%)`
+                    : 'Position count + concentration (Herfindahl index)'
+                }
+                arrow
+              >
+                <Box>
+                  <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                    Diversification
+                  </Typography>
+                  <Typography variant="h6" color="white">
+                    {analysis.current_metrics.correlation_adjusted_diversification_score?.toFixed(1) || analysis.current_metrics.diversification_score.toFixed(1)}/10
+                  </Typography>
+                  {analysis.current_metrics.correlation_adjusted_diversification_score && (
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                      (correlation-adjusted)
+                    </Typography>
+                  )}
+                </Box>
+              </Tooltip>
             </Grid>
           </Grid>
 
@@ -200,6 +217,64 @@ export function OptimizationRecommendations({ portfolioId }: OptimizationRecomme
           </Grid>
         </CardContent>
       </Card>
+
+      {/* Diversification Breakdown (if correlation-adjusted score is available) */}
+      {analysis.current_metrics.correlation_adjusted_diversification_score && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Info /> Diversification Breakdown
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Your portfolio diversification is scored using two methods:
+            </Alert>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom fontWeight={600}>
+                    Basic Diversification Score
+                  </Typography>
+                  <Typography variant="h4" color="primary" gutterBottom>
+                    {analysis.current_metrics.diversification_score.toFixed(1)}/10
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Based on number of positions and concentration (Herfindahl index).
+                    Does not account for how correlated your positions are.
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    bgcolor: 'success.light',
+                    borderColor: 'success.main',
+                    borderWidth: 2,
+                  }}
+                >
+                  <Typography variant="subtitle2" gutterBottom fontWeight={600}>
+                    Correlation-Adjusted Score
+                  </Typography>
+                  <Typography variant="h4" color="success.dark" gutterBottom>
+                    {analysis.current_metrics.correlation_adjusted_diversification_score.toFixed(1)}/10
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Accounts for how your positions move together (avg correlation:{' '}
+                    <strong>{((analysis.current_metrics.average_correlation || 0) * 100).toFixed(0)}%</strong>).
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Lower correlation = better diversification = higher bonus (up to +4 points)
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recommendations */}
       <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>

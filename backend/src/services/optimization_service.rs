@@ -157,6 +157,27 @@ async fn calculate_current_metrics(
     // Calculate diversification score
     let diversification_score = calculate_diversification_score(ticker_aggregates, total_value);
 
+    // Calculate correlation-adjusted diversification score (if we have enough positions)
+    let (correlation_adjusted_score, average_correlation) = if ticker_aggregates.len() >= 2 {
+        match calculate_correlation_adjusted_diversification(
+            pool,
+            ticker_aggregates,
+            total_value,
+            price_provider,
+            failure_cache,
+        )
+        .await
+        {
+            Ok((adj_score, avg_corr)) => (Some(adj_score), Some(avg_corr)),
+            Err(e) => {
+                warn!("Could not calculate correlation-adjusted diversification: {}", e);
+                (None, None)
+            }
+        }
+    } else {
+        (None, None)
+    };
+
     // Find largest position
     let mut positions: Vec<(String, f64)> = ticker_aggregates
         .iter()
@@ -177,6 +198,8 @@ async fn calculate_current_metrics(
             None
         },
         diversification_score,
+        correlation_adjusted_diversification_score: correlation_adjusted_score,
+        average_correlation,
         position_count: ticker_aggregates.len(),
         largest_position_weight,
         top_3_concentration,
@@ -438,6 +461,82 @@ fn calculate_diversification_score(
 
     let total_score = position_score + concentration_score;
     total_score.min(10.0)
+}
+
+/// Calculate correlation-adjusted diversification score (0-10)
+/// Returns (adjusted_score, average_correlation)
+async fn calculate_correlation_adjusted_diversification(
+    pool: &PgPool,
+    ticker_aggregates: &HashMap<String, (f64, f64, Option<String>)>,
+    total_value: f64,
+    _price_provider: &dyn PriceProvider,
+    _failure_cache: &FailureCache,
+) -> Result<(f64, f64), AppError> {
+    // Calculate Herfindahl index (concentration measure) for base score
+    let herfindahl: f64 = ticker_aggregates
+        .values()
+        .map(|(_, value, _)| {
+            let weight = value / total_value;
+            weight * weight
+        })
+        .sum();
+
+    // Base score from concentration (0-6 points)
+    let concentration_score = ((1.0 - herfindahl) / (1.0 - 0.05) * 6.0).max(0.0);
+
+    // Limit to top 10 positions to avoid excessive computation
+    let mut ticker_values: Vec<(String, f64)> = ticker_aggregates
+        .iter()
+        .map(|(ticker, (_, value, _))| (ticker.clone(), *value))
+        .collect();
+    ticker_values.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    let limited_tickers: Vec<String> = ticker_values.iter().take(10).map(|(t, _)| t.clone()).collect();
+
+    // Fetch price data for all tickers
+    let mut ticker_prices: HashMap<String, Vec<crate::models::PricePoint>> = HashMap::new();
+    for ticker in &limited_tickers {
+        match crate::services::price_service::get_history(pool, ticker).await {
+            Ok(prices) if !prices.is_empty() => {
+                ticker_prices.insert(ticker.clone(), prices);
+            }
+            _ => {
+                warn!("Could not fetch price data for ticker {} in correlation calculation", ticker);
+            }
+        }
+    }
+
+    // Compute correlations between all pairs
+    let mut correlations = Vec::new();
+    for i in 0..limited_tickers.len() {
+        for j in (i + 1)..limited_tickers.len() {
+            let ticker1 = &limited_tickers[i];
+            let ticker2 = &limited_tickers[j];
+
+            if let (Some(prices1), Some(prices2)) = (
+                ticker_prices.get(ticker1),
+                ticker_prices.get(ticker2),
+            ) {
+                if let Some(corr) = risk_service::compute_correlation(prices1, prices2) {
+                    correlations.push(corr.abs()); // Use absolute correlation
+                }
+            }
+        }
+    }
+
+    let average_correlation = if !correlations.is_empty() {
+        correlations.iter().sum::<f64>() / correlations.len() as f64
+    } else {
+        0.5 // Default to moderate correlation if we can't compute
+    };
+
+    // Correlation bonus (0-4 points): lower correlation = better
+    // avg_corr = 0 (uncorrelated) → 4 points
+    // avg_corr = 1 (perfectly correlated) → 0 points
+    let correlation_bonus = (1.0 - average_correlation) * 4.0;
+
+    let adjusted_score = (concentration_score + correlation_bonus).min(10.0);
+
+    Ok((adjusted_score, average_correlation))
 }
 
 /// Assess diversification and generate recommendation if needed

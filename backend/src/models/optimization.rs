@@ -96,6 +96,8 @@ pub struct CurrentMetrics {
     pub max_drawdown: f64,
     pub sharpe_ratio: Option<f64>,
     pub diversification_score: f64,
+    pub correlation_adjusted_diversification_score: Option<f64>,
+    pub average_correlation: Option<f64>,
     pub position_count: usize,
     pub largest_position_weight: f64,
     pub top_3_concentration: f64,
