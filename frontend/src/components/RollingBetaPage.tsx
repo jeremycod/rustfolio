@@ -10,10 +10,14 @@ import {
   Grid,
   Alert,
   FormHelperText,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
+import { Timeline, Science } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { listPortfolios, listAccounts, getLatestHoldings } from '../lib/endpoints';
 import { RollingBetaChart } from './RollingBetaChart';
+import { BetaForecastChart } from './BetaForecastChart';
 
 interface RollingBetaPageProps {
   selectedPortfolioId: string | null;
@@ -38,6 +42,7 @@ export function RollingBetaPage({
   const [selectedTicker, setSelectedTicker] = useState<string>(initialTicker || '');
   const [selectedBenchmark, setSelectedBenchmark] = useState<string>('SPY');
   const [days] = useState<number>(180);
+  const [view, setView] = useState<'historical' | 'forecast'>('historical');
 
   const portfoliosQ = useQuery({
     queryKey: ['portfolios'],
@@ -179,9 +184,33 @@ export function RollingBetaPage({
           </Grid>
         </Grid>
 
+        {/* View Toggle */}
+        {selectedTicker && (
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <ToggleButtonGroup
+              value={view}
+              exclusive
+              onChange={(_, newView) => newView && setView(newView)}
+              size="small"
+              fullWidth
+            >
+              <ToggleButton value="historical">
+                <Timeline sx={{ mr: 1 }} />
+                Historical Beta
+              </ToggleButton>
+              <ToggleButton value="forecast">
+                <Science sx={{ mr: 1 }} />
+                Beta Forecast
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        )}
+
         <Alert severity="info" sx={{ mt: 2 }}>
-          Rolling beta shows how a stock's correlation with a benchmark changes over time.
-          Select a ticker from your portfolio and a benchmark to analyze.
+          {view === 'historical'
+            ? 'Rolling beta shows how a stock\'s correlation with a benchmark changes over time. Select a ticker from your portfolio and a benchmark to analyze.'
+            : 'Beta forecasting predicts future beta values using historical patterns, mean reversion, and trend analysis.'
+          }
         </Alert>
 
         {selectedTicker && getTickerWarning(selectedTicker) && (
@@ -191,13 +220,20 @@ export function RollingBetaPage({
         )}
       </Paper>
 
-      {/* Render Rolling Beta Chart */}
+      {/* Render Chart Based on View */}
       {selectedPortfolioId && selectedTicker ? (
-        <RollingBetaChart
-          ticker={selectedTicker}
-          benchmark={selectedBenchmark}
-          days={days}
-        />
+        view === 'historical' ? (
+          <RollingBetaChart
+            ticker={selectedTicker}
+            benchmark={selectedBenchmark}
+            days={days}
+          />
+        ) : (
+          <BetaForecastChart
+            ticker={selectedTicker}
+            benchmark={selectedBenchmark}
+          />
+        )
       ) : (
         <Alert severity="info">
           Please select a portfolio to view rolling beta analysis.

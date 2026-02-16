@@ -960,19 +960,45 @@ pub async fn compute_rolling_beta(
         ));
     }
 
-    // Convert to vectors of (date, price)
-    let ticker_data: Vec<(chrono::NaiveDate, f64)> = ticker_prices
+    // Convert to maps for date alignment
+    let ticker_map: std::collections::HashMap<chrono::NaiveDate, f64> = ticker_prices
         .iter()
         .filter_map(|p| {
             p.close_price.to_f64().map(|price| (p.date, price))
         })
         .collect();
 
-    let benchmark_data: Vec<(chrono::NaiveDate, f64)> = benchmark_prices
+    let benchmark_map: std::collections::HashMap<chrono::NaiveDate, f64> = benchmark_prices
         .iter()
         .filter_map(|p| {
             p.close_price.to_f64().map(|price| (p.date, price))
         })
+        .collect();
+
+    // Find common dates and create aligned vectors
+    let mut common_dates: Vec<chrono::NaiveDate> = ticker_map
+        .keys()
+        .filter(|date| benchmark_map.contains_key(date))
+        .copied()
+        .collect();
+    common_dates.sort();
+
+    if common_dates.len() < 90 {
+        return Err(AppError::External(
+            format!("Insufficient aligned price data for rolling beta. Need at least 90 common dates, got {}",
+                common_dates.len())
+        ));
+    }
+
+    // Create aligned data vectors
+    let ticker_data: Vec<(chrono::NaiveDate, f64)> = common_dates
+        .iter()
+        .map(|date| (*date, ticker_map[date]))
+        .collect();
+
+    let benchmark_data: Vec<(chrono::NaiveDate, f64)> = common_dates
+        .iter()
+        .map(|date| (*date, benchmark_map[date]))
         .collect();
 
     // Calculate rolling beta for each window size

@@ -92,15 +92,6 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
     }
   };
 
-  // Debug logging
-  console.log('RollingBetaChart state:', {
-    isLoading: rollingBetaQuery.isLoading,
-    isError: rollingBetaQuery.isError,
-    error: rollingBetaQuery.error,
-    data: rollingBetaQuery.data,
-    status: rollingBetaQuery.status
-  });
-
   if (rollingBetaQuery.isLoading) {
     return (
       <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight="400px" gap={2}>
@@ -373,6 +364,7 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
               <YAxis
                 yAxisId="left"
                 label={{ value: 'Beta', angle: -90, position: 'insideLeft' }}
+                domain={[(dataMin: number) => Math.min(dataMin, 0.5), (dataMax: number) => Math.max(dataMax, 1.5)]}
               />
               <YAxis
                 yAxisId="right"

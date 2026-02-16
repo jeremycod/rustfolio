@@ -58,3 +58,38 @@ pub struct HistoricalDataPoint {
     pub date: String,
     pub value: f64,
 }
+
+/// Single point in a beta forecast time series
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BetaForecastPoint {
+    pub date: String,
+    pub predicted_beta: f64,
+    pub lower_bound: f64,
+    pub upper_bound: f64,
+    pub confidence_level: f64,
+}
+
+/// Beta regime change detection
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BetaRegimeChange {
+    pub date: String,
+    pub beta_before: f64,
+    pub beta_after: f64,
+    pub z_score: f64,
+    pub regime_type: String, // "mean_reversion", "structural_break", "high_volatility"
+}
+
+/// Complete beta forecast for a position
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BetaForecast {
+    pub ticker: String,
+    pub benchmark: String,
+    pub current_beta: f64,
+    pub beta_volatility: f64,
+    pub forecast_points: Vec<BetaForecastPoint>,
+    pub methodology: ForecastMethod,
+    pub confidence_level: f64,
+    pub regime_changes: Vec<BetaRegimeChange>,
+    pub warnings: Vec<String>,
+    pub generated_at: DateTime<Utc>,
+}

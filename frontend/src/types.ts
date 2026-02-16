@@ -304,6 +304,36 @@ export type RollingBetaAnalysis = {
     beta_volatility: number;
 };
 
+// Beta Forecast Types
+export type BetaForecastPoint = {
+    date: string;
+    predicted_beta: number;
+    lower_bound: number;
+    upper_bound: number;
+    confidence_level: number;
+};
+
+export type BetaRegimeChange = {
+    date: string;
+    beta_before: number;
+    beta_after: number;
+    z_score: number;
+    regime_type: string;
+};
+
+export type BetaForecast = {
+    ticker: string;
+    benchmark: string;
+    current_beta: number;
+    beta_volatility: number;
+    forecast_points: BetaForecastPoint[];
+    methodology: ForecastMethod;
+    confidence_level: number;
+    regime_changes: BetaRegimeChange[];
+    warnings: string[];
+    generated_at: string;
+};
+
 // Historical Risk Tracking Types
 export type RiskSnapshot = {
     id: string;

@@ -19,6 +19,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/positions/:ticker", get(get_position_risk))
         .route("/positions/:ticker/rolling-beta", get(get_rolling_beta))
+        .route("/positions/:ticker/beta-forecast", get(get_beta_forecast))
         .route("/portfolios/:portfolio_id", get(get_portfolio_risk))
         .route("/portfolios/:portfolio_id/correlations", get(get_portfolio_correlations))
         .route("/portfolios/:portfolio_id/snapshot", post(create_portfolio_snapshot))
@@ -297,6 +298,78 @@ pub async fn get_rolling_beta(
     );
 
     Ok(Json(analysis))
+}
+
+/// Query parameters for beta forecast
+#[derive(Debug, Deserialize)]
+pub struct BetaForecastParams {
+    /// Number of days to forecast (default: 30, max: 90)
+    #[serde(default = "default_forecast_days")]
+    pub days: i32,
+
+    /// Benchmark ticker (default: "SPY")
+    #[serde(default = "default_benchmark")]
+    pub benchmark: String,
+
+    /// Forecasting method (optional)
+    pub method: Option<String>,
+}
+
+fn default_forecast_days() -> i32 {
+    30
+}
+
+/// GET /api/risk/positions/:ticker/beta-forecast
+///
+/// Generate beta forecast for a position using historical rolling beta data.
+///
+/// Query parameters:
+/// - `days`: Forecast horizon in days (default: 30, max: 90)
+/// - `benchmark`: Benchmark ticker (default: SPY)
+/// - `method`: Forecasting method (linear_regression, exponential_smoothing, mean_reversion, ensemble)
+pub async fn get_beta_forecast(
+    Path(ticker): Path<String>,
+    Query(params): Query<BetaForecastParams>,
+    State(state): State<AppState>,
+) -> Result<Json<crate::models::forecast::BetaForecast>, AppError> {
+    use std::time::Instant;
+
+    let days = params.days.clamp(1, 90); // Max 90 days forecast
+
+    let start = Instant::now();
+    info!(
+        "GET /api/risk/positions/{}/beta-forecast - Generating forecast (days={}, benchmark={}, method={:?})",
+        ticker, days, params.benchmark, params.method
+    );
+
+    // Parse method parameter
+    let method = params.method.as_deref().and_then(|m| match m {
+        "linear_regression" => Some(crate::models::forecast::ForecastMethod::LinearRegression),
+        "exponential_smoothing" => Some(crate::models::forecast::ForecastMethod::ExponentialSmoothing),
+        "mean_reversion" => Some(crate::models::forecast::ForecastMethod::MovingAverage),
+        "ensemble" => Some(crate::models::forecast::ForecastMethod::Ensemble),
+        _ => None,
+    });
+
+    // Generate forecast
+    let forecast = crate::services::beta_forecasting_service::generate_beta_forecast(
+        &state.pool,
+        &ticker,
+        &params.benchmark,
+        days,
+        method,
+        state.price_provider.as_ref(),
+        &state.failure_cache,
+    )
+    .await?;
+
+    info!(
+        "Successfully generated beta forecast for {} in {:?}",
+        ticker,
+        start.elapsed()
+    );
+
+    Ok(Json(forecast))
 }
 
 /// GET /api/risk/portfolios/:portfolio_id

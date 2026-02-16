@@ -32,7 +32,9 @@ import type {
     NewsTheme,
     PortfolioQuestion,
     PortfolioAnswer,
-    PortfolioForecast
+    PortfolioForecast,
+    BetaForecast,
+    ForecastMethod
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -235,6 +237,25 @@ export async function getRollingBeta(
 
     // Use longer timeout for rolling beta calculation (2 minutes)
     const res = await api.get(url, { timeout: 120000 });
+    return res.data;
+}
+
+export async function getBetaForecast(
+    ticker: string,
+    days: number = 30,
+    benchmark: string = 'SPY',
+    method?: ForecastMethod
+): Promise<BetaForecast> {
+    const params = new URLSearchParams();
+    params.append('days', days.toString());
+    params.append('benchmark', benchmark);
+    if (method) params.append('method', method);
+
+    const queryString = params.toString();
+    const url = `/api/risk/positions/${ticker}/beta-forecast${queryString ? `?${queryString}` : ''}`;
+
+    // Longer timeout for forecast calculation (60 seconds)
+    const res = await api.get(url, { timeout: 60000 });
     return res.data;
 }
 
