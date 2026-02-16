@@ -1,13 +1,23 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
 use axum::routing::get;
+use serde::Deserialize;
 use uuid::Uuid;
 use crate::errors::AppError;
+use crate::models::{ForecastMethod, PortfolioForecast};
 use crate::services;
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/:portfolio_id", get(get_analytics))
+    Router::new()
+        .route("/:portfolio_id", get(get_analytics))
+        .route("/:portfolio_id/forecast", get(get_portfolio_forecast))
+}
+
+#[derive(Debug, Deserialize)]
+struct ForecastQuery {
+    days: Option<i32>,
+    method: Option<String>,
 }
 
 async fn get_analytics(
@@ -17,4 +27,29 @@ async fn get_analytics(
     services::analytics_service::get_analytics(&state.pool, portfolio_id)
         .await
         .map(Json)
+}
+
+async fn get_portfolio_forecast(
+    Path(portfolio_id): Path<Uuid>,
+    Query(params): Query<ForecastQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<PortfolioForecast>, AppError> {
+    let days_ahead = params.days.unwrap_or(30).min(90); // Cap at 90 days
+
+    let method = params.method.as_ref().and_then(|m| match m.as_str() {
+        "linear" => Some(ForecastMethod::LinearRegression),
+        "exponential" => Some(ForecastMethod::ExponentialSmoothing),
+        "moving_average" => Some(ForecastMethod::MovingAverage),
+        "ensemble" => Some(ForecastMethod::Ensemble),
+        _ => None,
+    });
+
+    services::forecasting_service::generate_portfolio_forecast(
+        &state.pool,
+        portfolio_id,
+        days_ahead,
+        method,
+    )
+    .await
+    .map(Json)
 }

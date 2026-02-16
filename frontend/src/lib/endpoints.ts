@@ -31,7 +31,8 @@ import type {
     PortfolioNewsAnalysis,
     NewsTheme,
     PortfolioQuestion,
-    PortfolioAnswer
+    PortfolioAnswer,
+    PortfolioForecast
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -50,6 +51,23 @@ export async function deletePortfolio(portfolioId: string): Promise<void> {
 
 export async function getAnalytics(portfolioId: string): Promise<AnalyticsResponse> {
     const res = await api.get(`/api/analytics/${portfolioId}`);
+    return res.data;
+}
+
+export async function getPortfolioForecast(
+    portfolioId: string,
+    days?: number,
+    method?: string
+): Promise<PortfolioForecast> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+    if (method) params.append('method', method);
+
+    const queryString = params.toString();
+    const url = `/api/analytics/${portfolioId}/forecast${queryString ? `?${queryString}` : ''}`;
+
+    // Use longer timeout for forecast calculation (60 seconds)
+    const res = await api.get(url, { timeout: 60000 });
     return res.data;
 }
 
@@ -183,7 +201,8 @@ export async function getPortfolioRisk(
     const queryString = params.toString();
     const url = `/api/risk/portfolios/${portfolioId}${queryString ? `?${queryString}` : ''}`;
 
-    const res = await api.get(url);
+    // Use longer timeout for risk calculation (2 minutes)
+    const res = await api.get(url, { timeout: 120000 });
     return res.data;
 }
 

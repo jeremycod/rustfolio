@@ -546,3 +546,24 @@ export type QAConversation = {
     question: PortfolioQuestion;
     answer: PortfolioAnswer;
 };
+
+// Forecasting Types
+export type ForecastPoint = {
+    date: string;
+    predicted_value: number;
+    lower_bound: number;
+    upper_bound: number;
+    confidence_level: number; // e.g., 0.95 for 95%
+};
+
+export type ForecastMethod = 'linear_regression' | 'exponential_smoothing' | 'moving_average' | 'ensemble';
+
+export type PortfolioForecast = {
+    portfolio_id: string;
+    current_value: number;
+    forecast_points: ForecastPoint[];
+    methodology: ForecastMethod;
+    confidence_level: number;
+    warnings: string[];
+    generated_at: string; // ISO 8601 timestamp
+};

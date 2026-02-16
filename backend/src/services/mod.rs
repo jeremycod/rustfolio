@@ -12,4 +12,5 @@ pub mod llm_service;
 pub mod narrative_service;
 pub mod news_service;
 pub mod qa_service;
+pub mod forecasting_service;
 mod indicators;

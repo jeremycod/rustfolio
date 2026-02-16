@@ -16,10 +16,13 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { getAnalytics, listPortfolios } from '../lib/endpoints';
+import { getAnalytics, listPortfolios, getPortfolioHistory, getPortfolioRisk } from '../lib/endpoints';
 import { PortfolioChart } from './PortfolioChart';
+import { ForecastChart } from './ForecastChart';
 
 interface AnalyticsProps {
   selectedPortfolioId: string | null;
@@ -27,6 +30,7 @@ interface AnalyticsProps {
 }
 
 export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsProps) {
+  const [currentTab, setCurrentTab] = useState(0);
   const [dateRange, setDateRange] = useState('3m');
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [overlays, setOverlays] = useState({
@@ -47,12 +51,58 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
     queryFn: listPortfolios,
   });
 
+  const historyQ = useQuery({
+    queryKey: ['portfolio-history', selectedPortfolioId],
+    queryFn: () => getPortfolioHistory(selectedPortfolioId!),
+    enabled: !!selectedPortfolioId,
+  });
+
+  const riskQ = useQuery({
+    queryKey: ['portfolio-risk', selectedPortfolioId],
+    queryFn: () => getPortfolioRisk(selectedPortfolioId!, 90), // Use 90 days for faster calculation
+    enabled: !!selectedPortfolioId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
   const handleOverlayChange = (overlay: keyof typeof overlays) => {
     setOverlays(prev => ({ ...prev, [overlay]: !prev[overlay] }));
   };
 
-  const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
   const formatPercent = (value: number) => `${value.toFixed(2)}%`;
+
+  // Calculate current portfolio metrics from history
+  const portfolioMetrics = historyQ.data ? (() => {
+    // Group by date and sum values
+    const byDate = historyQ.data.reduce((acc, record) => {
+      const date = record.snapshot_date;
+      if (!acc[date]) {
+        acc[date] = { totalValue: 0, totalCost: 0 };
+      }
+      acc[date].totalValue += parseFloat(record.total_value);
+      acc[date].totalCost += parseFloat(record.total_cost);
+      return acc;
+    }, {} as Record<string, { totalValue: number; totalCost: number }>);
+
+    // Get latest date
+    const dates = Object.keys(byDate).sort();
+    const latestDate = dates[dates.length - 1];
+    const latest = byDate[latestDate];
+
+    const totalValue = latest.totalValue;
+    const totalCost = latest.totalCost;
+    const totalPL = totalValue - totalCost;
+    const returnPct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
+
+    return { totalValue, totalCost, totalPL, returnPct };
+  })() : null;
 
   return (
     <Box>
@@ -78,8 +128,17 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
         </FormControl>
       </Box>
 
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={currentTab} onChange={(_, newValue) => setCurrentTab(newValue)}>
+          <Tab label="Portfolio Performance" />
+          <Tab label="Portfolio Value Forecast" />
+        </Tabs>
+      </Box>
 
-      <Grid container spacing={3}>
+      {/* Tab Panel 1: Portfolio Performance */}
+      {currentTab === 0 && (
+        <Grid container spacing={3}>
         {/* Main Chart */}
         <Grid item xs={12} lg={8}>
           <Paper sx={{ p: 3 }}>
@@ -197,30 +256,34 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
                       <Typography variant="body2" color="error.main">{formatPercent(-2.30)}</Typography>
                     </Box>
                   </Box>
-                ) : (
-                  // Portfolio metrics
+                ) : portfolioMetrics ? (
+                  // Portfolio metrics (from real data)
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Total Value:</Typography>
-                      <Typography variant="body2">{formatCurrency(15750.00)}</Typography>
+                      <Typography variant="body2">{formatCurrency(portfolioMetrics.totalValue)}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Total Cost:</Typography>
-                      <Typography variant="body2">{formatCurrency(15000.00)}</Typography>
+                      <Typography variant="body2">{formatCurrency(portfolioMetrics.totalCost)}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Total P/L:</Typography>
-                      <Typography variant="body2" color="success.main">{formatCurrency(750.00)}</Typography>
+                      <Typography variant="body2" color={portfolioMetrics.totalPL >= 0 ? "success.main" : "error.main"}>
+                        {formatCurrency(portfolioMetrics.totalPL)}
+                      </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Return %:</Typography>
-                      <Typography variant="body2" color="success.main">{formatPercent(5.00)}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">Sharpe Ratio:</Typography>
-                      <Typography variant="body2">1.25</Typography>
+                      <Typography variant="body2" color={portfolioMetrics.returnPct >= 0 ? "success.main" : "error.main"}>
+                        {formatPercent(portfolioMetrics.returnPct)}
+                      </Typography>
                     </Box>
                   </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Loading portfolio metrics...
+                  </Typography>
                 )}
               </CardContent>
             </Card>
@@ -231,20 +294,46 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
                 <Typography variant="h6" gutterBottom>
                   Risk Analysis
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">Volatility:</Typography>
-                    <Typography variant="body2">{formatPercent(18.5)}</Typography>
+                {riskQ.isLoading ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Loading risk metrics...
+                  </Typography>
+                ) : riskQ.isError ? (
+                  <Alert severity="error" sx={{ mt: 1 }}>
+                    Failed to load risk metrics. {(riskQ.error as Error)?.message || 'Unknown error'}
+                  </Alert>
+                ) : riskQ.data ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Volatility:</Typography>
+                      <Typography variant="body2">{formatPercent(riskQ.data.portfolio_volatility)}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Beta (SPY):</Typography>
+                      <Typography variant="body2">
+                        {riskQ.data.portfolio_beta?.toFixed(2) ?? 'N/A'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Sharpe Ratio:</Typography>
+                      <Typography variant="body2">
+                        {riskQ.data.portfolio_sharpe?.toFixed(2) ?? 'N/A'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Max Drawdown:</Typography>
+                      <Typography variant="body2" color="error.main">
+                        {formatPercent(riskQ.data.portfolio_max_drawdown)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Risk Score:</Typography>
+                      <Typography variant="body2">
+                        {riskQ.data.portfolio_risk_score.toFixed(1)}
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">Beta:</Typography>
-                    <Typography variant="body2">1.15</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">VaR (95%):</Typography>
-                    <Typography variant="body2" color="error.main">{formatCurrency(-450.00)}</Typography>
-                  </Box>
-                </Box>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -270,6 +359,20 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
           </Box>
         </Grid>
       </Grid>
+      )}
+
+      {/* Tab Panel 2: Portfolio Value Forecast */}
+      {currentTab === 1 && selectedPortfolioId && (
+        <Box>
+          <ForecastChart portfolioId={selectedPortfolioId} />
+        </Box>
+      )}
+
+      {currentTab === 1 && !selectedPortfolioId && (
+        <Alert severity="info">
+          Please select a portfolio to view the forecast.
+        </Alert>
+      )}
     </Box>
   );
 }

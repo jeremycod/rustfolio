@@ -276,7 +276,7 @@ Enhance risk analysis with industry-standard metrics and correlation analysis to
 
 ---
 
-### Sprint 13: Narrative Portfolio Summaries
+### LLSprint 13: Narrative Portfolio Summaries
 
 **Time Estimate**: 1 week
 
