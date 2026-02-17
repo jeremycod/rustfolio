@@ -34,7 +34,9 @@ import type {
     PortfolioAnswer,
     PortfolioForecast,
     BetaForecast,
-    ForecastMethod
+    ForecastMethod,
+    SentimentSignal,
+    PortfolioSentimentAnalysis
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -256,6 +258,28 @@ export async function getBetaForecast(
 
     // Longer timeout for forecast calculation (60 seconds)
     const res = await api.get(url, { timeout: 60000 });
+    return res.data;
+}
+
+// Sentiment Analysis endpoints (Sprint 18)
+export async function getPositionSentiment(
+    ticker: string,
+    days: number = 30
+): Promise<SentimentSignal> {
+    const res = await api.get(
+        `/api/sentiment/positions/${ticker}/sentiment?days=${days}`,
+        { timeout: 60000 }
+    );
+    return res.data;
+}
+
+export async function getPortfolioSentiment(
+    portfolioId: string
+): Promise<PortfolioSentimentAnalysis> {
+    const res = await api.get(
+        `/api/sentiment/portfolios/${portfolioId}/sentiment`,
+        { timeout: 60000 }
+    );
     return res.data;
 }
 

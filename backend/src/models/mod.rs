@@ -13,6 +13,7 @@ pub mod narrative;
 pub mod news;
 pub mod qa;
 pub mod forecast;
+pub mod sentiment;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -41,3 +42,7 @@ pub use narrative::{PortfolioNarrative, GenerateNarrativeRequest};
 pub use news::{NewsArticle, Sentiment, NewsTheme, PortfolioNewsAnalysis, NewsQueryParams};
 pub use qa::{PortfolioQuestion, PortfolioAnswer, Confidence, QAConversation};
 pub use forecast::{PortfolioForecast, ForecastPoint, ForecastMethod, HistoricalDataPoint};
+pub use sentiment::{
+    SentimentTrend, MomentumTrend, DivergenceType, SentimentDataPoint,
+    SentimentSignal, PortfolioSentimentAnalysis,
+};

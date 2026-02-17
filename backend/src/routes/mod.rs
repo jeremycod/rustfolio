@@ -12,4 +12,5 @@ pub mod optimization;
 pub mod llm;
 pub mod news;
 pub mod qa;
+pub mod sentiment;
 

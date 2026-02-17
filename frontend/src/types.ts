@@ -334,6 +334,42 @@ export type BetaForecast = {
     generated_at: string;
 };
 
+// Sentiment Analysis Types (Sprint 18)
+export type SentimentTrend = 'improving' | 'stable' | 'deteriorating';
+export type MomentumTrend = 'bullish' | 'neutral' | 'bearish';
+export type DivergenceType = 'bullish' | 'bearish' | 'confirmed' | 'none';
+
+export type SentimentDataPoint = {
+    date: string;
+    sentiment_score: number; // -1.0 to +1.0
+    news_volume: number;
+    price?: number;
+};
+
+export type SentimentSignal = {
+    ticker: string;
+    current_sentiment: number; // -1.0 to +1.0
+    sentiment_trend: SentimentTrend;
+    momentum_trend: MomentumTrend;
+    divergence: DivergenceType;
+    sentiment_price_correlation?: number; // -1 to +1
+    correlation_lag_days?: number;
+    correlation_strength?: string; // "strong", "moderate", "weak"
+    historical_sentiment: SentimentDataPoint[];
+    news_articles_analyzed: number;
+    calculated_at: string;
+    warnings: string[];
+};
+
+export type PortfolioSentimentAnalysis = {
+    portfolio_id: string;
+    signals: SentimentSignal[];
+    portfolio_avg_sentiment: number;
+    bullish_divergences: number;
+    bearish_divergences: number;
+    calculated_at: string;
+};
+
 // Historical Risk Tracking Types
 export type RiskSnapshot = {
     id: string;

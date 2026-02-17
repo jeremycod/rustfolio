@@ -1,6 +1,6 @@
 use axum::Router;
 
-use crate::routes::{portfolios, prices, analytics, health, accounts, imports, cash_flows, transactions, admin, risk, optimization, llm, news, qa};
+use crate::routes::{portfolios, prices, analytics, health, accounts, imports, cash_flows, transactions, admin, risk, optimization, llm, news, qa, sentiment};
 use crate::state::AppState;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use http::header::{AUTHORIZATION, CONTENT_TYPE, HeaderValue};
@@ -31,6 +31,7 @@ pub fn create_app(state: AppState) -> Router {
         .nest("/api/llm", llm::router())
         .nest("/api/news", news::router())
         .nest("/api/qa", qa::router())
+        .nest("/api/sentiment", sentiment::router())
         .with_state(state)
         .layer(cors)
 }

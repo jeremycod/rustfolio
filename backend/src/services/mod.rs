@@ -14,4 +14,5 @@ pub mod news_service;
 pub mod qa_service;
 pub mod forecasting_service;
 pub mod beta_forecasting_service;
+pub mod sentiment_service;
 mod indicators;
