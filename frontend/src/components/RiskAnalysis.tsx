@@ -22,6 +22,7 @@ import { PriceHistoryChart } from './PriceHistoryChart';
 import { RiskChart } from './RiskChart';
 import { RiskHistoryChart } from './RiskHistoryChart';
 import { SentimentDashboard } from './SentimentDashboard';
+import { EnhancedSentimentDashboard } from './EnhancedSentimentDashboard';
 
 interface RiskAnalysisProps {
   selectedTicker?: string | null;
@@ -192,6 +193,7 @@ export function RiskAnalysis({ selectedTicker }: RiskAnalysisProps) {
               <Tab label="Risk Trends" />
               <Tab label="Risk History" />
               <Tab label="Sentiment Signals 🧪" />
+              <Tab label="Enhanced Sentiment 🚀" />
             </Tabs>
           </Box>
 
@@ -239,6 +241,11 @@ export function RiskAnalysis({ selectedTicker }: RiskAnalysisProps) {
           {/* Sentiment Signals Tab */}
           {activeTab === 4 && (
             <SentimentDashboard ticker={searchTicker} />
+          )}
+
+          {/* Enhanced Sentiment Tab */}
+          {activeTab === 5 && (
+            <EnhancedSentimentDashboard ticker={searchTicker} />
           )}
         </Box>
       )}

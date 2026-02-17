@@ -283,6 +283,17 @@ export async function getPortfolioSentiment(
     return res.data;
 }
 
+export async function getEnhancedSentiment(
+    ticker: string,
+    days: number = 30
+): Promise<EnhancedSentimentSignal> {
+    const res = await api.get(
+        `/api/sentiment/positions/${ticker}/enhanced-sentiment?days=${days}`,
+        { timeout: 120000 }
+    );
+    return res.data;
+}
+
 export async function updatePriceHistory(ticker: string): Promise<void> {
     const res = await api.post(`/api/prices/${ticker}/update`, {}, { timeout: 60000 });
     return res.data;

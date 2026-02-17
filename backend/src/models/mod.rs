@@ -14,6 +14,7 @@ pub mod news;
 pub mod qa;
 pub mod forecast;
 pub mod sentiment;
+pub mod sec_filing;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -45,4 +46,9 @@ pub use forecast::{PortfolioForecast, ForecastPoint, ForecastMethod, HistoricalD
 pub use sentiment::{
     SentimentTrend, MomentumTrend, DivergenceType, SentimentDataPoint,
     SentimentSignal, PortfolioSentimentAnalysis,
+};
+pub use sec_filing::{
+    FilingType, SecFiling, EventImportance, MaterialEvent,
+    InsiderTransactionType, InsiderTransaction, InsiderConfidence, InsiderSentiment,
+    ConfidenceLevel, EnhancedSentimentSignal,
 };

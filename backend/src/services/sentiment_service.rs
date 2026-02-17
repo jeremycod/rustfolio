@@ -1,6 +1,6 @@
 use crate::models::{
     SentimentTrend, MomentumTrend, DivergenceType, SentimentDataPoint,
-    SentimentSignal, NewsTheme, PricePoint, Sentiment,
+    SentimentSignal, NewsTheme, PricePoint, Sentiment, NewsArticle,
 };
 use crate::errors::AppError;
 use chrono::{Utc, Duration, NaiveDate};
@@ -344,7 +344,6 @@ pub async fn generate_sentiment_signal(
 }
 
 /// Build sentiment timeline by aggregating news by date
-/// Note: Since NewsTheme doesn't have a date field, we aggregate all themes as a single point
 fn build_sentiment_timeline(
     themes: &[NewsTheme],
     prices: &[PricePoint],
@@ -358,21 +357,63 @@ fn build_sentiment_timeline(
         .filter_map(|p| p.close_price.to_f64().map(|price| (p.date, price)))
         .collect();
 
-    // Generate timeline with sentiment score applied uniformly
-    // (This is a simplification since themes don't have individual dates)
+    // Group articles by date
+    let mut articles_by_date: HashMap<NaiveDate, Vec<(NewsArticle, Sentiment, f64)>> = HashMap::new();
+
+    for theme in themes {
+        for article in &theme.articles {
+            let article_date = article.published_at.date_naive();
+            articles_by_date
+                .entry(article_date)
+                .or_insert_with(Vec::new)
+                .push((article.clone(), theme.sentiment, theme.relevance_score));
+        }
+    }
+
+    // Generate timeline with per-day sentiment
     let end_date = Utc::now().date_naive();
     let start_date = end_date - Duration::days(days as i64);
 
     let mut timeline = Vec::new();
-    let overall_sentiment = calculate_sentiment_score(themes);
     let mut current_date = start_date;
+
+    // Calculate fallback sentiment for days with no news
+    let overall_sentiment = calculate_sentiment_score(themes);
 
     while current_date <= end_date {
         if let Some(price) = price_map.get(&current_date).copied() {
+            // Calculate sentiment for this specific date
+            let (sentiment_score, news_count) = if let Some(day_articles) = articles_by_date.get(&current_date) {
+                // Calculate weighted sentiment for this day's articles
+                let mut weighted_sum = 0.0;
+                let mut total_weight = 0.0;
+
+                for (_article, sentiment, relevance) in day_articles {
+                    let sentiment_value = match sentiment {
+                        Sentiment::Positive => 0.7,
+                        Sentiment::Negative => -0.7,
+                        Sentiment::Neutral => 0.0,
+                    };
+                    weighted_sum += sentiment_value * relevance;
+                    total_weight += relevance;
+                }
+
+                let score = if total_weight > 0.0 {
+                    (weighted_sum / total_weight).clamp(-1.0, 1.0)
+                } else {
+                    0.0
+                };
+
+                (score, day_articles.len() as i32)
+            } else {
+                // No news for this day - use overall sentiment or neutral
+                (overall_sentiment * 0.5, 0) // Decay to neutral on no-news days
+            };
+
             timeline.push(SentimentDataPoint {
                 date: current_date.format("%Y-%m-%d").to_string(),
-                sentiment_score: overall_sentiment,
-                news_volume: themes.len() as i32,
+                sentiment_score,
+                news_volume: news_count,
                 price: Some(price),
             });
         }

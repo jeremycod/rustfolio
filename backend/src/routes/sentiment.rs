@@ -1,20 +1,14 @@
 use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
-use axum::routing::get;
+use axum::routing::{get, post};
 use serde::Deserialize;
 use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{SentimentSignal, PortfolioSentimentAnalysis, DivergenceType};
-use crate::services::{sentiment_service, price_service};
+use crate::models::{SentimentSignal, PortfolioSentimentAnalysis, DivergenceType, EnhancedSentimentSignal};
+use crate::services::{sentiment_service, price_service, enhanced_sentiment_service, sec_edgar_service};
 use crate::state::AppState;
-
-pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/positions/:ticker/sentiment", get(get_position_sentiment))
-        .route("/portfolios/:portfolio_id/sentiment", get(get_portfolio_sentiment))
-}
 
 /// Query parameters for sentiment analysis
 #[derive(Debug, Deserialize)]
@@ -95,6 +89,44 @@ pub async fn get_position_sentiment(
     );
 
     Ok(Json(signal))
+}
+
+/// GET /api/sentiment/positions/:ticker/enhanced-sentiment
+/// Enhanced sentiment combining news + SEC filings + insider trading
+/// Query params: days (default: 30)
+pub async fn get_enhanced_position_sentiment(
+    Path(ticker): Path<String>,
+    Query(params): Query<SentimentQueryParams>,
+    State(state): State<AppState>,
+) -> Result<Json<EnhancedSentimentSignal>, AppError> {
+    info!("Fetching enhanced sentiment for ticker: {}", ticker);
+
+    // Check if news service is enabled
+    if !state.news_service.is_enabled() {
+        return Err(AppError::External(
+            "News service is not enabled. Please configure NEWS_ENABLED=true and NEWS_API_KEY to use sentiment analysis.".to_string()
+        ));
+    }
+
+    // Create SEC Edgar service
+    let edgar_service = sec_edgar_service::SecEdgarService::new();
+
+    // Generate enhanced sentiment
+    let enhanced_signal = enhanced_sentiment_service::generate_enhanced_sentiment(
+        &state.pool,
+        &edgar_service,
+        &state.llm_service,
+        &state.news_service,
+        &ticker,
+        params.days,
+    ).await?;
+
+    info!(
+        "Generated enhanced sentiment for {}: combined={:.2}, confidence={:?}",
+        ticker, enhanced_signal.combined_sentiment, enhanced_signal.confidence_level
+    );
+
+    Ok(Json(enhanced_signal))
 }
 
 /// GET /api/sentiment/portfolios/:portfolio_id/sentiment
@@ -188,6 +220,38 @@ pub async fn get_portfolio_sentiment(
     Ok(Json(analysis))
 }
 
+/// POST /api/sentiment/cache/clear
+/// Clear all sentiment caches (both regular and enhanced)
+pub async fn clear_sentiment_cache(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    info!("Clearing all sentiment caches");
+
+    // Clear enhanced sentiment cache
+    let enhanced_deleted = sqlx::query!("DELETE FROM enhanced_sentiment_cache")
+        .execute(&state.pool)
+        .await?
+        .rows_affected();
+
+    // Clear regular sentiment cache
+    let regular_deleted = sqlx::query!("DELETE FROM sentiment_signal_cache")
+        .execute(&state.pool)
+        .await?
+        .rows_affected();
+
+    info!(
+        "Cleared {} enhanced sentiment cache entries and {} regular sentiment cache entries",
+        enhanced_deleted, regular_deleted
+    );
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "enhanced_cache_cleared": enhanced_deleted,
+        "regular_cache_cleared": regular_deleted,
+        "message": "All sentiment caches cleared successfully"
+    })))
+}
+
 /// Helper function to fetch sentiment for a single ticker
 async fn fetch_ticker_sentiment(
     state: &AppState,
@@ -230,4 +294,12 @@ async fn fetch_ticker_sentiment(
         themes,
         prices,
     ).await
+}
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/positions/:ticker/sentiment", get(get_position_sentiment))
+        .route("/positions/:ticker/enhanced-sentiment", get(get_enhanced_position_sentiment))
+        .route("/portfolios/:portfolio_id/sentiment", get(get_portfolio_sentiment))
+        .route("/cache/clear", post(clear_sentiment_cache))
 }

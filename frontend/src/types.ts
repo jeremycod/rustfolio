@@ -370,6 +370,58 @@ export type PortfolioSentimentAnalysis = {
     calculated_at: string;
 };
 
+// Enhanced Sentiment Analysis Types (Sprint 18 Extension - Multi-Source)
+export type EventImportance = 'critical' | 'high' | 'medium' | 'low';
+export type InsiderTransactionType = 'purchase' | 'sale' | 'grant' | 'exercise';
+export type InsiderConfidence = 'high' | 'medium' | 'low' | 'none';
+export type ConfidenceLevel = 'very_high' | 'high' | 'medium' | 'low';
+
+export type MaterialEvent = {
+    ticker: string;
+    event_date: string;
+    event_type: string;
+    sentiment_score: number;
+    summary: string;
+    importance: EventImportance;
+    filing_url: string;
+};
+
+export type InsiderTransaction = {
+    ticker: string;
+    transaction_date: string;
+    reporting_person: string;
+    title?: string;
+    transaction_type: InsiderTransactionType;
+    shares: number;
+    price_per_share?: number;
+    ownership_after?: number;
+};
+
+export type InsiderSentiment = {
+    ticker: string;
+    period_days: number;
+    net_shares_traded: number;
+    total_transactions: number;
+    buying_transactions: number;
+    selling_transactions: number;
+    sentiment_score: number;
+    confidence: InsiderConfidence;
+    notable_transactions: InsiderTransaction[];
+};
+
+export type EnhancedSentimentSignal = {
+    ticker: string;
+    news_sentiment: number;
+    news_confidence: string;
+    material_events: MaterialEvent[];
+    sec_filing_score?: number;
+    insider_sentiment: InsiderSentiment;
+    combined_sentiment: number;
+    confidence_level: ConfidenceLevel;
+    divergence_flags: string[];
+    calculated_at: string;
+};
+
 // Historical Risk Tracking Types
 export type RiskSnapshot = {
     id: string;
