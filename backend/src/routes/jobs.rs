@@ -1,10 +1,10 @@
 use axum::{
     extract::{Path, State},
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use crate::{errors::AppError, AppState};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 pub fn router() -> Router<AppState> {
     Router::new()

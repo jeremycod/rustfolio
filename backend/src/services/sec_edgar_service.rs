@@ -4,7 +4,7 @@ use crate::services::llm_service::LlmService;
 use chrono::{NaiveDate, Utc, Duration};
 use reqwest::Client;
 use serde::Deserialize;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 use uuid::Uuid;
 use regex::Regex;
 
@@ -15,6 +15,7 @@ pub struct SecEdgarService {
 
 /// SEC Edgar RSS feed entry
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct EdgarRssItem {
     title: String,
     link: String,

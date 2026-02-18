@@ -241,13 +241,13 @@ fn calculate_overall_sentiment(themes: &[NewsTheme]) -> Sentiment {
 
     let mut positive_count = 0;
     let mut negative_count = 0;
-    let mut neutral_count = 0;
+    let mut _neutral_count = 0;
 
     for theme in themes {
         match theme.sentiment {
             Sentiment::Positive => positive_count += 1,
             Sentiment::Negative => negative_count += 1,
-            Sentiment::Neutral => neutral_count += 1,
+            Sentiment::Neutral => _neutral_count += 1,
         }
     }
 

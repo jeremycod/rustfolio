@@ -74,6 +74,7 @@ pub struct AccountValueHistory {
 }
 
 impl HoldingSnapshot {
+    #[allow(dead_code)]
     pub fn new(
         account_id: uuid::Uuid,
         snapshot_date: chrono::NaiveDate,

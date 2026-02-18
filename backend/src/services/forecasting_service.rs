@@ -11,6 +11,7 @@ use crate::services::failure_cache::FailureCache;
 use sqlx::PgPool;
 
 /// Generate a portfolio value forecast
+#[allow(dead_code)]
 pub async fn generate_portfolio_forecast(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -79,6 +80,7 @@ pub async fn generate_portfolio_forecast(
 }
 
 /// Fetch the current (latest) portfolio value, unadjusted
+#[allow(dead_code)]
 async fn fetch_current_portfolio_value(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -112,6 +114,7 @@ async fn fetch_current_portfolio_value(
 
 /// Scale forecasts from the adjusted baseline to the real current value
 /// This preserves growth rates while starting from the correct current value
+#[allow(dead_code)]
 fn scale_forecasts_to_real_value(
     forecast_points: &mut [ForecastPoint],
     adjusted_baseline: f64,
@@ -139,6 +142,7 @@ fn scale_forecasts_to_real_value(
 }
 
 /// Fetch historical portfolio values from database, adjusted for cash flows
+#[allow(dead_code)]
 async fn fetch_historical_portfolio_values(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -176,6 +180,7 @@ async fn fetch_historical_portfolio_values(
 }
 
 /// Fetch all cash flows for a portfolio
+#[allow(dead_code)]
 async fn fetch_portfolio_cash_flows(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -203,6 +208,7 @@ async fn fetch_portfolio_cash_flows(
 
 /// Adjust historical values to remove the effect of deposits/withdrawals
 /// This gives us true investment growth, not growth from new money
+#[allow(dead_code)]
 fn adjust_for_cash_flows(
     data_points: &mut [HistoricalDataPoint],
     cash_flows: &[(NaiveDate, f64, String)],
@@ -303,7 +309,7 @@ fn linear_regression_forecast(
     let mut forecast_points = Vec::new();
 
     for day in 1..=days_ahead {
-        let x = (n + day as f64 - 1.0);
+        let x = n + day as f64 - 1.0;
         let predicted_value = slope * x + intercept;
 
         // Confidence intervals widen with forecast horizon
@@ -444,9 +450,9 @@ fn ensemble_forecast(
     let mut forecast_points = Vec::new();
 
     for i in 0..days_ahead as usize {
-        let predicted_value = (linear[i].predicted_value * 0.4
+        let predicted_value = linear[i].predicted_value * 0.4
             + exponential[i].predicted_value * 0.4
-            + moving_avg[i].predicted_value * 0.2);
+            + moving_avg[i].predicted_value * 0.2;
 
         let lower_bound = (linear[i].lower_bound.min(exponential[i].lower_bound)).min(moving_avg[i].lower_bound);
 
@@ -553,6 +559,7 @@ fn apply_sanity_caps(
 }
 
 /// Generate warnings based on data quality
+#[allow(dead_code)]
 fn generate_warnings(
     historical: &[HistoricalDataPoint],
     forecast: &[ForecastPoint],
@@ -691,6 +698,7 @@ enum Benchmark {
 
 /// Holding grouped by benchmark category
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct BenchmarkedHolding {
     ticker: String,
     market_value: f64,

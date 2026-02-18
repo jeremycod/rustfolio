@@ -50,18 +50,34 @@ impl JobSchedulerService {
     pub async fn start(&mut self) -> Result<(), AppError> {
         info!("🚀 Starting job scheduler...");
 
+        // Check if we're in test mode (runs jobs every minute for testing)
+        let test_mode = std::env::var("JOB_SCHEDULER_TEST_MODE")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse::<bool>()
+            .unwrap_or(false);
+
+        if test_mode {
+            info!("⚠️  JOB SCHEDULER IN TEST MODE - Jobs will run every minute!");
+        }
+
         // Nightly jobs (format: sec min hour day month weekday)
+        let refresh_prices_schedule = if test_mode { "0 */1 * * * *" } else { "0 0 2 * * *" };
+        let refresh_prices_desc = if test_mode { "Every minute (TEST MODE)" } else { "Daily at 2:00 AM" };
+
         self.schedule_job(
-            "0 0 2 * * *",
+            refresh_prices_schedule,
             "refresh_prices",
-            "Daily at 2:00 AM",
+            refresh_prices_desc,
             refresh_all_prices
         ).await?;
 
+        let fetch_news_schedule = if test_mode { "0 */2 * * * *" } else { "0 30 2 * * *" };
+        let fetch_news_desc = if test_mode { "Every 2 minutes (TEST MODE)" } else { "Daily at 2:30 AM" };
+
         self.schedule_job(
-            "0 30 2 * * *",
+            fetch_news_schedule,
             "fetch_news",
-            "Daily at 2:30 AM",
+            fetch_news_desc,
             fetch_all_news
         ).await?;
 
@@ -95,10 +111,13 @@ impl JobSchedulerService {
         ).await?;
 
         // Weekly jobs (SUN = Sunday)
+        let cleanup_schedule = if test_mode { "0 */3 * * * *" } else { "0 0 3 * * SUN" };
+        let cleanup_desc = if test_mode { "Every 3 minutes (TEST MODE)" } else { "Every Sunday at 3:00 AM" };
+
         self.schedule_job(
-            "0 0 3 * * SUN",
+            cleanup_schedule,
             "cleanup_cache",
-            "Every Sunday at 3:00 AM",
+            cleanup_desc,
             cleanup_expired_caches
         ).await?;
 
@@ -119,6 +138,7 @@ impl JobSchedulerService {
     }
 
     /// Stop the scheduler gracefully
+    #[allow(dead_code)]
     pub async fn stop(&mut self) -> Result<(), AppError> {
         info!("🛑 Stopping job scheduler...");
         self.scheduler.shutdown()

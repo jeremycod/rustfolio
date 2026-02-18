@@ -156,6 +156,7 @@ pub async fn upsert_thresholds(
 }
 
 /// Delete risk threshold settings for a portfolio (revert to defaults).
+#[allow(dead_code)]
 pub async fn delete_thresholds(
     pool: &PgPool,
     portfolio_id: Uuid,

@@ -15,6 +15,7 @@ use crate::models::{CreateDetectedTransaction, TransactionType};
 #[derive(Debug, Deserialize)]
 struct ActivityRow {
     #[serde(rename = "Processed")]
+    #[allow(dead_code)]
     processed: String,
     #[serde(rename = "Settled")]
     settled: String,

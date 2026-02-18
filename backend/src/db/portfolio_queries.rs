@@ -19,6 +19,7 @@ pub async fn fetch_one(pool: &PgPool, id: Uuid) -> Result<Option<Portfolio>, sql
         .await
 }
 
+#[allow(dead_code)]
 pub async fn create(pool: &PgPool, name: String)
 -> Result<Uuid, sqlx::Error> {
     let id = Uuid::new_v4();
@@ -59,6 +60,7 @@ pub async fn delete(pool: &PgPool, id: Uuid)
     Ok(result.rows_affected())
 }
 
+#[allow(dead_code)]
 pub async fn exists(pool: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> {
     let result = sqlx::query!("SELECT EXISTS(SELECT 1 FROM portfolios WHERE id = $1)", id)
         .fetch_one(pool)

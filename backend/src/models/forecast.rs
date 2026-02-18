@@ -34,6 +34,7 @@ pub enum ForecastMethod {
 }
 
 impl ForecastMethod {
+    #[allow(dead_code)]
     pub fn description(&self) -> &'static str {
         match self {
             ForecastMethod::LinearRegression => {

@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::models::{LlmUsage, CreateLlmUsage, LlmUsageStats};
 
 /// Log LLM usage to database
+#[allow(dead_code)]
 pub async fn log_usage(
     pool: &PgPool,
     usage: CreateLlmUsage,
@@ -27,6 +28,7 @@ pub async fn log_usage(
 }
 
 /// Get LLM usage for a specific user within a date range
+#[allow(dead_code)]
 pub async fn get_user_usage(
     pool: &PgPool,
     user_id: Uuid,
@@ -92,6 +94,7 @@ pub async fn get_user_usage_stats(
 }
 
 /// Get total LLM cost across all users (admin function)
+#[allow(dead_code)]
 pub async fn get_total_cost(pool: &PgPool) -> Result<f64, sqlx::Error> {
     let row = sqlx::query(
         r#"
@@ -107,6 +110,7 @@ pub async fn get_total_cost(pool: &PgPool) -> Result<f64, sqlx::Error> {
 }
 
 /// Get recent LLM usage (admin function)
+#[allow(dead_code)]
 pub async fn get_recent_usage(
     pool: &PgPool,
     limit: i64,

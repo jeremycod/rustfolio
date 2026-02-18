@@ -41,6 +41,7 @@ pub async fn find_by_account_number(
     .await
 }
 
+#[allow(dead_code)]
 pub async fn create(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -88,6 +89,7 @@ pub async fn upsert(
     .await
 }
 
+#[allow(dead_code)]
 pub async fn delete(pool: &PgPool, id: Uuid) -> Result<u64, sqlx::Error> {
     let result = sqlx::query!("DELETE FROM accounts WHERE id = $1", id)
         .execute(pool)

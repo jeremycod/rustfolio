@@ -39,9 +39,11 @@ pub trait LlmProvider: Send + Sync {
     async fn generate_completion(&self, prompt: String) -> Result<String, LlmError>;
 
     /// Generate a summary of text with a maximum length
+    #[allow(dead_code)]
     async fn generate_summary(&self, text: String, max_length: usize) -> Result<String, LlmError>;
 
     /// Get text embedding (vector representation)
+    #[allow(dead_code)]
     async fn get_embedding(&self, text: String) -> Result<Vec<f32>, LlmError>;
 }
 
@@ -84,17 +86,20 @@ struct OpenAiUsage {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct OpenAiEmbeddingRequest {
     model: String,
     input: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OpenAiEmbeddingResponse {
     data: Vec<OpenAiEmbeddingData>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OpenAiEmbeddingData {
     embedding: Vec<f32>,
 }
@@ -321,6 +326,7 @@ impl LlmCache {
         info!("Cached response (key: {})", &key[..key.len().min(50)]);
     }
 
+    #[allow(dead_code)]
     pub async fn clear_expired(&self) {
         let mut cache = self.cache.write().await;
         let initial_count = cache.len();
@@ -383,6 +389,7 @@ impl RateLimiter {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn cleanup_expired(&self) {
         let mut limits = self.limits.write().await;
         let now = Instant::now();
@@ -397,6 +404,7 @@ impl RateLimiter {
 
 /// LLM service with provider abstraction, caching, and rate limiting
 pub struct LlmService {
+    #[allow(dead_code)]
     config: LlmConfig,
     provider: Option<Arc<dyn LlmProvider>>,
     cache: LlmCache,
@@ -476,6 +484,7 @@ impl LlmService {
     }
 
     /// Generate completion without rate limiting (for internal use)
+    #[allow(dead_code)]
     pub async fn generate_completion(&self, prompt: String) -> Result<String, LlmError> {
         let provider = self.provider.as_ref()
             .ok_or(LlmError::Disabled)?;
@@ -483,6 +492,7 @@ impl LlmService {
         provider.generate_completion(prompt).await
     }
 
+    #[allow(dead_code)]
     pub async fn generate_summary(&self, text: String, max_length: usize) -> Result<String, LlmError> {
         let provider = self.provider.as_ref()
             .ok_or(LlmError::Disabled)?;
@@ -490,6 +500,7 @@ impl LlmService {
         provider.generate_summary(text, max_length).await
     }
 
+    #[allow(dead_code)]
     pub async fn get_embedding(&self, text: String) -> Result<Vec<f32>, LlmError> {
         let provider = self.provider.as_ref()
             .ok_or(LlmError::Disabled)?;
@@ -508,6 +519,7 @@ impl LlmService {
     }
 
     /// Clean up expired cache entries and rate limits
+    #[allow(dead_code)]
     pub async fn cleanup(&self) {
         self.cache.clear_expired().await;
         self.rate_limiter.cleanup_expired().await;

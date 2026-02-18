@@ -17,6 +17,7 @@ pub enum AppError {
     #[error("External service error: {0}")]
     External(String),
     #[error("Unauthorized")]
+    #[allow(dead_code)]
     Unauthorized,
     #[error("LLM error: {0}")]
     Llm(LlmError),

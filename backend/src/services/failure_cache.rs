@@ -4,6 +4,7 @@ use dashmap::DashMap;
 
 /// Information about a failed API call for a ticker
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct FailureInfo {
     pub failed_at: DateTime<Utc>,
     pub error_type: FailureType,
@@ -32,6 +33,7 @@ impl FailureCache {
     }
 
     /// Check if a ticker is in the failure cache and the failure is still valid
+    #[allow(dead_code)]
     pub fn is_failed(&self, ticker: &str) -> Option<FailureInfo> {
         if let Some(entry) = self.cache.get(ticker) {
             let info = entry.value().clone();
@@ -73,6 +75,7 @@ impl FailureCache {
     }
 
     /// Clear all expired entries from the cache
+    #[allow(dead_code)]
     pub fn cleanup_expired(&self) {
         let now = Utc::now();
         self.cache.retain(|_, info| {
@@ -82,6 +85,7 @@ impl FailureCache {
     }
 
     /// Get the number of cached failures
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.cache.len()
     }

@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
-use crate::errors::{AppError, LlmError};
+use crate::errors::AppError;
 use crate::models::{NewsArticle, NewsTheme, Sentiment};
 use crate::services::llm_service::LlmService;
 
@@ -173,7 +173,7 @@ fn parse_serper_date(date_str: &str) -> Option<DateTime<Utc>> {
     Some(now)
 }
 
-fn extract_number(text: &str, unit: &str) -> Option<u32> {
+fn extract_number(text: &str, _unit: &str) -> Option<u32> {
     text.split_whitespace()
         .find_map(|word| word.parse::<u32>().ok())
 }

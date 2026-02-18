@@ -3,8 +3,8 @@ use crate::models::{
     SentimentSignal, EnhancedSentimentSignal, MaterialEvent, InsiderSentiment,
     ConfidenceLevel, EventImportance, InsiderConfidence,
 };
-use crate::services::{sentiment_service, sec_edgar_service};
-use chrono::{Utc, Duration};
+use crate::services::sec_edgar_service;
+use chrono::Utc;
 use sqlx::PgPool;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -595,6 +595,7 @@ async fn get_enhanced_sentiment_from_cache(
         news_sentiment: f64,
         news_confidence: String,
         sec_filing_score: Option<f64>,
+        #[allow(dead_code)]
         insider_sentiment_score: f64,
         combined_sentiment: f64,
         confidence_level: String,

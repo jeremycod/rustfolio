@@ -40,6 +40,7 @@ pub async fn fetch_by_account(
     .await
 }
 
+#[allow(dead_code)]
 pub async fn fetch_by_date_range(
     pool: &PgPool,
     account_id: Uuid,

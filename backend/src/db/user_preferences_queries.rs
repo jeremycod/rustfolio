@@ -96,6 +96,7 @@ pub async fn update_llm_consent(
 }
 
 /// Delete user preferences (revoke all consent and preferences)
+#[allow(dead_code)]
 pub async fn delete(
     pool: &PgPool,
     user_id: Uuid,

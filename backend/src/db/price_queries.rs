@@ -4,6 +4,7 @@ use tracing::error;
 use crate::models::PricePoint;
 use crate::external::price_provider::ExternalPricePoint;
 
+#[allow(dead_code)]
 pub async fn insert_many(
     pool: &PgPool,
     items: &[PricePoint]

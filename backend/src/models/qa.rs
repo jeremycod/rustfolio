@@ -44,6 +44,7 @@ pub struct PortfolioAnswer {
 
 /// Full Q&A conversation entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct QAConversation {
     pub question: PortfolioQuestion,
     pub answer: PortfolioAnswer,

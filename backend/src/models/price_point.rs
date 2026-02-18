@@ -15,6 +15,7 @@ pub struct PricePoint {
 }
 
 impl PricePoint {
+    #[allow(dead_code)]
     fn new(ticker: String, date: NaiveDate, close_price: BigDecimal) -> Self {
         Self {
             id: uuid::Uuid::new_v4(),

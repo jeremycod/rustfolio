@@ -27,8 +27,7 @@ pub use cash_flow::{CashFlow, CreateCashFlow, FlowType};
 pub use detected_transaction::{DetectedTransaction, CreateDetectedTransaction, TransactionType, AccountActivity, AccountTruePerformance};
 pub use risk::{
     PositionRisk, RiskAssessment, RiskLevel, PortfolioRisk, PositionRiskContribution,
-    CorrelationPair, CorrelationMatrix, RiskDecomposition, ViolationSeverity, ThresholdViolation,
-    PortfolioRiskWithViolations
+    CorrelationPair, CorrelationMatrix,
 };
 pub use risk_snapshot::{RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams};
 pub use optimization::{
@@ -41,7 +40,7 @@ pub use llm::{
 };
 pub use narrative::{PortfolioNarrative, GenerateNarrativeRequest};
 pub use news::{NewsArticle, Sentiment, NewsTheme, PortfolioNewsAnalysis, NewsQueryParams};
-pub use qa::{PortfolioQuestion, PortfolioAnswer, Confidence, QAConversation};
+pub use qa::{PortfolioQuestion, PortfolioAnswer, Confidence};
 pub use forecast::{PortfolioForecast, ForecastPoint, ForecastMethod, HistoricalDataPoint};
 pub use sentiment::{
     SentimentTrend, MomentumTrend, DivergenceType, SentimentDataPoint,

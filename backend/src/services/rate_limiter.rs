@@ -72,6 +72,7 @@ impl RateLimiter {
     }
 
     /// Get the current utilization (for monitoring)
+    #[allow(dead_code)]
     pub fn available_permits(&self) -> usize {
         self.semaphore.available_permits()
     }

@@ -2,6 +2,7 @@ use sqlx::PgPool;
 use chrono::{Utc, Duration, NaiveDateTime};
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TickerFetchFailure {
     pub ticker: String,
     pub last_attempt_at: NaiveDateTime,
@@ -118,6 +119,7 @@ pub async fn clear_fetch_failure(
 }
 
 /// Clean up expired failure records (ones past retry_after)
+#[allow(dead_code)]
 pub async fn cleanup_expired_failures(
     pool: &PgPool,
 ) -> Result<u64, sqlx::Error> {
@@ -134,6 +136,7 @@ pub async fn cleanup_expired_failures(
 }
 
 /// Get all active failures (for debugging/monitoring)
+#[allow(dead_code)]
 pub async fn get_all_active_failures(
     pool: &PgPool,
 ) -> Result<Vec<TickerFetchFailure>, sqlx::Error> {

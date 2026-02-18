@@ -98,6 +98,7 @@ pub async fn fetch_history(
 }
 
 /// Get the latest snapshot for a portfolio or position
+#[allow(dead_code)]
 pub async fn fetch_latest(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -138,6 +139,7 @@ pub async fn fetch_latest(
 }
 
 /// Fetch all position snapshots for a portfolio on a specific date
+#[allow(dead_code)]
 pub async fn fetch_portfolio_positions_by_date(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -161,6 +163,7 @@ pub async fn fetch_portfolio_positions_by_date(
 }
 
 /// Fetch snapshots for multiple dates (for trend analysis)
+#[allow(dead_code)]
 pub async fn fetch_snapshots_by_dates(
     pool: &PgPool,
     portfolio_id: Uuid,

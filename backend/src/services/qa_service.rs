@@ -162,7 +162,7 @@ struct QAResponse {
 /// Parse the LLM response into a PortfolioAnswer
 fn parse_qa_response(
     response: &str,
-    question: PortfolioQuestion,
+    _question: PortfolioQuestion,
 ) -> Result<PortfolioAnswer, AppError> {
     // Try to parse JSON response
     match serde_json::from_str::<QAResponse>(response) {

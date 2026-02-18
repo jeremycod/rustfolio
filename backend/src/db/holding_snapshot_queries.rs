@@ -3,6 +3,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use crate::models::{AccountValueHistory, CreateHoldingSnapshot, HoldingSnapshot, LatestAccountHolding};
 
+#[allow(dead_code)]
 pub async fn create(
     pool: &PgPool,
     account_id: Uuid,
@@ -94,6 +95,7 @@ pub async fn upsert(
     .await
 }
 
+#[allow(dead_code)]
 pub async fn fetch_by_account(
     pool: &PgPool,
     account_id: Uuid,
@@ -192,6 +194,7 @@ pub async fn fetch_portfolio_value_history(
     .await
 }
 
+#[allow(dead_code)]
 pub async fn delete_by_account(pool: &PgPool, account_id: Uuid) -> Result<u64, sqlx::Error> {
     let result = sqlx::query!("DELETE FROM holdings_snapshots WHERE account_id = $1", account_id)
         .execute(pool)

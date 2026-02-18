@@ -22,6 +22,7 @@ pub struct CreateAccount {
 }
 
 impl Account {
+    #[allow(dead_code)]
     pub fn new(
         portfolio_id: uuid::Uuid,
         account_number: String,

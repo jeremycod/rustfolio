@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 /// LLM usage tracking record
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[allow(dead_code)]
 pub struct LlmUsage {
     pub id: Uuid,
     pub user_id: Option<Uuid>,
@@ -18,6 +19,7 @@ pub struct LlmUsage {
 
 /// Input for creating LLM usage record
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct CreateLlmUsage {
     pub user_id: Option<Uuid>,
     pub portfolio_id: Option<Uuid>,

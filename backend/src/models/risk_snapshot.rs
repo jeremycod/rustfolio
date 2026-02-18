@@ -82,6 +82,8 @@ fn default_threshold() -> f64 {
 #[derive(Debug, Clone, Copy)]
 pub enum Aggregation {
     Daily,
+    #[allow(dead_code)]
     Weekly,
+    #[allow(dead_code)]
     Monthly,
 }
