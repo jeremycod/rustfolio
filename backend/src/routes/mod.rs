@@ -13,4 +13,5 @@ pub mod llm;
 pub mod news;
 pub mod qa;
 pub mod sentiment;
+pub mod jobs;
 

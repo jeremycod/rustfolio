@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT cf.flow_date, cf.amount, cf.flow_type\n        FROM cash_flows cf\n        JOIN accounts a ON cf.account_id = a.id\n        WHERE a.portfolio_id = $1\n        ORDER BY cf.flow_date\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "flow_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 2,
+        "name": "flow_type",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "95c1897d2811f4de61fc2fb35df3b8486e73facfb28cfa3be1c40e8f76929fe8"
+}

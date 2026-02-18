@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            job_name,\n            COUNT(*) as \"total_runs!\",\n            COUNT(*) FILTER (WHERE status = 'success') as \"successful_runs!\",\n            COUNT(*) FILTER (WHERE status = 'failed') as \"failed_runs!\",\n            AVG(duration_ms) as \"avg_duration_ms\",\n            AVG(items_processed) as \"avg_items_processed\",\n            MAX(started_at)::TEXT as \"last_run?\",\n            (SELECT status::TEXT FROM job_runs WHERE job_name = $1 ORDER BY started_at DESC LIMIT 1) as \"last_status?\"\n        FROM job_runs\n        WHERE job_name = $1\n        GROUP BY job_name\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "total_runs!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "successful_runs!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "failed_runs!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "avg_duration_ms",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "avg_items_processed",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_run?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_status?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "cbcd8bdc730f42fae419c871fc29b667d3d18523a96ed9b3af2a4a97fc78c157"
+}

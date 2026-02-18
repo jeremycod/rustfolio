@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE accounts\n         SET total_deposits = COALESCE((\n             SELECT SUM(amount) FROM cash_flows\n             WHERE account_id = $1 AND flow_type = 'DEPOSIT'\n         ), 0),\n         total_withdrawals = COALESCE((\n             SELECT SUM(amount) FROM cash_flows\n             WHERE account_id = $1 AND flow_type = 'WITHDRAWAL'\n         ), 0)\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "493c38f71565902b66a088a81eeb3f7bb393ad42ec246e7bbca8156c77ee65b9"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM detected_transactions\n         WHERE account_id = $1 AND to_snapshot_date = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cca80e2423f5ff77564d233c2a445f706394afe7d7f5d209712915f5dcce3d27"
+}

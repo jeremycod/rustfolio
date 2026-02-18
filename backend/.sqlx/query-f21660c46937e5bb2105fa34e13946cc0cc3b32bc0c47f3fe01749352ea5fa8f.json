@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO sentiment_signal_cache (\n            ticker,\n            calculated_at,\n            expires_at,\n            current_sentiment,\n            sentiment_trend,\n            momentum_trend,\n            divergence,\n            sentiment_price_correlation,\n            correlation_lag_days,\n            historical_sentiment,\n            news_articles_analyzed,\n            warnings\n        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n        ON CONFLICT (ticker)\n        DO UPDATE SET\n            calculated_at = EXCLUDED.calculated_at,\n            expires_at = EXCLUDED.expires_at,\n            current_sentiment = EXCLUDED.current_sentiment,\n            sentiment_trend = EXCLUDED.sentiment_trend,\n            momentum_trend = EXCLUDED.momentum_trend,\n            divergence = EXCLUDED.divergence,\n            sentiment_price_correlation = EXCLUDED.sentiment_price_correlation,\n            correlation_lag_days = EXCLUDED.correlation_lag_days,\n            historical_sentiment = EXCLUDED.historical_sentiment,\n            news_articles_analyzed = EXCLUDED.news_articles_analyzed,\n            warnings = EXCLUDED.warnings\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Timestamp",
+        "Timestamp",
+        "Float8",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Float8",
+        "Int4",
+        "Jsonb",
+        "Int4",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f21660c46937e5bb2105fa34e13946cc0cc3b32bc0c47f3fe01749352ea5fa8f"
+}

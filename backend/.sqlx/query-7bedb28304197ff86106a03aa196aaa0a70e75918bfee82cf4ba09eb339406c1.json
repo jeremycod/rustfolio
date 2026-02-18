@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM enhanced_sentiment_cache WHERE ticker = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7bedb28304197ff86106a03aa196aaa0a70e75918bfee82cf4ba09eb339406c1"
+}

@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            ticker,\n            calculated_at,\n            current_sentiment,\n            sentiment_trend,\n            momentum_trend,\n            divergence,\n            sentiment_price_correlation,\n            correlation_lag_days,\n            historical_sentiment,\n            news_articles_analyzed,\n            warnings\n        FROM sentiment_signal_cache\n        WHERE ticker = $1\n          AND expires_at > NOW()\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ticker",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "calculated_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 2,
+        "name": "current_sentiment",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "sentiment_trend",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "momentum_trend",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "divergence",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "sentiment_price_correlation",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 7,
+        "name": "correlation_lag_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "historical_sentiment",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "news_articles_analyzed",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "warnings",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e5479ffd08c27fbc44b913133aec04d869f0a5823a0f956cb735d8e39a9cd68e"
+}

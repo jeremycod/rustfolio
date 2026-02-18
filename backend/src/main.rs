@@ -24,6 +24,7 @@ use crate::services::failure_cache::FailureCache;
 use crate::services::rate_limiter::RateLimiter;
 use crate::services::llm_service::{LlmService, LlmConfig};
 use crate::services::news_service::{NewsService, NewsConfig};
+use crate::services::job_scheduler_service::JobSchedulerService;
 use crate::logging::{LoggingConfig, init_logging};
 
 #[tokio::main]
@@ -120,14 +121,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("⏱️  Rate limiter initialized: 3 concurrent, 8 requests/min");
 
     let state = AppState {
-        pool,
-        price_provider: provider,
+        pool: pool.clone(),
+        price_provider: provider.clone(),
         failure_cache: FailureCache::new(),
-        rate_limiter,
+        rate_limiter: rate_limiter.clone(),
         risk_free_rate,
         llm_service,
         news_service,
     };
+
+    // Initialize and start job scheduler
+    let mut job_scheduler = JobSchedulerService::new(
+        Arc::new(pool),
+        provider.clone(),
+        Arc::new(state.failure_cache.clone()),
+        rate_limiter.clone(),
+    ).await?;
+
+    job_scheduler.start().await?;
+    tracing::info!("✅ Job scheduler started");
+
     let app = app::create_app(state);
 
 /*    let app = Router::new()

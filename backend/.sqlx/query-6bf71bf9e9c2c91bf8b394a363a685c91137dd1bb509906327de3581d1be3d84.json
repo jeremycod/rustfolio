@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n          h.snapshot_date as \"date!\",\n          SUM(h.market_value)::double precision as \"value!\"\n        FROM holdings_snapshots h\n        JOIN accounts a ON h.account_id = a.id\n        WHERE a.portfolio_id = $1\n        GROUP BY h.snapshot_date\n        ORDER BY h.snapshot_date ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "date!",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "value!",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "6bf71bf9e9c2c91bf8b394a363a685c91137dd1bb509906327de3581d1be3d84"
+}

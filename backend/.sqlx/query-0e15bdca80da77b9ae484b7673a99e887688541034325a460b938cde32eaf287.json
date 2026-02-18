@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ticker_fetch_failures\n         (ticker, last_attempt_at, failure_type, retry_after, consecutive_failures, error_message, updated_at)\n         VALUES ($1, $2, $3, $4, 1, $5, $6)\n         ON CONFLICT(ticker) DO UPDATE SET\n           last_attempt_at = EXCLUDED.last_attempt_at,\n           failure_type = EXCLUDED.failure_type,\n           retry_after = EXCLUDED.retry_after,\n           consecutive_failures = ticker_fetch_failures.consecutive_failures + 1,\n           error_message = EXCLUDED.error_message,\n           updated_at = EXCLUDED.updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamp",
+        "Text",
+        "Timestamp",
+        "Text",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0e15bdca80da77b9ae484b7673a99e887688541034325a460b938cde32eaf287"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM beta_forecast_cache WHERE ticker = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "af8d21750196be8d8ff672b8179ce0dc5f59158b0e6c162c87de6f54fd7bbd53"
+}

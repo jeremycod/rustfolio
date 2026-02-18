@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT portfolio_id FROM risk_threshold_settings",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "portfolio_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0a3bc608b098de9a855e07a5a9ca62fd7aa2a23378ae70f613a0f57311d2c708"
+}

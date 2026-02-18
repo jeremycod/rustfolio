@@ -1,0 +1,61 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            forecast_points,\n            regime_changes,\n            warnings,\n            current_beta,\n            beta_volatility,\n            calculated_at,\n            expires_at\n        FROM beta_forecast_cache\n        WHERE ticker = $1\n          AND benchmark = $2\n          AND days_ahead = $3\n          AND method = $4\n          AND expires_at > CURRENT_TIMESTAMP\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "forecast_points",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "regime_changes",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "warnings",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "current_beta",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "beta_volatility",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "calculated_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "expires_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "309a20c26cca34a53b3ae13bd0be001b6c9dd379777b5962b6d88a9f6424dcdc"
+}

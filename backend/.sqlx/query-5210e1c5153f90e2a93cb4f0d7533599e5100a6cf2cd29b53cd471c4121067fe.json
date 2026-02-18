@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO price_points (id, ticker, date, close_price)\n                     VALUES (gen_random_uuid(), $1, $2, $3)\n                     ON CONFLICT (ticker, date) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Date",
+        "Numeric"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5210e1c5153f90e2a93cb4f0d7533599e5100a6cf2cd29b53cd471c4121067fe"
+}

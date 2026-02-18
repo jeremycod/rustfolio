@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            job_name,\n            started_at::TEXT as \"started_at!\",\n            completed_at::TEXT as \"completed_at?\",\n            status::TEXT as \"status!\",\n            error_message,\n            items_processed,\n            items_failed,\n            duration_ms\n        FROM job_runs\n        ORDER BY started_at DESC\n        LIMIT 50\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "started_at!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "completed_at?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "error_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "items_processed",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "items_failed",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      null,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "3a678f905a71d9dc76cd5596d7982bc262950e457a5d019fefd0f36bfa12301b"
+}

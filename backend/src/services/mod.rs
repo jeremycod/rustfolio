@@ -18,4 +18,5 @@ pub mod beta_forecasting_service;
 pub mod sentiment_service;
 pub mod sec_edgar_service;
 pub mod enhanced_sentiment_service;
+pub mod job_scheduler_service;
 mod indicators;

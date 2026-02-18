@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ticker_fetch_failures WHERE ticker = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a307365b8c2bd029ae8b492a505349296d172869445f3b2e9b291f2bc5413e84"
+}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ticker, last_attempt_at, failure_type, retry_after, consecutive_failures, error_message\n         FROM ticker_fetch_failures\n         WHERE retry_after > $1\n         ORDER BY retry_after DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ticker",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_attempt_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 2,
+        "name": "failure_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "retry_after",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 4,
+        "name": "consecutive_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "error_message",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamp"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "c6b6f49cf388ec92cce818fe335501f86218809afbba14b876af00b0860caa4c"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH latest_snapshot AS (\n          SELECT MAX(h.snapshot_date) AS snapshot_date\n          FROM holdings_snapshots h\n          JOIN accounts a ON h.account_id = a.id\n          WHERE a.portfolio_id = $1\n        )\n        SELECT\n          h.ticker as \"ticker!\",\n          SUM(h.market_value)::double precision as \"value!\"\n        FROM holdings_snapshots h\n        JOIN accounts a ON h.account_id = a.id\n        JOIN latest_snapshot l ON h.snapshot_date = l.snapshot_date\n        WHERE a.portfolio_id = $1\n          AND h.ticker != ''\n        GROUP BY h.ticker\n        ORDER BY h.ticker ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ticker!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "value!",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "2516a5b80eec359b20627202916f49efc96eeccb5bbcf1f55c8aeee7972a3356"
+}

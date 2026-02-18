@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE job_runs\n        SET completed_at = NOW(),\n            status = 'success'::job_status,\n            items_processed = $2,\n            items_failed = $3,\n            duration_ms = $4\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0f0d128b8bf9ec3fd13af501100229814b01129ac3b939890a13efeccb9a1acc"
+}

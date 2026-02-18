@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO price_points (id, ticker, date, close_price)\n             VALUES ($1, $2, $3, $4)\n             ON CONFLICT (ticker, date) DO UPDATE SET close_price = EXCLUDED.close_price",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Date",
+        "Numeric"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68ed938bcaa2cbf68ec53c39a9ca97356d15680807fe8fb3af156b6b186b9c9d"
+}

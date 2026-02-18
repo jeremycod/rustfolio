@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO beta_forecast_cache\n        (ticker, benchmark, days_ahead, method, calculated_at, expires_at,\n         forecast_points, regime_changes, warnings, current_beta, beta_volatility)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n        ON CONFLICT (ticker, benchmark, days_ahead, method)\n        DO UPDATE SET\n            calculated_at = $5,\n            expires_at = $6,\n            forecast_points = $7,\n            regime_changes = $8,\n            warnings = $9,\n            current_beta = $10,\n            beta_volatility = $11\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Varchar",
+        "Timestamp",
+        "Timestamp",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "af9fda8594475efa9a025618e89d9d3b22bf64e8387e809291a2e900e8709ef8"
+}

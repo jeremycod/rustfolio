@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ticker_fetch_failures WHERE retry_after <= $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "937f5b97605b97da4c704c11bb6469bdccd655054d21a6254e7715b766461f88"
+}

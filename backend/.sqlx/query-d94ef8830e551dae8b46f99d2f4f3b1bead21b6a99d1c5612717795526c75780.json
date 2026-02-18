@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM sentiment_signal_cache",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d94ef8830e551dae8b46f99d2f4f3b1bead21b6a99d1c5612717795526c75780"
+}
