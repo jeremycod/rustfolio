@@ -17,9 +17,11 @@ use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 use crate::external::alphavantage::AlphaVantageProvider;
 use crate::external::twelvedata::TwelveDataProvider;
+use crate::external::yahoofinance::YahooFinanceProvider;
 use crate::external::multi_provider::MultiProvider;
 use crate::state::AppState;
 use crate::services::failure_cache::FailureCache;
+use crate::services::rate_limiter::RateLimiter;
 use crate::services::llm_service::{LlmService, LlmConfig};
 use crate::services::news_service::{NewsService, NewsConfig};
 use crate::logging::{LoggingConfig, init_logging};
@@ -55,12 +57,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("Failed to create TwelveDataProvider (check TWELVEDATA_API_KEY)"))
         },
         "multi" => {
-            tracing::info!("📊 Using price provider: Multi-provider (Twelve Data + Alpha Vantage fallback)");
+            tracing::info!("📊 Using price provider: Multi-provider (Twelve Data + Alpha Vantage + Yahoo Finance)");
             let primary = Box::new(TwelveDataProvider::from_env()
                 .expect("Failed to create TwelveDataProvider (check TWELVEDATA_API_KEY)"));
             let fallback = Box::new(AlphaVantageProvider::from_env()
                 .expect("Failed to create AlphaVantageProvider (check ALPHAVANTAGE_API_KEY)"));
-            Arc::new(MultiProvider::new(primary, fallback))
+            let yahoo = Box::new(YahooFinanceProvider::new());
+            Arc::new(MultiProvider::new(primary, fallback, yahoo))
         },
         _ => {
             panic!("Invalid PRICE_PROVIDER: {}. Must be 'alphavantage', 'twelvedata', or 'multi'", provider_name);
@@ -111,10 +114,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::info!("📰 News service disabled");
     }
 
+    // Initialize rate limiter for API calls
+    // Allow max 3 concurrent requests, 8 per minute (free tier limit)
+    let rate_limiter = Arc::new(RateLimiter::new(3, 8));
+    tracing::info!("⏱️  Rate limiter initialized: 3 concurrent, 8 requests/min");
+
     let state = AppState {
         pool,
         price_provider: provider,
         failure_cache: FailureCache::new(),
+        rate_limiter,
         risk_free_rate,
         llm_service,
         news_service,

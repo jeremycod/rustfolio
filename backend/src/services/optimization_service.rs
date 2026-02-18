@@ -7,7 +7,7 @@ use crate::db::holding_snapshot_queries;
 use crate::errors::AppError;
 use crate::external::price_provider::PriceProvider;
 use crate::models::*;
-use crate::services::{failure_cache::FailureCache, risk_service};
+use crate::services::{failure_cache::FailureCache, rate_limiter::RateLimiter, risk_service};
 
 /// Analyze portfolio and generate optimization recommendations
 pub async fn analyze_portfolio(
@@ -15,6 +15,7 @@ pub async fn analyze_portfolio(
     portfolio_id: Uuid,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    rate_limiter: &RateLimiter,
     risk_free_rate: f64,
 ) -> Result<OptimizationAnalysis, AppError> {
     info!("Analyzing portfolio {} for optimization", portfolio_id);
@@ -55,6 +56,7 @@ pub async fn analyze_portfolio(
         total_value,
         price_provider,
         failure_cache,
+        rate_limiter,
         risk_free_rate,
     )
     .await?;
@@ -74,6 +76,7 @@ pub async fn analyze_portfolio(
         total_value,
         price_provider,
         failure_cache,
+        rate_limiter,
         risk_free_rate,
     )
     .await?;
@@ -111,6 +114,7 @@ async fn calculate_current_metrics(
     total_value: f64,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    rate_limiter: &RateLimiter,
     risk_free_rate: f64,
 ) -> Result<CurrentMetrics, AppError> {
     let mut weighted_volatility = 0.0;
@@ -132,6 +136,7 @@ async fn calculate_current_metrics(
             "SPY",
             price_provider,
             failure_cache,
+            rate_limiter,
             risk_free_rate,
         )
         .await
@@ -301,6 +306,7 @@ async fn calculate_risk_contributions(
     total_value: f64,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    rate_limiter: &RateLimiter,
     risk_free_rate: f64,
 ) -> Result<Vec<RiskContribution>, AppError> {
     let mut contributions = Vec::new();
@@ -318,6 +324,7 @@ async fn calculate_risk_contributions(
             "SPY",
             price_provider,
             failure_cache,
+            rate_limiter,
             risk_free_rate,
         )
         .await

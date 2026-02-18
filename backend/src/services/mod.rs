@@ -8,6 +8,7 @@ pub mod risk_service;
 pub mod risk_snapshot_service;
 pub mod optimization_service;
 pub mod failure_cache;
+pub mod rate_limiter;
 pub mod llm_service;
 pub mod narrative_service;
 pub mod news_service;

@@ -72,6 +72,7 @@ pub async fn update_prices(
         state.price_provider.as_ref(),
         &ticker,
         &state.failure_cache,
+        &state.rate_limiter,
     ).await
         .map_err(|e| {
             match &e {

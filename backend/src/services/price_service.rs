@@ -8,7 +8,7 @@ use crate::errors::AppError;
 use crate::external::price_provider::{ExternalPricePoint, ExternalTickerMatch, PriceProvider, PriceProviderError};
 use crate::models::PricePoint;
 use crate::services::failure_cache::{FailureCache, FailureType};
-use chrono::{Utc, Duration as ChronoDuration};
+use chrono::{Utc, Duration as ChronoDuration, Datelike, Timelike};
 
 pub async fn get_history(pool: &PgPool, ticker: &str)
                          -> Result<Vec<PricePoint>, AppError> {
@@ -74,12 +74,105 @@ pub async fn search_for_ticker_from_api(
         },
     }
 }
+
+/// Determines if we should refresh price data based on market hours and data age
+///
+/// Strategy:
+/// - Weekends: Don't refresh (markets closed)
+/// - Before market open (< 9:30 AM ET): Use data from previous day
+/// - During market hours (9:30 AM - 4:00 PM ET): Refresh if older than 15 minutes
+/// - After market close (> 4:00 PM ET): Don't refresh until next day
+fn should_refresh_price_data(latest_price_date: chrono::NaiveDate) -> bool {
+    use chrono::Weekday;
+
+    let now = Utc::now();
+    let today = now.date_naive();
+
+    // Convert to Eastern Time (approximate - 5 hours behind UTC, or 4 during DST)
+    // For simplicity, we'll use a fixed offset. In production, consider using chrono_tz.
+    let et_hour = if now.hour() >= 5 { now.hour() - 5 } else { now.hour() + 19 };
+
+    // Weekend: No need to refresh
+    if matches!(now.weekday(), Weekday::Sat | Weekday::Sun) {
+        return false;
+    }
+
+    // If data is from today, check based on market hours
+    if latest_price_date == today {
+        // During market hours (9:30 AM - 4:00 PM ET ≈ 14:30 - 21:00 UTC)
+        if et_hour >= 9 && et_hour < 16 {
+            // Refresh every 15 minutes during market hours
+            // Since we can't track exact time, we'll refresh on each request during market hours
+            // but the rate limiter will prevent too many concurrent requests
+            return true;
+        }
+        // Before or after market hours with today's data: don't refresh
+        return false;
+    }
+
+    // If data is from yesterday and it's before market open, that's recent enough
+    if latest_price_date == today - ChronoDuration::days(1) && et_hour < 9 {
+        return false;
+    }
+
+    // Data is old (> 1 day or > 1 business day): refresh
+    true
+}
+
+/// Validates whether a ticker symbol is valid for API calls
+/// Returns false for empty strings, non-alphabetic symbols, and known mutual fund codes
+fn is_valid_ticker(ticker: &str) -> bool {
+    let ticker = ticker.trim();
+
+    // Must not be empty
+    if ticker.is_empty() {
+        return false;
+    }
+
+    // Must contain at least one letter
+    if !ticker.chars().any(|c| c.is_alphabetic()) {
+        return false;
+    }
+
+    // Skip known mutual fund codes that won't be found in stock APIs
+    // These are internal fund identifiers used by Canadian fund providers
+    let mutual_fund_prefixes = [
+        "FID",  // Fidelity funds
+        "DYN",  // Dynamic Funds
+        "EDG",  // Edge funds
+        "BIP",  // Brookfield funds
+        "LYZ",  // Lysander funds
+        "RBF",  // RBC funds
+        "AGF",  // AGF funds
+        "MFC",  // Manulife funds
+        "RPD",  // Fund code
+        "MMF",  // Fund code
+        "NWT",  // Fund code
+    ];
+
+    if mutual_fund_prefixes.iter().any(|prefix| ticker.starts_with(prefix)) {
+        return false;
+    }
+
+    true
+}
+
 pub async fn refresh_from_api(
     pool: &PgPool,
     provider: &dyn PriceProvider,
     ticker: &str,
     failure_cache: &FailureCache,
+    rate_limiter: &crate::services::rate_limiter::RateLimiter,
 ) -> Result<(), AppError> {
+    // Validate ticker before attempting any API calls
+    if !is_valid_ticker(ticker) {
+        info!("⊘ Skipping invalid ticker: '{}' (empty, non-alphabetic, or mutual fund code)", ticker);
+        return Err(AppError::External(format!(
+            "Invalid ticker symbol: '{}'. This appears to be empty, malformed, or a mutual fund code that requires manual pricing.",
+            ticker
+        )));
+    }
+
     // Check database failure cache first - avoid repeated calls for known-bad tickers
     let should_retry = db::ticker_fetch_failure_queries::should_retry_ticker(pool, ticker)
         .await
@@ -101,13 +194,10 @@ pub async fn refresh_from_api(
         }
     }
 
-    // Check if we already have recent data in database
+    // Check if we already have recent data in database (smart caching)
     if let Some(latest) = db::price_queries::fetch_latest(pool, ticker).await? {
-        let today = Utc::now().date_naive();
-
-        // If we already have recent data, skip fetching to avoid rate limits
-        if latest.date >= today - ChronoDuration::hours(6) {
-            info!("✓ Skipping API call for {} - data is recent ({})", ticker, latest.date);
+        if !should_refresh_price_data(latest.date) {
+            info!("✓ Skipping API call for {} - data is recent enough ({})", ticker, latest.date);
             return Ok(());
         }
     }
@@ -117,6 +207,9 @@ pub async fn refresh_from_api(
     let max_retries = 3;
 
     loop {
+        // Acquire rate limiter permit before making API call
+        let _guard = rate_limiter.acquire().await;
+
         // Fetch 365 days of history to support rolling beta analysis (needs 180 days + 90-day window)
         match provider.fetch_daily_history(ticker, 365).await {
             Ok(external_points) => {

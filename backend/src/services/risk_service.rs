@@ -5,6 +5,7 @@ use crate::models::risk::{PositionRisk, RiskAssessment, RiskLevel, RiskDecomposi
 use crate::models::PricePoint;
 use crate::services::price_service;
 use crate::services::failure_cache::FailureCache;
+use crate::services::rate_limiter::RateLimiter;
 use bigdecimal::ToPrimitive;
 use sqlx::PgPool;
 use tracing::{info, warn};
@@ -21,6 +22,7 @@ use tracing::{info, warn};
 /// * `benchmark` – symbol of the benchmark index for beta calculation (e.g., "SPY")
 /// * `price_provider` – external price data provider for fetching fresh data
 /// * `failure_cache` – cache to avoid retrying known-bad tickers
+/// * `rate_limiter` – rate limiter to control API request frequency
 /// * `risk_free_rate` – annual risk-free rate for Sharpe/Sortino calculations (e.g., 0.045 for 4.5%)
 ///
 /// # Returns
@@ -32,14 +34,15 @@ pub async fn compute_risk_metrics(
     benchmark: &str,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    rate_limiter: &RateLimiter,
     risk_free_rate: f64,
 ) -> Result<RiskAssessment, AppError> {
     // Ensure we have recent price data for both ticker and benchmark
     info!("Ensuring fresh price data for ticker: {}", ticker);
-    let ticker_fetch_failed = price_service::refresh_from_api(pool, price_provider, ticker, failure_cache).await.is_err();
+    let ticker_fetch_failed = price_service::refresh_from_api(pool, price_provider, ticker, failure_cache, rate_limiter).await.is_err();
 
     info!("Ensuring fresh price data for benchmark: {}", benchmark);
-    let benchmark_fetch_failed = price_service::refresh_from_api(pool, price_provider, benchmark, failure_cache).await.is_err();
+    let benchmark_fetch_failed = price_service::refresh_from_api(pool, price_provider, benchmark, failure_cache, rate_limiter).await.is_err();
 
     // Fetch price history for the ticker and benchmark
     let series = price_queries::fetch_window(pool, ticker, days).await?;
@@ -87,7 +90,7 @@ pub async fn compute_risk_metrics(
 
     // Compute multi-benchmark betas
     let (beta_spy, beta_qqq, beta_iwm) =
-        compute_multi_benchmark_beta(pool, &series, days, price_provider, failure_cache).await;
+        compute_multi_benchmark_beta(pool, &series, days, price_provider, failure_cache, rate_limiter).await;
 
     // Compute risk decomposition (requires benchmark data)
     let risk_decomposition = if beta.is_some() {
@@ -674,6 +677,7 @@ pub fn compute_correlation(series1: &[PricePoint], series2: &[PricePoint]) -> Op
 /// * `days` – Number of trading days to analyze
 /// * `price_provider` – External price data provider
 /// * `failure_cache` – Cache to avoid retrying known-bad tickers
+/// * `rate_limiter` – Rate limiter to control API request frequency
 ///
 /// # Returns
 /// Tuple of (beta_spy, beta_qqq, beta_iwm) where each is Option<f64>
@@ -683,13 +687,14 @@ async fn compute_multi_benchmark_beta(
     days: i64,
     price_provider: &dyn PriceProvider,
     failure_cache: &FailureCache,
+    rate_limiter: &RateLimiter,
 ) -> (Option<f64>, Option<f64>, Option<f64>) {
     let benchmarks = ["SPY", "QQQ", "IWM"];
     let mut betas = Vec::new();
 
     for benchmark in &benchmarks {
         // Ensure fresh benchmark data
-        if let Err(e) = price_service::refresh_from_api(pool, price_provider, benchmark, failure_cache).await {
+        if let Err(e) = price_service::refresh_from_api(pool, price_provider, benchmark, failure_cache, rate_limiter).await {
             warn!("Failed to refresh {} data: {}", benchmark, e);
             betas.push(None);
             continue;

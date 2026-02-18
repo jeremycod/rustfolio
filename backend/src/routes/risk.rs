@@ -224,6 +224,7 @@ pub async fn get_position_risk(
         &params.benchmark,
         state.price_provider.as_ref(),
         &state.failure_cache,
+        &state.rate_limiter,
         state.risk_free_rate,
     )
     .await
@@ -462,6 +463,7 @@ pub async fn get_portfolio_risk(
             &params.benchmark,
             state.price_provider.as_ref(),
             &state.failure_cache,
+            &state.rate_limiter,
             state.risk_free_rate,
         ).await {
             Ok(assessment) => {
@@ -1027,6 +1029,7 @@ pub async fn create_portfolio_snapshot(
         today,
         state.price_provider.as_ref(),
         &state.failure_cache,
+        &state.rate_limiter,
         state.risk_free_rate,
     )
     .await?;
@@ -1208,6 +1211,7 @@ pub async fn export_portfolio_risk_csv(
             &params.benchmark,
             state.price_provider.as_ref(),
             &state.failure_cache,
+            &state.rate_limiter,
             state.risk_free_rate,
         ).await {
             Ok(assessment) => {
@@ -1397,6 +1401,7 @@ pub async fn get_portfolio_narrative(
             "SPY",
             state.price_provider.as_ref(),
             &state.failure_cache,
+            &state.rate_limiter,
             state.risk_free_rate,
         ).await {
             Ok(assessment) => {
