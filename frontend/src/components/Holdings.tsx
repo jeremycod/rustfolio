@@ -232,7 +232,7 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
                 </TableRow>
               </TableHead>
               <TableBody>
-                {positionsQ.data.map((pos) => {
+                {positionsQ.data.map((pos: any) => {
                   const shares = parseFloat(pos.shares);
                   const avgBuyPrice = parseFloat(pos.avg_buy_price);
                   const currentPrice = avgBuyPrice * 1.05; // Mock 5% gain
@@ -354,10 +354,10 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
                 fullWidth
                 variant="outlined"
                 type="number"
-                step="0.01"
                 value={formData.avg_buy_price}
                 onChange={handleInputChange('avg_buy_price')}
                 placeholder="150.00"
+                inputProps={{ step: 0.01 }}
               />
             </Grid>
           </Grid>
@@ -396,9 +396,9 @@ export function Holdings({ selectedPortfolioId, onPortfolioChange }: HoldingsPro
                 fullWidth
                 variant="outlined"
                 type="number"
-                step="0.01"
                 value={editFormData.avg_buy_price}
                 onChange={handleEditInputChange('avg_buy_price')}
+                inputProps={{ step: 0.01 }}
               />
             </Grid>
           </Grid>

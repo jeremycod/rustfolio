@@ -362,7 +362,6 @@ export type SentimentSignal = {
 };
 
 export type PortfolioSentimentAnalysis = {
-    portfolio_id: string;
     signals: SentimentSignal[];
     portfolio_avg_sentiment: number;
     bullish_divergences: number;
@@ -463,6 +462,7 @@ export type RiskAlert = {
     previous_value: number;
     current_value: number;
     change_percent: number;
+    percentage_change: number;
     date: string; // Date YYYY-MM-DD
     metric_name: string; // "risk_score", "volatility", etc.
 };
@@ -511,6 +511,8 @@ export type ExpectedImpact = {
 export type OptimizationRecommendation = {
     id: string;
     recommendation_type: RecommendationType;
+    action_type: string;
+    ticker: string;
     severity: Severity;
     title: string;
     rationale: string;
@@ -583,17 +585,6 @@ export type UpdateRiskThresholds = {
     var_critical_threshold?: number;
 };
 
-export type ViolationSeverity = 'warning' | 'critical';
-
-export type ThresholdViolation = {
-    ticker: string;
-    holding_name: string | null;
-    metric_name: string;
-    metric_value: number;
-    threshold_value: number;
-    threshold_type: ViolationSeverity;
-};
-
 // LLM / AI Features
 export type UserPreferences = {
     id: string;
@@ -619,30 +610,26 @@ export type LlmUsageStats = {
 };
 
 export type PortfolioNarrative = {
-    summary: string;
-    performance_explanation: string;
-    risk_highlights: string[];
-    top_contributors: string[];
+    narrative: string;
+    confidence: number;
+    time_period: string;
+    summary?: string;
+    performance_explanation?: string;
+    risk_highlights?: string[];
+    top_contributors?: string[];
     generated_at: string; // ISO 8601 timestamp
 };
 
 // News & Sentiment Types
-export type NewsArticle = {
-    title: string;
-    url: string;
-    source: string;
-    published_at: string; // ISO 8601 timestamp
-    snippet: string;
-};
-
-export type Sentiment = 'positive' | 'neutral' | 'negative';
+export type Sentiment = 'Positive' | 'Neutral' | 'Negative' | 'positive' | 'neutral' | 'negative';
 
 export type NewsTheme = {
-    theme_name: string;
+    theme: string;
     summary: string;
     sentiment: Sentiment;
     articles: NewsArticle[];
     relevance_score: number;
+    article_count: number;
 };
 
 export type PortfolioNewsAnalysis = {
@@ -683,7 +670,7 @@ export type ForecastPoint = {
     confidence_level: number; // e.g., 0.95 for 95%
 };
 
-export type ForecastMethod = 'linear_regression' | 'exponential_smoothing' | 'moving_average' | 'ensemble';
+export type ForecastMethod = 'linear_regression' | 'exponential_smoothing' | 'moving_average' | 'ensemble' | 'mean_reversion';
 
 export type PortfolioForecast = {
     portfolio_id: string;

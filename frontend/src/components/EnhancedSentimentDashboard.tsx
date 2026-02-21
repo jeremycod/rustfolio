@@ -139,7 +139,7 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                                 <strong>Divergence Detected</strong>
                             </Typography>
                             <Stack spacing={0.5}>
-                                {signal.divergence_flags.map((flag, idx) => (
+                                {signal.divergence_flags.map((flag: string, idx: number) => (
                                     <Typography key={idx} variant="body2">
                                         {flag}
                                     </Typography>
@@ -255,7 +255,7 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                         <Collapse in={expandedNewsArticles}>
                             <Divider sx={{ my: 2 }} />
                             <List>
-                                {signal.news_articles.map((article, idx) => (
+                                {signal.news_articles.map((article: any, idx: number) => (
                                     <ListItem
                                         key={idx}
                                         sx={{
@@ -333,7 +333,7 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                         <Collapse in={expandedMaterialEvents}>
                             <Divider sx={{ my: 2 }} />
                             <List>
-                                {signal.material_events.map((event, idx) => (
+                                {signal.material_events.map((event: any, idx: number) => (
                                     <ListItem
                                         key={idx}
                                         sx={{
@@ -416,7 +416,7 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                         <Collapse in={expandedInsiderActivity}>
                             <Divider sx={{ my: 2 }} />
                             <List>
-                                {signal.insider_sentiment.notable_transactions.map((txn, idx) => (
+                                {signal.insider_sentiment.notable_transactions.map((txn: any, idx: number) => (
                                     <ListItem
                                         key={idx}
                                         sx={{

@@ -266,7 +266,7 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
               tick={{ fontSize: 12 }}
             />
             <Tooltip
-              formatter={(value: number) => [`${value.toFixed(2)}%`, 'Volatility']}
+              formatter={(value: number | undefined) => value !== undefined ? [`${value.toFixed(2)}%`, 'Volatility'] : ['', 'Volatility']}
               contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
             />
             <Legend />
@@ -307,7 +307,7 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
               domain={['auto', 0]}
             />
             <Tooltip
-              formatter={(value: number) => [`${value.toFixed(2)}%`, 'Drawdown']}
+              formatter={(value: number | undefined) => value !== undefined ? [`${value.toFixed(2)}%`, 'Drawdown'] : ['', 'Drawdown']}
               contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
             />
             <Legend />

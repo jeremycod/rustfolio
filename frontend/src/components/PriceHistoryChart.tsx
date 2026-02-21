@@ -238,10 +238,12 @@ export function PriceHistoryChart({ ticker, days, companyName }: PriceHistoryCha
                   tickFormatter={(value) => `$${value.toFixed(0)}`}
                 />
                 <Tooltip
-                  formatter={(value: number, name: string) => {
-                    if (name === 'Price') return [formatCurrency(value), name];
-                    if (name === '20-Day MA') return [formatCurrency(value), name];
-                    return [value, name];
+                  formatter={(value: number | undefined, name: string | undefined) => {
+                    const displayName = name || '';
+                    if (value === undefined) return ['', displayName];
+                    if (displayName === 'Price') return [formatCurrency(value), displayName];
+                    if (displayName === '20-Day MA') return [formatCurrency(value), displayName];
+                    return [value, displayName];
                   }}
                   labelFormatter={(label) => {
                     const date = new Date(label);
@@ -300,7 +302,7 @@ export function PriceHistoryChart({ ticker, days, companyName }: PriceHistoryCha
                   label={{ value: 'Drawdown (%)', angle: -90, position: 'insideLeft' }}
                 />
                 <Tooltip
-                  formatter={(value: number) => [`${value.toFixed(2)}%`, 'Drawdown from Peak']}
+                  formatter={(value: number | undefined) => value !== undefined ? [`${value.toFixed(2)}%`, 'Drawdown from Peak'] : ['', 'Drawdown from Peak']}
                   labelFormatter={(label) => {
                     const date = new Date(label);
                     return date.toLocaleDateString();

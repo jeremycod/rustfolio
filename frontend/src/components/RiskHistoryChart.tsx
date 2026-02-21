@@ -292,7 +292,8 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
                   month: 'long',
                   day: 'numeric'
                 })}
-                formatter={(value: number, name: string) => {
+                formatter={(value: number | undefined, name: string | undefined) => {
+                  if (value === undefined) return '';
                   if (name === 'Sharpe Ratio' || name === 'Sortino Ratio' || name === 'Beta') {
                     return value.toFixed(2);
                   }

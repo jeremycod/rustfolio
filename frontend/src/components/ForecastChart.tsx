@@ -68,6 +68,7 @@ export function ForecastChart({ portfolioId }: ForecastChartProps) {
       exponential_smoothing: 'Exponential smoothing with trend (Holt\'s method)',
       moving_average: 'Simple moving average projection with adaptive window',
       ensemble: 'Weighted average of multiple forecasting methods',
+      mean_reversion: 'Mean reversion forecast based on historical average',
     };
     return descriptions[m];
   };
@@ -283,15 +284,17 @@ export function ForecastChart({ portfolioId }: ForecastChartProps) {
                     day: 'numeric'
                   });
                 }}
-                formatter={(value: number, name: string) => {
-                  if (name === 'Predicted Value') {
-                    return [formatCurrency(value), name];
+                formatter={(value: number | undefined, name: string | undefined) => {
+                  const displayName = name || '';
+                  if (value === undefined) return ['', displayName];
+                  if (displayName === 'Predicted Value') {
+                    return [formatCurrency(value), displayName];
                   }
-                  if (name === 'Confidence Range') {
+                  if (displayName === 'Confidence Range') {
                     const range = value as unknown as [number, number];
-                    return [`${formatCurrency(range[0])} - ${formatCurrency(range[1])}`, name];
+                    return [`${formatCurrency(range[0])} - ${formatCurrency(range[1])}`, displayName];
                   }
-                  return [formatCurrency(value), name];
+                  return [formatCurrency(value), displayName];
                 }}
               />
               <Legend />

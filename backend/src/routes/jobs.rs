@@ -89,6 +89,7 @@ async fn list_jobs(
         ("calculate_portfolio_risks", "0 15 * * * *", "Every hour at :15"),
         ("calculate_portfolio_correlations", "0 45 */2 * * *", "Every 2 hours at :45"),
         ("create_daily_risk_snapshots", "0 0 17 * * *", "Daily at 5:00 PM ET"),
+        ("populate_optimization_cache", if test_mode { "0 */15 * * * *" } else { "0 0 */6 * * *" }, if test_mode { "Every 15 minutes (TEST MODE)" } else { "Every 6 hours" }),
         ("cleanup_cache", if test_mode { "0 */3 * * * *" } else { "0 0 3 * * SUN" }, if test_mode { "Every 3 minutes (TEST MODE)" } else { "Every Sunday at 3:00 AM" }),
         ("archive_snapshots", "0 30 3 * * SUN", "Every Sunday at 3:30 AM"),
     ];
@@ -268,6 +269,7 @@ async fn trigger_job(
         "refresh_prices", "fetch_news", "generate_forecasts", "analyze_sec_filings",
         "check_thresholds", "warm_caches", "calculate_portfolio_risks",
         "calculate_portfolio_correlations", "create_daily_risk_snapshots",
+        "populate_optimization_cache",
         "cleanup_cache", "archive_snapshots"
     ];
 
@@ -340,6 +342,10 @@ async fn trigger_job(
         "create_daily_risk_snapshots" => {
             info!("📸 Executing daily risk snapshots job...");
             crate::jobs::daily_risk_snapshots_job::create_all_daily_risk_snapshots(job_context).await
+        }
+        "populate_optimization_cache" => {
+            info!("🎯 Executing optimization cache population job...");
+            crate::jobs::populate_optimization_cache_job::populate_all_optimization_caches(job_context).await
         }
         "cleanup_cache" => {
             info!("🧹 Executing cleanup cache job...");

@@ -42,7 +42,7 @@ export default function NewsThemeCard({ theme }: Props) {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
           <Box sx={{ flex: 1 }}>
             <Typography variant="h6" gutterBottom>
-              {theme.theme_name}
+              {theme.theme}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
               <SentimentBadge sentiment={theme.sentiment} />

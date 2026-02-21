@@ -168,7 +168,7 @@ export function PortfolioSentimentOverview({ portfolioId }: PortfolioSentimentOv
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {analysis.signals.map((signal) => (
+                                    {analysis.signals.map((signal: any) => (
                                         <TableRow key={signal.ticker} hover>
                                             <TableCell>
                                                 <Typography variant="body2" fontWeight={600}>

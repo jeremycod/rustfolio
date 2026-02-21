@@ -221,7 +221,7 @@ export function PortfolioPerformance({ portfolioId }: PortfolioPerformanceProps)
                   <XAxis dataKey="date" />
                   <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
                   <Tooltip
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : ''}
                   />
                   <Legend />
                   <Line

@@ -2,6 +2,7 @@ import { api } from "./api";
 import type {
     AnalyticsResponse,
     Portfolio,
+    Position,
     PricePoint,
     TickerMatch,
     Account,
@@ -37,6 +38,7 @@ import type {
     ForecastMethod,
     SentimentSignal,
     PortfolioSentimentAnalysis,
+    EnhancedSentimentSignal,
     JobRun,
     ScheduledJob,
     JobStats,
@@ -55,6 +57,31 @@ export async function createPortfolio(name: string): Promise<Portfolio> {
 
 export async function deletePortfolio(portfolioId: string): Promise<void> {
     await api.delete(`/api/portfolios/${portfolioId}`);
+}
+
+export async function listPositions(portfolioId: string): Promise<Position[]> {
+    const res = await api.get(`/api/portfolios/${portfolioId}/positions`);
+    return res.data;
+}
+
+export async function createPosition(
+    portfolioId: string,
+    data: { ticker: string; shares: number; avg_buy_price: number }
+): Promise<Position> {
+    const res = await api.post(`/api/portfolios/${portfolioId}/positions`, data);
+    return res.data;
+}
+
+export async function updatePosition(
+    positionId: string,
+    data: { shares: number; avg_buy_price: number }
+): Promise<Position> {
+    const res = await api.put(`/api/positions/${positionId}`, data);
+    return res.data;
+}
+
+export async function deletePosition(positionId: string): Promise<void> {
+    await api.delete(`/api/positions/${positionId}`);
 }
 
 export async function getAnalytics(portfolioId: string): Promise<AnalyticsResponse> {
@@ -284,7 +311,7 @@ export async function getPortfolioSentiment(
 ): Promise<PortfolioSentimentAnalysis> {
     const res = await api.get(
         `/api/sentiment/portfolios/${portfolioId}/sentiment`,
-        { timeout: 60000 }
+        { timeout: 10000 } // 10 second timeout
     );
     return res.data;
 }
@@ -423,7 +450,9 @@ export async function exportPortfolioRiskCSV(
 export async function getPortfolioOptimization(
     portfolioId: string
 ): Promise<OptimizationAnalysis> {
-    const res = await api.get(`/api/optimization/portfolios/${portfolioId}`);
+    const res = await api.get(`/api/optimization/portfolios/${portfolioId}`, {
+        timeout: 10000 // 10 second timeout
+    });
     return res.data;
 }
 // LLM / AI Features endpoints

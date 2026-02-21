@@ -108,7 +108,7 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
       date: point.snapshot_date,
       value: parseFloat(point.total_value),
       cost: parseFloat(point.total_cost),
-      gainLoss: parseFloat(point.total_gain_loss),
+      gainLoss: point.total_gain_loss ? parseFloat(point.total_gain_loss) : 0,
     }));
   }, [historyQ.data]);
 
@@ -289,7 +289,7 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
                     <XAxis dataKey="date" />
                     <YAxis />
                     <Tooltip
-                      formatter={(value: number) => formatCurrency(value)}
+                      formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : ''}
                     />
                     <Legend />
                     <Line
@@ -337,8 +337,8 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
                   </TableHead>
                   <TableBody>
                     {historyQ.data?.slice().reverse().map((point) => {
-                      const gainLoss = parseFloat(point.total_gain_loss);
-                      const gainLossPct = parseFloat(point.total_gain_loss_pct);
+                      const gainLoss = point.total_gain_loss ? parseFloat(point.total_gain_loss) : 0;
+                      const gainLossPct = point.total_gain_loss_pct ? parseFloat(point.total_gain_loss_pct) : 0;
 
                       return (
                         <TableRow key={point.snapshot_date}>

@@ -2,11 +2,11 @@ use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
 use axum::routing::{get, post};
 use serde::Deserialize;
-use tracing::{error, info};
+use tracing::info;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{SentimentSignal, PortfolioSentimentAnalysis, DivergenceType, EnhancedSentimentSignal};
+use crate::models::{SentimentSignal, PortfolioSentimentAnalysis, DivergenceType, EnhancedSentimentSignal, SentimentTrend, MomentumTrend, SentimentDataPoint};
 use crate::services::{sentiment_service, price_service, enhanced_sentiment_service, sec_edgar_service};
 use crate::state::AppState;
 
@@ -130,18 +130,13 @@ pub async fn get_enhanced_position_sentiment(
 }
 
 /// GET /api/sentiment/portfolios/:portfolio_id/sentiment
+///
+/// FAST VERSION: Reads from sentiment_signal_cache instead of fetching fresh data
 pub async fn get_portfolio_sentiment(
     Path(portfolio_id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<PortfolioSentimentAnalysis>, AppError> {
-    info!("Fetching portfolio sentiment for portfolio_id: {}", portfolio_id);
-
-    // Check if news service is enabled
-    if !state.news_service.is_enabled() {
-        return Err(AppError::External(
-            "News service is not enabled. Please configure NEWS_ENABLED=true and NEWS_API_KEY to use sentiment analysis.".to_string()
-        ));
-    }
+    info!("Fetching portfolio sentiment from cache for portfolio_id: {}", portfolio_id);
 
     // 1. Get all positions in the portfolio
     let positions = sqlx::query!(
@@ -166,35 +161,107 @@ pub async fn get_portfolio_sentiment(
 
     info!("Found {} positions in portfolio", positions.len());
 
-    // 2. Fetch sentiment signal for each position
+    // 2. Read cached sentiment for each position from sentiment_signal_cache
     let mut signals = Vec::new();
     let mut bullish_divergences = 0;
     let mut bearish_divergences = 0;
 
     for position in positions {
-        let ticker = position.ticker;
+        let ticker = &position.ticker;
 
-        // Try to fetch sentiment for this ticker
-        match fetch_ticker_sentiment(&state, &ticker, 30).await {
-            Ok(signal) => {
-                // Count divergences
-                match signal.divergence {
-                    DivergenceType::Bullish => bullish_divergences += 1,
-                    DivergenceType::Bearish => bearish_divergences += 1,
-                    _ => {}
+        // Read from cache instead of fetching fresh data
+        let cached = sqlx::query!(
+            r#"
+            SELECT
+                ticker,
+                current_sentiment,
+                sentiment_trend,
+                momentum_trend,
+                divergence,
+                sentiment_price_correlation,
+                correlation_lag_days,
+                historical_sentiment,
+                news_articles_analyzed,
+                warnings,
+                calculated_at
+            FROM sentiment_signal_cache
+            WHERE ticker = $1
+              AND expires_at > NOW()
+            "#,
+            ticker
+        )
+        .fetch_optional(&state.pool)
+        .await?;
+
+        if let Some(cache) = cached {
+            // Parse the cached data into SentimentSignal
+            let historical: Vec<SentimentDataPoint> = serde_json::from_value(cache.historical_sentiment)
+                .unwrap_or_default();
+
+            let warnings: Vec<String> = serde_json::from_value(cache.warnings)
+                .unwrap_or_default();
+
+            let divergence = match cache.divergence.as_str() {
+                "Bullish" => {
+                    bullish_divergences += 1;
+                    DivergenceType::Bullish
+                },
+                "Bearish" => {
+                    bearish_divergences += 1;
+                    DivergenceType::Bearish
+                },
+                _ => DivergenceType::None,
+            };
+
+            let sentiment_trend = match cache.sentiment_trend.as_str() {
+                "Improving" => SentimentTrend::Improving,
+                "Deteriorating" => SentimentTrend::Deteriorating,
+                _ => SentimentTrend::Stable,
+            };
+
+            let momentum_trend = match cache.momentum_trend.as_str() {
+                "Bullish" => MomentumTrend::Bullish,
+                "Bearish" => MomentumTrend::Bearish,
+                _ => MomentumTrend::Neutral,
+            };
+
+            // Calculate correlation strength from correlation value
+            let correlation_strength = cache.sentiment_price_correlation.map(|corr| {
+                let abs_corr = corr.abs();
+                if abs_corr >= 0.7 {
+                    "strong".to_string()
+                } else if abs_corr >= 0.4 {
+                    "moderate".to_string()
+                } else {
+                    "weak".to_string()
                 }
-                signals.push(signal);
-            }
-            Err(e) => {
-                error!("Failed to fetch sentiment for {}: {}", ticker, e);
-                // Continue with other tickers instead of failing the whole request
-            }
+            });
+
+            let signal = SentimentSignal {
+                ticker: cache.ticker,
+                current_sentiment: cache.current_sentiment,
+                sentiment_trend,
+                momentum_trend,
+                divergence,
+                sentiment_price_correlation: cache.sentiment_price_correlation,
+                correlation_lag_days: cache.correlation_lag_days,
+                correlation_strength,
+                historical_sentiment: historical,
+                news_articles_analyzed: cache.news_articles_analyzed,
+                warnings,
+                calculated_at: cache.calculated_at.and_utc(),
+            };
+
+            signals.push(signal);
+        } else {
+            // No cached data for this ticker - skip it
+            info!("No cached sentiment data for ticker: {}", ticker);
         }
     }
 
     if signals.is_empty() {
         return Err(AppError::Validation(
-            "Could not fetch sentiment for any positions in the portfolio".to_string()
+            "No cached sentiment data available for portfolio positions. Please wait for the sentiment cache to be populated by background jobs.".to_string()
         ));
     }
 
@@ -213,8 +280,8 @@ pub async fn get_portfolio_sentiment(
     };
 
     info!(
-        "Generated portfolio sentiment: avg={:.2}, bullish={}, bearish={}",
-        portfolio_avg_sentiment, bullish_divergences, bearish_divergences
+        "Generated portfolio sentiment from cache: avg={:.2}, bullish={}, bearish={}, positions with data: {}",
+        portfolio_avg_sentiment, bullish_divergences, bearish_divergences, analysis.signals.len()
     );
 
     Ok(Json(analysis))

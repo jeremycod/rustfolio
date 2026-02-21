@@ -231,9 +231,8 @@ export function AdminDashboard() {
           {jobsQuery.data && (
             <>
               <Alert severity="info" sx={{ mb: 2 }}>
-                Jobs with a <Chip label="Manual" size="small" color="primary" variant="outlined" sx={{ fontSize: '0.65rem', height: '18px', mx: 0.5 }} /> badge
-                support manual triggering. Other jobs run automatically on schedule only.
-                A "failed" status indicates the last scheduled run failed - you can manually retry analytics jobs.
+                All jobs can be triggered manually using the play button. Jobs also run automatically according to their schedule.
+                A "failed" status indicates the last scheduled run failed - you can manually retry any job.
               </Alert>
               <TableContainer>
               <Table>
@@ -406,7 +405,7 @@ export function AdminDashboard() {
                       <Chip
                         label={cacheHealthQuery.data.status.toUpperCase()}
                         color={getCacheHealthColor(cacheHealthQuery.data.status)}
-                        size="large"
+                        size="medium"
                         sx={{ fontWeight: 'bold' }}
                       />
                     </Box>

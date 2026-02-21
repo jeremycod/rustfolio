@@ -41,7 +41,7 @@ export default function App() {
                     <Dashboard
                         selectedPortfolioId={selectedPortfolioId}
                         onPortfolioChange={setSelectedPortfolioId}
-                        onTickerNavigate={handleTickerNavigate}
+                        onNavigate={handlePageChange}
                     />
                 );
             case 'accounts':
@@ -109,6 +109,7 @@ export default function App() {
                     <Dashboard
                         selectedPortfolioId={selectedPortfolioId}
                         onPortfolioChange={setSelectedPortfolioId}
+                        onNavigate={handlePageChange}
                     />
                 );
         }

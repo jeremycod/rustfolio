@@ -155,7 +155,7 @@ export default function PortfolioNarrative({ portfolioId, timePeriod = '90d' }: 
           Risk Highlights
         </Typography>
         <List dense>
-          {narrative.risk_highlights.map((highlight, index) => (
+          {narrative.risk_highlights?.map((highlight, index) => (
             <ListItem key={index} sx={{ px: 0 }}>
               <ListItemText
                 primary={`• ${highlight}`}
@@ -177,7 +177,7 @@ export default function PortfolioNarrative({ portfolioId, timePeriod = '90d' }: 
           Top Contributors
         </Typography>
         <List dense>
-          {narrative.top_contributors.map((contributor, index) => (
+          {narrative.top_contributors?.map((contributor, index) => (
             <ListItem key={index} sx={{ px: 0 }}>
               <ListItemText
                 primary={`• ${contributor}`}

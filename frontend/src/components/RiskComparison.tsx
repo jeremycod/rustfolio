@@ -77,11 +77,11 @@ export function RiskComparison() {
   });
 
   // Get unique tickers from holdings
-  const availableTickers = holdingsQ.data
+  const availableTickers: string[] = holdingsQ.data
     ? Array.from(
         new Set(
           holdingsQ.data
-            .map((h: any) => h.ticker)
+            .map((h: any) => h.ticker as string)
             .filter((t: string) => t && t !== 'CASH')
         )
       ).sort()
@@ -244,7 +244,7 @@ export function RiskComparison() {
                   <TextField {...params} label="Select from Portfolio" placeholder="Choose a ticker" />
                 )}
                 onChange={(_, value) => {
-                  if (value) handleAddTicker(value);
+                  if (value && typeof value === 'string') handleAddTicker(value);
                 }}
                 disabled={tickers.length >= 4}
                 value={null}
@@ -422,7 +422,7 @@ export function RiskComparison() {
                         .map((d) => d.data?.metrics.sharpe || 0);
                       const currentValue = item.data?.metrics.sharpe;
                       const indicator =
-                        currentValue !== null
+                        currentValue !== null && currentValue !== undefined
                           ? getBestWorstIndicator(values, currentValue, false)
                           : '';
                       return (
@@ -468,7 +468,7 @@ export function RiskComparison() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="ticker" />
                     <YAxis label={{ value: 'Volatility (%)', angle: -90, position: 'insideLeft' }} />
-                    <RechartsTooltip formatter={(value: number) => `${value.toFixed(2)}%`} />
+                    <RechartsTooltip formatter={(value: number | undefined) => value !== undefined ? `${value.toFixed(2)}%` : ''} />
                     <Bar dataKey="value" name="Volatility">
                       {volatilityData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -495,7 +495,7 @@ export function RiskComparison() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="ticker" />
                     <YAxis label={{ value: 'Max Drawdown (%)', angle: -90, position: 'insideLeft' }} />
-                    <RechartsTooltip formatter={(value: number) => `-${value.toFixed(2)}%`} />
+                    <RechartsTooltip formatter={(value: number | undefined) => value !== undefined ? `-${value.toFixed(2)}%` : ''} />
                     <Bar dataKey="value" name="Max Drawdown">
                       {drawdownData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -523,7 +523,7 @@ export function RiskComparison() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="ticker" />
                       <YAxis label={{ value: 'Beta', angle: -90, position: 'insideLeft' }} />
-                      <RechartsTooltip formatter={(value: number) => value.toFixed(2)} />
+                      <RechartsTooltip formatter={(value: number | undefined) => value !== undefined ? value.toFixed(2) : ''} />
                       <Bar dataKey="value" name="Beta">
                         {betaData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -551,7 +551,7 @@ export function RiskComparison() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="ticker" />
                     <YAxis label={{ value: 'Risk Score', angle: -90, position: 'insideLeft' }} domain={[0, 100]} />
-                    <RechartsTooltip formatter={(value: number) => value.toFixed(1)} />
+                    <RechartsTooltip formatter={(value: number | undefined) => value !== undefined ? value.toFixed(1) : ''} />
                     <Bar dataKey="value" name="Risk Score">
                       {riskScoreData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />

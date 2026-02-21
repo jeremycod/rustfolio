@@ -10,6 +10,8 @@
 //! - `portfolio_risk_job` - Calculates and updates portfolio risk metrics cache
 //! - `portfolio_correlations_job` - Computes asset correlation matrices
 //! - `daily_risk_snapshots_job` - Creates historical risk snapshots for tracking
+//! - `populate_sentiment_cache_job` - Pre-caches sentiment signals for portfolio tickers
+//! - `populate_optimization_cache_job` - Pre-caches optimization recommendations
 //!
 //! # Job Architecture
 //!
@@ -24,3 +26,5 @@
 pub mod portfolio_risk_job;
 pub mod portfolio_correlations_job;
 pub mod daily_risk_snapshots_job;
+// pub mod populate_sentiment_cache_job; // TODO: Fix sentiment job
+pub mod populate_optimization_cache_job;
