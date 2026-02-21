@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            calculation_status,\n            calculated_at,\n            last_error,\n            retry_count,\n            EXTRACT(EPOCH FROM (NOW() - calculated_at))::BIGINT as age_seconds\n        FROM portfolio_risk_cache\n        WHERE portfolio_id = $1\n        ORDER BY calculated_at DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "calculation_status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "calculated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "retry_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "age_seconds",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "05ff3a40fdce1a83ae1da460c898327db4c3aeb2b05db48bedbcade4c5886a92"
+}

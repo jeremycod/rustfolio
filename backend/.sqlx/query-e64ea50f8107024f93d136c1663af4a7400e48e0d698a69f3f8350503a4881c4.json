@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE portfolio_risk_cache\n        SET calculation_status = 'stale',\n            updated_at = NOW()\n        WHERE portfolio_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e64ea50f8107024f93d136c1663af4a7400e48e0d698a69f3f8350503a4881c4"
+}

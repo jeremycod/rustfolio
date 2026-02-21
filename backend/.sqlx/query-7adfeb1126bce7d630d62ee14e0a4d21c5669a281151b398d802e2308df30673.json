@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            calculation_status,\n            COUNT(*) as count\n        FROM portfolio_risk_cache\n        GROUP BY calculation_status\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "calculation_status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "7adfeb1126bce7d630d62ee14e0a4d21c5669a281151b398d802e2308df30673"
+}

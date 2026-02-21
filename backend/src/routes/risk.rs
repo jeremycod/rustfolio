@@ -29,6 +29,8 @@ pub fn router() -> Router<AppState> {
         .route("/portfolios/:portfolio_id/thresholds", post(set_thresholds))
         .route("/portfolios/:portfolio_id/narrative", get(get_portfolio_narrative))
         .route("/portfolios/:portfolio_id/export/csv", get(export_portfolio_risk_csv))
+        .route("/portfolios/:portfolio_id/cache-status", get(crate::routes::admin::get_portfolio_cache_status))
+        .route("/portfolios/:portfolio_id/invalidate-cache", post(crate::routes::admin::invalidate_cache))
 }
 
 /// Query parameters for risk calculation
@@ -56,6 +58,9 @@ fn default_benchmark() -> String {
 }
 
 /// Check if cached risk data exists and is still fresh (< 4 hours old)
+///
+/// DEPRECATED: Use `get_cached_portfolio_risk_with_status` instead for status-aware caching
+#[allow(dead_code)]
 async fn get_cached_portfolio_risk(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -373,6 +378,105 @@ pub async fn get_beta_forecast(
     Ok(Json(forecast))
 }
 
+/// Represents the state of cached portfolio risk data
+#[derive(Debug)]
+enum CacheResult {
+    /// Cache is fresh and valid
+    Fresh(PortfolioRiskWithViolations),
+    /// Calculation is currently in progress
+    Calculating,
+    /// Cache exists but is stale (expired)
+    Stale(PortfolioRiskWithViolations),
+    /// Previous calculation failed with an error
+    Error(String),
+}
+
+/// Query portfolio risk cache and determine its status
+///
+/// This function checks the portfolio_risk_cache table and returns the appropriate
+/// CacheResult variant based on the calculation_status and expiration time.
+///
+/// Returns:
+/// - `Some(CacheResult::Fresh)` if status='fresh' and not expired
+/// - `Some(CacheResult::Stale)` if status='fresh' but expired, or status='stale'
+/// - `Some(CacheResult::Calculating)` if status='calculating'
+/// - `Some(CacheResult::Error)` if status='error'
+/// - `None` if no cache entry exists
+async fn get_cached_portfolio_risk_with_status(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    days: i64,
+    benchmark: &str,
+) -> Result<Option<CacheResult>, AppError> {
+    // Use raw query to handle case where status columns might not exist yet
+    let result = sqlx::query_as::<_, (serde_json::Value, Option<String>, chrono::DateTime<Utc>, Option<String>)>(
+        r#"
+        SELECT risk_data,
+               COALESCE(calculation_status, 'stale') as calculation_status,
+               expires_at,
+               last_error
+        FROM portfolio_risk_cache
+        WHERE portfolio_id = $1 AND days = $2 AND benchmark = $3
+        "#
+    )
+    .bind(portfolio_id)
+    .bind(days as i32)
+    .bind(benchmark)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    match result {
+        None => {
+            info!("No cache entry found for portfolio {} ({}d, {})", portfolio_id, days, benchmark);
+            Ok(None)
+        }
+        Some((risk_data_json, calculation_status_opt, expires_at, last_error)) => {
+            let now = Utc::now();
+            let is_expired = expires_at <= now;
+            let calculation_status = calculation_status_opt.unwrap_or_else(|| "stale".to_string());
+
+            match calculation_status.as_str() {
+                "fresh" => {
+                    if is_expired {
+                        info!("Cache entry for portfolio {} is expired ({}d, {})", portfolio_id, days, benchmark);
+                        // Try to deserialize the stale data
+                        let risk_data: PortfolioRiskWithViolations = serde_json::from_value(risk_data_json)
+                            .map_err(|e| AppError::External(format!("Failed to deserialize cached risk: {}", e)))?;
+                        Ok(Some(CacheResult::Stale(risk_data)))
+                    } else {
+                        info!("Found fresh cache for portfolio {} ({}d, {})", portfolio_id, days, benchmark);
+                        let risk_data: PortfolioRiskWithViolations = serde_json::from_value(risk_data_json)
+                            .map_err(|e| AppError::External(format!("Failed to deserialize cached risk: {}", e)))?;
+                        Ok(Some(CacheResult::Fresh(risk_data)))
+                    }
+                }
+                "stale" => {
+                    info!("Cache entry for portfolio {} is marked stale ({}d, {})", portfolio_id, days, benchmark);
+                    let risk_data: PortfolioRiskWithViolations = serde_json::from_value(risk_data_json)
+                        .map_err(|e| AppError::External(format!("Failed to deserialize cached risk: {}", e)))?;
+                    Ok(Some(CacheResult::Stale(risk_data)))
+                }
+                "calculating" => {
+                    info!("Cache entry for portfolio {} is calculating ({}d, {})", portfolio_id, days, benchmark);
+                    Ok(Some(CacheResult::Calculating))
+                }
+                "error" => {
+                    let error_msg = last_error.unwrap_or_else(|| "Unknown error".to_string());
+                    info!("Cache entry for portfolio {} has error: {} ({}d, {})", portfolio_id, error_msg, days, benchmark);
+                    Ok(Some(CacheResult::Error(error_msg)))
+                }
+                status => {
+                    warn!("Unknown calculation_status '{}' for portfolio {}, treating as stale", status, portfolio_id);
+                    let risk_data: PortfolioRiskWithViolations = serde_json::from_value(risk_data_json)
+                        .map_err(|e| AppError::External(format!("Failed to deserialize cached risk: {}", e)))?;
+                    Ok(Some(CacheResult::Stale(risk_data)))
+                }
+            }
+        }
+    }
+}
+
 /// GET /api/risk/portfolios/:portfolio_id
 ///
 /// Calculate aggregated risk metrics for a portfolio.
@@ -393,17 +497,55 @@ pub async fn get_portfolio_risk(
     use std::collections::HashMap;
 
     info!(
-        "GET /api/risk/portfolios/{} - Computing portfolio risk (days={}, benchmark={}, force={})",
+        "GET /api/risk/portfolios/{} - Requesting portfolio risk (days={}, benchmark={}, force={})",
         portfolio_id, params.days, params.benchmark, params.force
     );
 
-    // Check cache first if not forcing refresh
+    // NEW BEHAVIOR: Cache-only strategy for normal requests
+    // The endpoint now relies on background job calculations and returns cached data
+    // This significantly reduces API response time and prevents duplicate calculations
     if !params.force {
-        if let Some(cached_risk) = get_cached_portfolio_risk(&state.pool, portfolio_id, params.days, &params.benchmark).await? {
-            info!("Returning cached risk data for portfolio {}", portfolio_id);
-            return Ok(Json(cached_risk));
+        // Query the cache with status information
+        match get_cached_portfolio_risk_with_status(&state.pool, portfolio_id, params.days, &params.benchmark).await? {
+            Some(CacheResult::Fresh(data)) => {
+                info!("✓ Returning fresh cached risk data for portfolio {}", portfolio_id);
+                return Ok(Json(data));
+            }
+            Some(CacheResult::Stale(data)) => {
+                // Return stale data but log a warning
+                // Background job will refresh this automatically
+                warn!(
+                    "⚠ Returning stale cache data for portfolio {} ({}d, {}). Background job will refresh soon.",
+                    portfolio_id, params.days, params.benchmark
+                );
+                return Ok(Json(data));
+            }
+            Some(CacheResult::Calculating) => {
+                // Calculation is in progress, ask client to retry
+                return Err(AppError::ServiceUnavailable(
+                    "Risk calculation in progress. Please try again in 30 seconds.".to_string()
+                ));
+            }
+            Some(CacheResult::Error(msg)) => {
+                // Previous calculation failed, background job will retry automatically
+                return Err(AppError::External(format!(
+                    "Risk calculation failed: {}. Background job will retry automatically.",
+                    msg
+                )));
+            }
+            None => {
+                // No cache entry exists - this is the first request for this portfolio
+                return Err(AppError::ServiceUnavailable(
+                    "Risk data is being calculated. This is your first request for this portfolio. Please try again in 30-60 seconds.".to_string()
+                ));
+            }
         }
     }
+
+    // LEGACY BEHAVIOR: force=true triggers synchronous calculation
+    // This is preserved for manual refresh and debugging purposes
+    // In production, this should rarely be used as it can cause timeouts
+    info!("🔄 Force refresh requested - performing synchronous calculation for portfolio {}", portfolio_id);
 
     // 1. Fetch all latest holdings for the portfolio
     let holdings = holding_snapshot_queries::fetch_portfolio_latest_holdings(
@@ -739,12 +881,46 @@ pub async fn set_thresholds(
     Ok(Json(settings))
 }
 
+/// Get cached correlation matrix if available and fresh
+async fn get_cached_correlations(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    days: i64,
+) -> Result<Option<crate::models::risk::CorrelationMatrixWithStats>, AppError> {
+    let result = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT correlations_data
+        FROM portfolio_correlations_cache
+        WHERE portfolio_id = $1
+          AND days = $2
+          AND calculation_status = 'fresh'
+          AND expires_at > NOW()
+        "#
+    )
+    .bind(portfolio_id)
+    .bind(days as i32)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    if let Some(correlations_data) = result {
+        info!("Found cached correlation data for portfolio {} ({}d)", portfolio_id, days);
+        let correlation_result: crate::models::risk::CorrelationMatrixWithStats = serde_json::from_value(correlations_data)
+            .map_err(|e| AppError::External(format!("Failed to deserialize cached correlations: {}", e)))?;
+        Ok(Some(correlation_result))
+    } else {
+        info!("No valid correlation cache found for portfolio {} ({}d)", portfolio_id, days);
+        Ok(None)
+    }
+}
+
 /// GET /api/risk/portfolios/:portfolio_id/correlations
 ///
 /// Calculate correlation matrix for all positions in a portfolio.
 ///
 /// Query parameters:
 /// - `days`: Rolling window in days (default: 90)
+/// - `force`: Force recalculation (default: false)
 ///
 /// Example: GET /api/risk/portfolios/{uuid}/correlations?days=90
 pub async fn get_portfolio_correlations(
@@ -756,10 +932,31 @@ pub async fn get_portfolio_correlations(
     use std::collections::HashMap;
     use std::time::Instant;
 
+    info!(
+        "GET /api/risk/portfolios/{}/correlations - Requesting correlation matrix (days={}, force={})",
+        portfolio_id, params.days, params.force
+    );
+
+    // Check cache first if not forcing refresh
+    if !params.force {
+        if let Some(cached_correlations) = get_cached_correlations(&state.pool, portfolio_id, params.days).await? {
+            info!("Returning cached correlation data for portfolio {}", portfolio_id);
+            return Ok(Json(cached_correlations));
+        }
+
+        // Cache miss or stale - return 503 to indicate data is being calculated
+        warn!("No fresh correlation cache for portfolio {} ({}d) - data may be calculating in background",
+              portfolio_id, params.days);
+        return Err(AppError::ServiceUnavailable(
+            "Correlation matrix is being calculated. Please try again in a few moments.".to_string()
+        ));
+    }
+
+    // Force refresh requested - compute correlations on demand
     let start = Instant::now();
     info!(
-        "GET /api/risk/portfolios/{}/correlations - Computing correlation matrix (days={})",
-        portfolio_id, params.days
+        "Force refresh requested - computing correlation matrix (days={})",
+        params.days
     );
 
     // 1. Fetch all latest holdings for the portfolio

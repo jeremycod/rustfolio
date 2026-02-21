@@ -36,7 +36,11 @@ import type {
     BetaForecast,
     ForecastMethod,
     SentimentSignal,
-    PortfolioSentimentAnalysis
+    PortfolioSentimentAnalysis,
+    JobRun,
+    ScheduledJob,
+    JobStats,
+    CacheHealthStatus
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -212,10 +216,12 @@ export async function getPortfolioRisk(
 
 export async function getPortfolioCorrelations(
     portfolioId: string,
-    days?: number
+    days?: number,
+    force?: boolean
 ): Promise<CorrelationMatrixWithStats> {
     const params = new URLSearchParams();
     if (days) params.append('days', days.toString());
+    if (force) params.append('force', 'true');
 
     const queryString = params.toString();
     const url = `/api/risk/portfolios/${portfolioId}/correlations${queryString ? `?${queryString}` : ''}`;
@@ -484,5 +490,48 @@ export async function askPortfolioQuestion(
     question: PortfolioQuestion
 ): Promise<PortfolioAnswer> {
     const res = await api.post(`/api/qa/portfolios/${portfolioId}/ask`, question);
+    return res.data;
+}
+
+// Job Scheduler Admin endpoints
+export async function listJobs(): Promise<ScheduledJob[]> {
+    const res = await api.get('/api/admin/jobs');
+    return res.data;
+}
+
+export async function getRecentJobRuns(limit?: number): Promise<JobRun[]> {
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit.toString());
+
+    const queryString = params.toString();
+    const url = `/api/admin/jobs/recent${queryString ? `?${queryString}` : ''}`;
+
+    const res = await api.get(url);
+    return res.data;
+}
+
+export async function getJobHistory(jobName: string, limit?: number): Promise<JobRun[]> {
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit.toString());
+
+    const queryString = params.toString();
+    const url = `/api/admin/jobs/${encodeURIComponent(jobName)}/history${queryString ? `?${queryString}` : ''}`;
+
+    const res = await api.get(url);
+    return res.data;
+}
+
+export async function getJobStats(jobName: string): Promise<JobStats> {
+    const res = await api.get(`/api/admin/jobs/${encodeURIComponent(jobName)}/stats`);
+    return res.data;
+}
+
+export async function triggerJob(jobName: string): Promise<{ success: boolean; message: string; job_id?: number }> {
+    const res = await api.post(`/api/admin/jobs/${encodeURIComponent(jobName)}/trigger`);
+    return res.data;
+}
+
+export async function getCacheHealth(): Promise<CacheHealthStatus> {
+    const res = await api.get('/api/admin/cache-health');
     return res.data;
 }

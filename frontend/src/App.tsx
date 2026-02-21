@@ -14,6 +14,7 @@ import { PortfolioRiskOverview } from "./components/PortfolioRiskOverview";
 import { RiskComparison } from "./components/RiskComparison";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { RollingBetaPage } from "./components/RollingBetaPage";
+import { AdminDashboard } from "./components/AdminDashboard";
 
 export default function App() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
@@ -101,6 +102,8 @@ export default function App() {
                 );
             case 'settings':
                 return <Settings />;
+            case 'admin':
+                return <AdminDashboard />;
             default:
                 return (
                     <Dashboard

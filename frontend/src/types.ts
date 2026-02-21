@@ -685,3 +685,68 @@ export type PortfolioForecast = {
     warnings: string[];
     generated_at: string; // ISO 8601 timestamp
 };
+
+// Job Scheduler types
+export type JobStatus = 'running' | 'success' | 'failed' | 'cancelled';
+
+export type JobRun = {
+    id: number;
+    job_name: string;
+    started_at: string;
+    completed_at: string | null;
+    status: JobStatus;
+    items_processed: number | null;
+    items_failed: number | null;
+    error_message: string | null;
+    duration_ms: number | null;
+};
+
+export type ScheduledJob = {
+    name: string;
+    schedule: string;
+    description: string;
+    last_run: string | null;
+    last_status: JobStatus | null;
+    next_run: string | null;
+};
+
+export type JobStats = {
+    job_name: string;
+    total_runs: number;
+    successful_runs: number;
+    failed_runs: number;
+    avg_duration_ms: number;
+    last_run_at: string | null;
+    last_status: JobStatus | null;
+};
+
+// Cache Health types
+export type CacheHealthLevel = 'healthy' | 'degraded' | 'critical';
+
+export type CacheTableHealth = {
+    table_name: string;
+    total_entries: number;
+    fresh_entries: number;
+    stale_entries: number;
+    calculating_entries: number;
+    error_entries: number;
+    hit_rate_pct: number | null;
+    avg_age_hours: number | null;
+};
+
+export type CacheHealthSummary = {
+    total_entries: number;
+    total_fresh: number;
+    total_stale: number;
+    total_calculating: number;
+    total_errors: number;
+    freshness_pct: number;
+    error_rate_pct: number;
+};
+
+export type CacheHealthStatus = {
+    checked_at: string;
+    status: CacheHealthLevel;
+    tables: CacheTableHealth[];
+    summary: CacheHealthSummary;
+};

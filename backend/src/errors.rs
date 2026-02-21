@@ -1,6 +1,8 @@
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::IntoResponse;
+use axum::Json;
 use reqwest::StatusCode;
+use serde_json::json;
 use sqlx::Error;
 use thiserror::Error;
 
@@ -21,6 +23,9 @@ pub enum AppError {
     Unauthorized,
     #[error("LLM error: {0}")]
     Llm(LlmError),
+    /// 503 Service Unavailable - Resource is being computed in background
+    #[error("Service unavailable: {0}")]
+    ServiceUnavailable(String),
 }
 
 #[derive(Debug, Error)]
@@ -55,6 +60,16 @@ impl IntoResponse for AppError {
             // Use 503 Service Unavailable only for actual external service failures
             AppError::External(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg).into_response(),
             AppError::Db(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response(),
+            AppError::ServiceUnavailable(msg) => {
+                let mut headers = HeaderMap::new();
+                headers.insert("Retry-After", HeaderValue::from_static("30"));
+                let body = json!({
+                    "error": "service_unavailable",
+                    "message": msg,
+                    "retry_after": 30
+                });
+                (StatusCode::SERVICE_UNAVAILABLE, headers, Json(body)).into_response()
+            },
             AppError::Llm(llm_err) => match llm_err {
                 LlmError::RateLimited => {
                     let mut headers = HeaderMap::new();
@@ -84,6 +99,12 @@ impl From<String> for AppError {
 impl From<LlmError> for AppError {
     fn from(value: LlmError) -> Self {
         AppError::Llm(value)
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::External(format!("JSON serialization error: {}", err))
     }
 }
 

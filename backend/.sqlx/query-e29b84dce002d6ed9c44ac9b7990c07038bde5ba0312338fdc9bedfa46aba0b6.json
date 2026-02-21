@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            calculation_status,\n            COUNT(*) as count\n        FROM portfolio_correlations_cache\n        GROUP BY calculation_status\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "calculation_status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "e29b84dce002d6ed9c44ac9b7990c07038bde5ba0312338fdc9bedfa46aba0b6"
+}

@@ -1,5 +1,6 @@
 use crate::errors::AppError;
 use crate::external::price_provider::PriceProvider;
+use crate::jobs::{portfolio_risk_job, portfolio_correlations_job, daily_risk_snapshots_job};
 use crate::services::failure_cache::FailureCache;
 use crate::services::rate_limiter::RateLimiter;
 use sqlx::PgPool;
@@ -110,6 +111,29 @@ impl JobSchedulerService {
             warm_popular_caches
         ).await?;
 
+        // Portfolio analytics jobs
+        self.schedule_job(
+            "0 15 * * * *",
+            "calculate_portfolio_risks",
+            "Every hour at :15",
+            portfolio_risk_job::calculate_all_portfolio_risks
+        ).await?;
+
+        self.schedule_job(
+            "0 45 */2 * * *",
+            "calculate_portfolio_correlations",
+            "Every 2 hours at :45",
+            portfolio_correlations_job::calculate_all_portfolio_correlations
+        ).await?;
+
+        // Daily jobs - after market close
+        self.schedule_job(
+            "0 0 17 * * *",
+            "create_daily_risk_snapshots",
+            "Daily at 5:00 PM ET",
+            daily_risk_snapshots_job::create_all_daily_risk_snapshots
+        ).await?;
+
         // Weekly jobs (SUN = Sunday)
         let cleanup_schedule = if test_mode { "0 */3 * * * *" } else { "0 0 3 * * SUN" };
         let cleanup_desc = if test_mode { "Every 3 minutes (TEST MODE)" } else { "Every Sunday at 3:00 AM" };
@@ -133,7 +157,7 @@ impl JobSchedulerService {
             .await
             .map_err(|e| AppError::External(format!("Failed to start scheduler: {}", e)))?;
 
-        info!("✅ Job scheduler started successfully with 8 jobs");
+        info!("✅ Job scheduler started successfully with 11 jobs");
         Ok(())
     }
 

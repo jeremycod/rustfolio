@@ -82,6 +82,19 @@ export function PortfolioRiskOverview({
     queryFn: () => getPortfolioRisk(selectedPortfolioId!, 90, 'SPY', false),
     enabled: !!selectedPortfolioId,
     staleTime: 4 * 60 * 60 * 1000, // 4 hours (matches backend cache)
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 503) {
+        return failureCount < 5; // Retry 503 up to 5 times
+      }
+      return failureCount < 3; // Normal retries
+    },
+    retryDelay: (attemptIndex, error: any) => {
+      if (error?.response?.status === 503) {
+        // Exponential backoff: 10s, 20s, 40s, 60s, 60s
+        return Math.min(10000 * Math.pow(2, attemptIndex), 60000);
+      }
+      return 1000; // Normal retry delay
+    },
   });
 
   // Extract data from response
@@ -250,7 +263,22 @@ export function PortfolioRiskOverview({
         </Box>
       )}
 
-      {portfolioRiskQ.isError && (
+      {/* 503 Service Unavailable - Calculation in Progress */}
+      {portfolioRiskQ.isError && (portfolioRiskQ.error as any)?.response?.status === 503 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="body2" gutterBottom>
+            <strong>Risk metrics are being calculated.</strong> This typically takes 1-2 minutes.
+            The page will automatically refresh when ready.
+          </Typography>
+          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
+            Auto-retrying with exponential backoff...
+          </Typography>
+          <LinearProgress sx={{ mt: 1 }} />
+        </Alert>
+      )}
+
+      {/* Other errors */}
+      {portfolioRiskQ.isError && (portfolioRiskQ.error as any)?.response?.status !== 503 && (
         <Alert severity="error" sx={{ mb: 3 }}>
           Failed to load portfolio risk data. {portfolioRiskQ.error instanceof Error ? portfolioRiskQ.error.message : 'Please try again.'}
         </Alert>

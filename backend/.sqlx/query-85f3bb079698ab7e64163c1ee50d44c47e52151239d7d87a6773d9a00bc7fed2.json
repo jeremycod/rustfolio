@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            calculation_status,\n            calculated_at,\n            last_error,\n            EXTRACT(EPOCH FROM (NOW() - calculated_at))::BIGINT as age_seconds\n        FROM portfolio_correlations_cache\n        WHERE portfolio_id = $1\n        ORDER BY calculated_at DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "calculation_status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "calculated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "age_seconds",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "85f3bb079698ab7e64163c1ee50d44c47e52151239d7d87a6773d9a00bc7fed2"
+}

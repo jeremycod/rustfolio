@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO portfolio_correlations_cache\n            (portfolio_id, days, correlations_data, calculated_at, expires_at, calculation_status, last_error)\n        VALUES ($1, $2, '{}'::jsonb, NOW(), $3, 'error', $4)\n        ON CONFLICT (portfolio_id, days)\n        DO UPDATE SET\n            calculated_at = NOW(),\n            expires_at = EXCLUDED.expires_at,\n            calculation_status = 'error',\n            last_error = EXCLUDED.last_error,\n            updated_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f47afae20f3885f6b422f675cf6dfaa20387d44e946ef5ff2c7b84fd9b8bf602"
+}

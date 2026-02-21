@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM portfolio_news_cache",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "29112f94f7d2561d23041df7d8bd815fb078276b1f78b6c7367166a5951e6865"
+}

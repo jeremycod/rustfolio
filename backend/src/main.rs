@@ -10,6 +10,7 @@ mod services;
 mod external;
 mod state;
 mod logging;
+mod jobs;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
