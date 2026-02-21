@@ -19,20 +19,20 @@ import {
   Alert,
   Card,
   CardContent,
+  Tooltip,
 } from '@mui/material';
-import { Delete, Warning, Settings as SettingsIcon, Psychology, Tune } from '@mui/icons-material';
-import { useState } from 'react';
+import { Delete, Warning, Settings as SettingsIcon, Psychology, Tune, NotificationsActive, NotificationsOff } from '@mui/icons-material';
+import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { resetAllData, listPortfolios, deletePortfolio, getUserPreferences } from '../lib/endpoints';
 import { RiskThresholdSettings } from './RiskThresholdSettings';
 import UserSettingsDialog from './UserSettingsDialog';
 import AIBadge from './AIBadge';
+import { usePreferences } from '../contexts/PreferencesContext';
 import type { Portfolio } from '../types';
 
 export function Settings() {
-  const [darkMode, setDarkMode] = useState(false);
-  const [notifications, setNotifications] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const { darkMode, toggleDarkMode, notifications, toggleNotifications, autoRefresh, toggleAutoRefresh } = usePreferences();
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [portfolioToDelete, setPortfolioToDelete] = useState<Portfolio | null>(null);
@@ -214,7 +214,7 @@ export function Settings() {
             control={
               <Switch
                 checked={darkMode}
-                onChange={(e) => setDarkMode(e.target.checked)}
+                onChange={toggleDarkMode}
               />
             }
             label="Dark Mode"
@@ -224,7 +224,7 @@ export function Settings() {
             control={
               <Switch
                 checked={notifications}
-                onChange={(e) => setNotifications(e.target.checked)}
+                onChange={toggleNotifications}
               />
             }
             label="Enable Notifications"
@@ -234,7 +234,7 @@ export function Settings() {
             control={
               <Switch
                 checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
+                onChange={toggleAutoRefresh}
               />
             }
             label="Auto-refresh Data"

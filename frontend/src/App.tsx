@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Box, Typography, Alert } from "@mui/material";
 import { listPortfolios } from "./lib/endpoints";
 import { Layout } from "./components/Layout";
@@ -15,12 +15,16 @@ import { RiskComparison } from "./components/RiskComparison";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { RollingBetaPage } from "./components/RollingBetaPage";
 import { AdminDashboard } from "./components/AdminDashboard";
+import { usePreferences } from "./contexts/PreferencesContext";
 
 export default function App() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState('dashboard');
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
     const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+
+    const queryClient = useQueryClient();
+    const { autoRefresh } = usePreferences();
 
     const portfoliosQ = useQuery({
         queryKey: ["portfolios"],
@@ -33,6 +37,17 @@ export default function App() {
             setSelectedPortfolioId(portfoliosQ.data[0].id);
         }
     }, [portfoliosQ.data, selectedPortfolioId]);
+
+    // Auto-refresh data when enabled
+    useEffect(() => {
+        if (!autoRefresh) return;
+
+        const interval = setInterval(() => {
+            queryClient.invalidateQueries();
+        }, 60000); // Refresh every 60 seconds
+
+        return () => clearInterval(interval);
+    }, [autoRefresh, queryClient]);
 
     const renderPage = () => {
         switch (currentPage) {
