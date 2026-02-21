@@ -31,7 +31,7 @@ pub async fn generate_enhanced_sentiment(
 
     // 1. Get base news sentiment (existing implementation)
     info!("📰 [ENHANCED SENTIMENT] === PHASE 1: NEWS SENTIMENT ===");
-    let news_signal = get_or_create_news_sentiment(pool, news_service, ticker, days).await?;
+    let (news_signal, news_articles) = get_or_create_news_sentiment(pool, news_service, ticker, days).await?;
     info!("📰 [ENHANCED SENTIMENT] News sentiment result: score={:.2}, articles={}",
         news_signal.current_sentiment, news_signal.news_articles_analyzed);
 
@@ -101,6 +101,7 @@ pub async fn generate_enhanced_sentiment(
         ticker: ticker.to_string(),
         news_sentiment: news_signal.current_sentiment,
         news_confidence: format!("{} articles analyzed", news_signal.news_articles_analyzed),
+        news_articles,
         material_events,
         sec_filing_score: sec_score,
         insider_sentiment,
@@ -129,7 +130,7 @@ async fn get_or_create_news_sentiment(
     news_service: &crate::services::news_service::NewsService,
     ticker: &str,
     days: i32,
-) -> Result<SentimentSignal, AppError> {
+) -> Result<(SentimentSignal, Vec<crate::models::NewsArticle>), AppError> {
     info!("🔍 [NEWS SENTIMENT] Starting news sentiment fetch for {} (days={})", ticker, days);
 
     // 1. Fetch news articles
@@ -141,7 +142,7 @@ async fn get_or_create_news_sentiment(
         },
         Err(e) => {
             warn!("❌ [NEWS SENTIMENT] Failed to fetch news for {}: {}", ticker, e);
-            return Ok(SentimentSignal {
+            return Ok((SentimentSignal {
                 ticker: ticker.to_string(),
                 current_sentiment: 0.0,
                 sentiment_trend: crate::models::SentimentTrend::Stable,
@@ -154,13 +155,13 @@ async fn get_or_create_news_sentiment(
                 news_articles_analyzed: 0,
                 calculated_at: Utc::now(),
                 warnings: vec![format!("Failed to fetch news: {}", e)],
-            });
+            }, Vec::new()));
         }
     };
 
     if articles.is_empty() {
         warn!("⚠️ [NEWS SENTIMENT] No news articles found for {} in last {} days", ticker, days);
-        return Ok(SentimentSignal {
+        return Ok((SentimentSignal {
             ticker: ticker.to_string(),
             current_sentiment: 0.0,
             sentiment_trend: crate::models::SentimentTrend::Stable,
@@ -173,10 +174,13 @@ async fn get_or_create_news_sentiment(
             news_articles_analyzed: 0,
             calculated_at: Utc::now(),
             warnings: vec!["No news articles found".to_string()],
-        });
+        }, Vec::new()));
     }
 
     info!("✅ [NEWS SENTIMENT] Found {} news articles for {}", articles.len(), ticker);
+
+    // Clone articles for return value before consuming them
+    let articles_clone = articles.clone();
 
     // 2. Cluster articles into themes using LLM
     info!("🔍 [NEWS SENTIMENT] Step 2: Clustering articles into themes using LLM...");
@@ -190,7 +194,7 @@ async fn get_or_create_news_sentiment(
         },
         Err(e) => {
             warn!("❌ [NEWS SENTIMENT] Failed to cluster themes for {}: {}", ticker, e);
-            return Ok(SentimentSignal {
+            return Ok((SentimentSignal {
                 ticker: ticker.to_string(),
                 current_sentiment: 0.0,
                 sentiment_trend: crate::models::SentimentTrend::Stable,
@@ -203,13 +207,13 @@ async fn get_or_create_news_sentiment(
                 news_articles_analyzed: 0,
                 calculated_at: Utc::now(),
                 warnings: vec![format!("Failed to analyze themes: {}", e)],
-            });
+            }, articles_clone));
         }
     };
 
     if themes.is_empty() {
         warn!("⚠️ [NEWS SENTIMENT] No themes extracted for {} (empty result from LLM)", ticker);
-        return Ok(SentimentSignal {
+        return Ok((SentimentSignal {
             ticker: ticker.to_string(),
             current_sentiment: 0.0,
             sentiment_trend: crate::models::SentimentTrend::Stable,
@@ -222,7 +226,7 @@ async fn get_or_create_news_sentiment(
             news_articles_analyzed: 0,
             calculated_at: Utc::now(),
             warnings: vec!["No themes extracted from news".to_string()],
-        });
+        }, articles_clone));
     }
 
     info!("✅ [NEWS SENTIMENT] Extracted {} themes for {}", themes.len(), ticker);
@@ -236,7 +240,7 @@ async fn get_or_create_news_sentiment(
         },
         Err(e) => {
             warn!("❌ [NEWS SENTIMENT] Failed to fetch price history for {}: {}", ticker, e);
-            return Ok(SentimentSignal {
+            return Ok((SentimentSignal {
                 ticker: ticker.to_string(),
                 current_sentiment: 0.0,
                 sentiment_trend: crate::models::SentimentTrend::Stable,
@@ -249,13 +253,13 @@ async fn get_or_create_news_sentiment(
                 news_articles_analyzed: themes.iter().map(|t| t.articles.len()).sum::<usize>() as i32,
                 calculated_at: Utc::now(),
                 warnings: vec![format!("No price history available: {}", e)],
-            });
+            }, articles_clone));
         }
     };
 
     if prices.is_empty() {
         warn!("⚠️ [NEWS SENTIMENT] No price history found for {} (empty result from DB)", ticker);
-        return Ok(SentimentSignal {
+        return Ok((SentimentSignal {
             ticker: ticker.to_string(),
             current_sentiment: 0.0,
             sentiment_trend: crate::models::SentimentTrend::Stable,
@@ -268,7 +272,7 @@ async fn get_or_create_news_sentiment(
             news_articles_analyzed: themes.iter().map(|t| t.articles.len()).sum::<usize>() as i32,
             calculated_at: Utc::now(),
             warnings: vec!["No price history available".to_string()],
-        });
+        }, articles_clone));
     }
 
     info!("✅ [NEWS SENTIMENT] Found {} price points for {}", prices.len(), ticker);
@@ -288,7 +292,7 @@ async fn get_or_create_news_sentiment(
         },
         Err(e) => {
             warn!("❌ [NEWS SENTIMENT] Failed to generate sentiment signal for {}: {}", ticker, e);
-            return Ok(SentimentSignal {
+            return Ok((SentimentSignal {
                 ticker: ticker.to_string(),
                 current_sentiment: 0.0,
                 sentiment_trend: crate::models::SentimentTrend::Stable,
@@ -301,7 +305,7 @@ async fn get_or_create_news_sentiment(
                 news_articles_analyzed: 0,
                 calculated_at: Utc::now(),
                 warnings: vec![format!("Failed to generate signal: {}", e)],
-            });
+            }, articles_clone));
         }
     };
 
@@ -310,7 +314,7 @@ async fn get_or_create_news_sentiment(
         ticker, signal.current_sentiment, signal.sentiment_trend, signal.news_articles_analyzed
     );
 
-    Ok(signal)
+    Ok((signal, articles_clone))
 }
 
 /// Fetch and analyze 8-K material events
@@ -649,6 +653,7 @@ async fn get_enhanced_sentiment_from_cache(
             ticker: row.ticker,
             news_sentiment: row.news_sentiment,
             news_confidence: row.news_confidence,
+            news_articles: Vec::new(), // Articles not stored in cache
             material_events,
             sec_filing_score: row.sec_filing_score,
             insider_sentiment,

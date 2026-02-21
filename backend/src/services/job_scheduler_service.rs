@@ -336,7 +336,7 @@ async fn record_job_failure(
 }
 
 // Job implementation functions
-async fn refresh_all_prices(ctx: JobContext) -> Result<JobResult, AppError> {
+pub async fn refresh_all_prices(ctx: JobContext) -> Result<JobResult, AppError> {
     info!("💰 Refreshing all prices...");
 
     // Get all unique tickers from positions
@@ -372,7 +372,7 @@ async fn refresh_all_prices(ctx: JobContext) -> Result<JobResult, AppError> {
     Ok(JobResult { items_processed: processed, items_failed: failed })
 }
 
-async fn fetch_all_news(ctx: JobContext) -> Result<JobResult, AppError> {
+pub async fn fetch_all_news(ctx: JobContext) -> Result<JobResult, AppError> {
     info!("📰 Fetching all news...");
 
     // Clear all news cache to force fresh fetch on next request
@@ -386,7 +386,7 @@ async fn fetch_all_news(ctx: JobContext) -> Result<JobResult, AppError> {
     Ok(JobResult { items_processed: processed, items_failed: 0 })
 }
 
-async fn generate_all_forecasts(ctx: JobContext) -> Result<JobResult, AppError> {
+pub async fn generate_all_forecasts(ctx: JobContext) -> Result<JobResult, AppError> {
     info!("🔮 Generating all forecasts...");
 
     // Get popular tickers (top 20 by position count)
@@ -422,7 +422,7 @@ async fn generate_all_forecasts(ctx: JobContext) -> Result<JobResult, AppError> 
     Ok(JobResult { items_processed: processed, items_failed: 0 })
 }
 
-async fn analyze_all_sec_filings(ctx: JobContext) -> Result<JobResult, AppError> {
+pub async fn analyze_all_sec_filings(ctx: JobContext) -> Result<JobResult, AppError> {
     info!("📄 Analyzing SEC filings...");
 
     // Get top 20 tickers
@@ -450,7 +450,7 @@ async fn analyze_all_sec_filings(ctx: JobContext) -> Result<JobResult, AppError>
     Ok(JobResult { items_processed: processed, items_failed: 0 })
 }
 
-async fn check_all_thresholds(ctx: JobContext) -> Result<JobResult, AppError> {
+pub async fn check_all_thresholds(ctx: JobContext) -> Result<JobResult, AppError> {
     info!("⚠️ Checking thresholds...");
 
     // Get all portfolios with threshold settings
@@ -467,7 +467,7 @@ async fn check_all_thresholds(ctx: JobContext) -> Result<JobResult, AppError> {
     Ok(JobResult { items_processed: processed, items_failed: 0 })
 }
 
-async fn warm_popular_caches(_ctx: JobContext) -> Result<JobResult, AppError> {
+pub async fn warm_popular_caches(_ctx: JobContext) -> Result<JobResult, AppError> {
     info!("🔥 Warming popular caches...");
 
     // Nothing to pre-warm yet, caches fill on-demand
@@ -476,7 +476,7 @@ async fn warm_popular_caches(_ctx: JobContext) -> Result<JobResult, AppError> {
     Ok(JobResult { items_processed: 0, items_failed: 0 })
 }
 
-async fn cleanup_expired_caches(ctx: JobContext) -> Result<JobResult, AppError> {
+pub async fn cleanup_expired_caches(ctx: JobContext) -> Result<JobResult, AppError> {
     info!("🧹 Cleaning up expired caches...");
 
     let mut processed = 0;
@@ -504,7 +504,7 @@ async fn cleanup_expired_caches(ctx: JobContext) -> Result<JobResult, AppError> 
     Ok(JobResult { items_processed: processed, items_failed: 0 })
 }
 
-async fn archive_old_snapshots(ctx: JobContext) -> Result<JobResult, AppError> {
+pub async fn archive_old_snapshots(ctx: JobContext) -> Result<JobResult, AppError> {
     info!("📦 Archiving old snapshots...");
 
     // Delete risk snapshots older than 1 year

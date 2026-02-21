@@ -504,7 +504,7 @@ export async function getRecentJobRuns(limit?: number): Promise<JobRun[]> {
     if (limit) params.append('limit', limit.toString());
 
     const queryString = params.toString();
-    const url = `/api/admin/jobs/recent${queryString ? `?${queryString}` : ''}`;
+    const url = `/api/admin/jobs/runs/recent${queryString ? `?${queryString}` : ''}`;
 
     const res = await api.get(url);
     return res.data;

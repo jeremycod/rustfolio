@@ -17,15 +17,16 @@ pub fn router() -> Router<AppState> {
         .route("/:job_name/trigger", post(trigger_job))
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 struct JobInfo {
+    #[serde(rename = "name")]
     job_name: String,
     enabled: bool,
     schedule: String,
+    description: String,
     last_run: Option<String>,
+    last_status: Option<String>,
     next_run: Option<String>,
-    max_duration_minutes: Option<i32>,
-    retry_count: Option<i32>,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -69,25 +70,64 @@ struct TriggerJobResponse {
 async fn list_jobs(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<JobInfo>>, AppError> {
-    let jobs = sqlx::query_as!(
-        JobInfo,
-        r#"
-        SELECT
-            job_name,
-            enabled,
-            schedule,
-            last_run::TEXT as "last_run?",
-            next_run::TEXT as "next_run?",
-            max_duration_minutes,
-            retry_count
-        FROM job_config
-        ORDER BY job_name
-        "#
-    )
-    .fetch_all(&state.pool)
-    .await?;
+    info!("GET /api/admin/jobs - Listing all scheduled jobs");
 
-    Ok(Json(jobs))
+    // Check if we're in test mode
+    let test_mode = std::env::var("JOB_SCHEDULER_TEST_MODE")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    // Define all jobs with their schedules and descriptions
+    let job_definitions = vec![
+        ("refresh_prices", if test_mode { "0 */1 * * * *" } else { "0 0 2 * * *" }, if test_mode { "Every minute (TEST MODE)" } else { "Daily at 2:00 AM" }),
+        ("fetch_news", if test_mode { "0 */2 * * * *" } else { "0 30 2 * * *" }, if test_mode { "Every 2 minutes (TEST MODE)" } else { "Daily at 2:30 AM" }),
+        ("generate_forecasts", "0 0 4 * * *", "Daily at 4:00 AM"),
+        ("analyze_sec_filings", "0 30 4 * * *", "Daily at 4:30 AM"),
+        ("check_thresholds", "0 0 * * * *", "Every hour at :00"),
+        ("warm_caches", "0 30 * * * *", "Every hour at :30"),
+        ("calculate_portfolio_risks", "0 15 * * * *", "Every hour at :15"),
+        ("calculate_portfolio_correlations", "0 45 */2 * * *", "Every 2 hours at :45"),
+        ("create_daily_risk_snapshots", "0 0 17 * * *", "Daily at 5:00 PM ET"),
+        ("cleanup_cache", if test_mode { "0 */3 * * * *" } else { "0 0 3 * * SUN" }, if test_mode { "Every 3 minutes (TEST MODE)" } else { "Every Sunday at 3:00 AM" }),
+        ("archive_snapshots", "0 30 3 * * SUN", "Every Sunday at 3:30 AM"),
+    ];
+
+    let mut jobs_info = Vec::new();
+
+    for (job_name, schedule, description) in job_definitions {
+        // Get last run info from database
+        let last_run_info = sqlx::query!(
+            r#"
+            SELECT started_at::TEXT as "started_at?", status::TEXT as "status?"
+            FROM job_runs
+            WHERE job_name = $1
+            ORDER BY started_at DESC
+            LIMIT 1
+            "#,
+            job_name
+        )
+        .fetch_optional(&state.pool)
+        .await?;
+
+        let (last_run, last_status) = if let Some(info) = last_run_info {
+            (info.started_at, info.status)
+        } else {
+            (None, None)
+        };
+
+        jobs_info.push(JobInfo {
+            job_name: job_name.to_string(),
+            enabled: true,
+            schedule: schedule.to_string(),
+            description: description.to_string(),
+            last_run,
+            last_status,
+            next_run: None, // TODO: Calculate next run time from cron schedule
+        });
+    }
+
+    Ok(Json(jobs_info))
 }
 
 /// GET /api/admin/jobs/recent - Get recent job runs
@@ -223,22 +263,18 @@ async fn trigger_job(
 ) -> Result<Json<TriggerJobResponse>, AppError> {
     info!("🎯 Manual trigger requested for job: {}", job_name);
 
-    // Validate that the job exists in the job_config table
-    let job_config = sqlx::query!(
-        r#"
-        SELECT job_name, enabled
-        FROM job_config
-        WHERE job_name = $1
-        "#,
-        job_name
-    )
-    .fetch_optional(&state.pool)
-    .await?;
+    // Validate that the job exists in our known jobs list
+    let known_jobs = vec![
+        "refresh_prices", "fetch_news", "generate_forecasts", "analyze_sec_filings",
+        "check_thresholds", "warm_caches", "calculate_portfolio_risks",
+        "calculate_portfolio_correlations", "create_daily_risk_snapshots",
+        "cleanup_cache", "archive_snapshots"
+    ];
 
-    if job_config.is_none() {
-        return Err(AppError::External(format!(
-            "Job '{}' not found. Available jobs can be listed via GET /api/admin/jobs",
-            job_name
+    if !known_jobs.contains(&job_name.as_str()) {
+        return Err(AppError::Validation(format!(
+            "Unknown job '{}'. Available jobs: {}",
+            job_name, known_jobs.join(", ")
         )));
     }
 
@@ -269,6 +305,30 @@ async fn trigger_job(
 
     // Execute the appropriate job function
     let result = match job_name.as_str() {
+        "refresh_prices" => {
+            info!("💰 Executing refresh prices job...");
+            crate::services::job_scheduler_service::refresh_all_prices(job_context).await
+        }
+        "fetch_news" => {
+            info!("📰 Executing fetch news job...");
+            crate::services::job_scheduler_service::fetch_all_news(job_context).await
+        }
+        "generate_forecasts" => {
+            info!("🔮 Executing generate forecasts job...");
+            crate::services::job_scheduler_service::generate_all_forecasts(job_context).await
+        }
+        "analyze_sec_filings" => {
+            info!("📄 Executing analyze SEC filings job...");
+            crate::services::job_scheduler_service::analyze_all_sec_filings(job_context).await
+        }
+        "check_thresholds" => {
+            info!("⚠️ Executing check thresholds job...");
+            crate::services::job_scheduler_service::check_all_thresholds(job_context).await
+        }
+        "warm_caches" => {
+            info!("🔥 Executing warm caches job...");
+            crate::services::job_scheduler_service::warm_popular_caches(job_context).await
+        }
         "calculate_portfolio_risks" => {
             info!("🔍 Executing portfolio risk calculation job...");
             crate::jobs::portfolio_risk_job::calculate_all_portfolio_risks(job_context).await
@@ -281,12 +341,20 @@ async fn trigger_job(
             info!("📸 Executing daily risk snapshots job...");
             crate::jobs::daily_risk_snapshots_job::create_all_daily_risk_snapshots(job_context).await
         }
+        "cleanup_cache" => {
+            info!("🧹 Executing cleanup cache job...");
+            crate::services::job_scheduler_service::cleanup_expired_caches(job_context).await
+        }
+        "archive_snapshots" => {
+            info!("📦 Executing archive snapshots job...");
+            crate::services::job_scheduler_service::archive_old_snapshots(job_context).await
+        }
         _ => {
-            // Job exists in config but isn't implemented for manual triggering
+            // Unknown job
             let error_msg = format!(
-                "Job '{}' cannot be manually triggered. Only analytics jobs (calculate_portfolio_risks, \
-                calculate_portfolio_correlations, create_daily_risk_snapshots) support manual execution.",
-                job_name
+                "Unknown job '{}'. Available jobs: {}",
+                job_name,
+                known_jobs.join(", ")
             );
             error!("{}", error_msg);
 
@@ -311,7 +379,7 @@ async fn trigger_job(
             return Ok(Json(TriggerJobResponse {
                 job_name,
                 status: "failed".to_string(),
-                message: "Job cannot be manually triggered".to_string(),
+                message: "Unknown job".to_string(),
                 job_id: Some(job_id),
                 items_processed: None,
                 items_failed: None,

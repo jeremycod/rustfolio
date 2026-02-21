@@ -165,7 +165,9 @@ fn parse_serper_date(date_str: &str) -> Option<DateTime<Utc>> {
     // Try parsing absolute dates
     // Format: "Mar 15, 2024" or similar
     if let Ok(dt) = chrono::NaiveDate::parse_from_str(date_str, "%b %d, %Y") {
-        return Some(dt.and_hms_opt(0, 0, 0)?.and_utc());
+        if let Some(datetime) = dt.and_hms_opt(0, 0, 0) {
+            return Some(datetime.and_utc());
+        }
     }
 
     // Default to now if parsing fails

@@ -1,6 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use bigdecimal::BigDecimal;
+use crate::models::news::NewsArticle;
 
 /// SEC Filing types we track
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
@@ -122,6 +123,7 @@ pub struct EnhancedSentimentSignal {
     // Original news sentiment
     pub news_sentiment: f64,
     pub news_confidence: String,
+    pub news_articles: Vec<NewsArticle>,
 
     // SEC Edgar intelligence
     pub material_events: Vec<MaterialEvent>,

@@ -21,26 +21,28 @@ pub fn router() -> Router<AppState> {
 async fn get_cached_news(
     pool: &PgPool,
     portfolio_id: Uuid,
+    days: i32,
 ) -> Result<Option<PortfolioNewsAnalysis>, AppError> {
     let result = sqlx::query_scalar::<_, serde_json::Value>(
         r#"
         SELECT news_data
         FROM portfolio_news_cache
-        WHERE portfolio_id = $1 AND expires_at > NOW()
+        WHERE portfolio_id = $1 AND days = $2 AND expires_at > NOW()
         "#
     )
     .bind(portfolio_id)
+    .bind(days)
     .fetch_optional(pool)
     .await
     .map_err(AppError::Db)?;
 
     if let Some(news_data) = result {
-        info!("Found cached news for portfolio {}", portfolio_id);
+        info!("Found cached news for portfolio {} (days={})", portfolio_id, days);
         let news_analysis: PortfolioNewsAnalysis = serde_json::from_value(news_data)
             .map_err(|e| AppError::External(format!("Failed to deserialize cached news: {}", e)))?;
         Ok(Some(news_analysis))
     } else {
-        info!("No valid cache found for portfolio {}", portfolio_id);
+        info!("No valid cache found for portfolio {} (days={})", portfolio_id, days);
         Ok(None)
     }
 }
@@ -49,6 +51,7 @@ async fn get_cached_news(
 async fn cache_news(
     pool: &PgPool,
     portfolio_id: Uuid,
+    days: i32,
     news_analysis: &PortfolioNewsAnalysis,
 ) -> Result<(), AppError> {
     let news_data = serde_json::to_value(news_analysis)
@@ -59,17 +62,18 @@ async fn cache_news(
 
     sqlx::query(
         r#"
-        INSERT INTO portfolio_news_cache (portfolio_id, news_data, fetched_at, expires_at)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (portfolio_id)
+        INSERT INTO portfolio_news_cache (portfolio_id, days, news_data, fetched_at, expires_at)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (portfolio_id, days)
         DO UPDATE SET
-            news_data = $2,
-            fetched_at = $3,
-            expires_at = $4,
+            news_data = $3,
+            fetched_at = $4,
+            expires_at = $5,
             updated_at = NOW()
         "#
     )
     .bind(portfolio_id)
+    .bind(days)
     .bind(news_data)
     .bind(fetched_at)
     .bind(expires_at)
@@ -77,7 +81,7 @@ async fn cache_news(
     .await
     .map_err(AppError::Db)?;
 
-    info!("Cached news for portfolio {} (expires at {})", portfolio_id, expires_at);
+    info!("Cached news for portfolio {} (days={}, expires at {})", portfolio_id, days, expires_at);
     Ok(())
 }
 
@@ -105,8 +109,8 @@ async fn get_portfolio_news(
 
     // Check cache first if not forcing refresh
     if !force {
-        if let Some(cached_news) = get_cached_news(&state.pool, portfolio_id).await? {
-            info!("Returning cached news for portfolio {}", portfolio_id);
+        if let Some(cached_news) = get_cached_news(&state.pool, portfolio_id, days).await? {
+            info!("Returning cached news for portfolio {} (days={})", portfolio_id, days);
             return Ok(Json(cached_news));
         }
     }
@@ -185,8 +189,8 @@ async fn get_portfolio_news(
     };
 
     // Cache the results for future requests
-    if let Err(e) = cache_news(&state.pool, portfolio_id, &news_analysis).await {
-        error!("Failed to cache news for portfolio {}: {}", portfolio_id, e);
+    if let Err(e) = cache_news(&state.pool, portfolio_id, days, &news_analysis).await {
+        error!("Failed to cache news for portfolio {} (days={}): {}", portfolio_id, days, e);
         // Continue even if caching fails - don't fail the request
     }
 

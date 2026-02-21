@@ -13,11 +13,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/admin/reset-all-data", post(reset_all_data))
         .route("/admin/cache-health", get(get_cache_health))
-        .route("/admin/jobs", get(list_scheduled_jobs))
-        .route("/admin/jobs/recent", get(get_recent_job_runs))
-        .route("/admin/jobs/:job_name/history", get(get_job_history))
-        .route("/admin/jobs/:job_name/stats", get(get_job_stats))
-        .route("/admin/jobs/:job_name/trigger", post(trigger_job_manually))
+        // Note: Job-related routes are in routes/jobs.rs and mounted at /api/admin/jobs
 }
 
 #[derive(Debug, Serialize)]
@@ -212,25 +208,31 @@ pub async fn get_cache_health(
     let mut tables = Vec::new();
 
     // Query portfolio_risk_cache
-    let risk_cache_health = query_cache_table_health(
-        &state.pool,
-        "portfolio_risk_cache",
-    ).await?;
-    tables.push(risk_cache_health);
+    match query_cache_table_health(&state.pool, "portfolio_risk_cache").await {
+        Ok(health) => tables.push(health),
+        Err(e) => {
+            error!("Failed to query portfolio_risk_cache health: {}", e);
+            return Err(e);
+        }
+    }
 
     // Query portfolio_correlations_cache
-    let corr_cache_health = query_cache_table_health(
-        &state.pool,
-        "portfolio_correlations_cache",
-    ).await?;
-    tables.push(corr_cache_health);
+    match query_cache_table_health(&state.pool, "portfolio_correlations_cache").await {
+        Ok(health) => tables.push(health),
+        Err(e) => {
+            error!("Failed to query portfolio_correlations_cache health: {}", e);
+            return Err(e);
+        }
+    }
 
-    // Query portfolio_narrative_cache
-    let narrative_cache_health = query_cache_table_health(
-        &state.pool,
-        "portfolio_narrative_cache",
-    ).await?;
-    tables.push(narrative_cache_health);
+    // Query portfolio_narrative_cache (has different column name: generated_at instead of calculated_at)
+    match query_narrative_cache_health(&state.pool).await {
+        Ok(health) => tables.push(health),
+        Err(e) => {
+            error!("Failed to query portfolio_narrative_cache health: {}", e);
+            return Err(e);
+        }
+    }
 
     // Calculate summary statistics
     let total_entries: i64 = tables.iter().map(|t| t.total_entries).sum();
@@ -309,7 +311,7 @@ async fn query_cache_table_health(
                     COUNT(*) FILTER (WHERE calculation_status = 'stale' OR (calculation_status = 'fresh' AND expires_at <= NOW())) as stale,
                     COUNT(*) FILTER (WHERE calculation_status = 'calculating') as calculating,
                     COUNT(*) FILTER (WHERE calculation_status = 'error') as error,
-                    AVG(EXTRACT(EPOCH FROM (NOW() - calculated_at)) / 3600.0) as avg_age_hours
+                    AVG(EXTRACT(EPOCH FROM (NOW() - calculated_at)) / 3600.0)::FLOAT8 as avg_age_hours
                 FROM {}
                 "#,
                 table_name
@@ -338,7 +340,7 @@ async fn query_cache_table_health(
                     COUNT(*) as total,
                     COUNT(*) FILTER (WHERE expires_at > NOW()) as fresh,
                     COUNT(*) FILTER (WHERE expires_at <= NOW()) as stale,
-                    AVG(EXTRACT(EPOCH FROM (NOW() - calculated_at)) / 3600.0) as avg_age_hours
+                    AVG(EXTRACT(EPOCH FROM (NOW() - calculated_at)) / 3600.0)::FLOAT8 as avg_age_hours
                 FROM {}
                 "#,
                 table_name
@@ -361,6 +363,36 @@ async fn query_cache_table_health(
     };
 
     Ok(stats)
+}
+
+/// Query health statistics for narrative cache table (uses generated_at instead of calculated_at)
+async fn query_narrative_cache_health(
+    pool: &sqlx::PgPool,
+) -> Result<CacheTableHealth, AppError> {
+    let result = sqlx::query_as::<_, (i64, i64, i64, Option<f64>)>(
+        r#"
+        SELECT
+            COUNT(*) as total,
+            COUNT(*) FILTER (WHERE expires_at > NOW()) as fresh,
+            COUNT(*) FILTER (WHERE expires_at <= NOW()) as stale,
+            AVG(EXTRACT(EPOCH FROM (NOW() - generated_at)) / 3600.0)::FLOAT8 as avg_age_hours
+        FROM portfolio_narrative_cache
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    Ok(CacheTableHealth {
+        table_name: "portfolio_narrative_cache".to_string(),
+        total_entries: result.0,
+        fresh_entries: result.1,
+        stale_entries: result.2,
+        calculating_entries: 0,
+        error_entries: 0,
+        hit_rate_pct: None,
+        avg_age_hours: result.3,
+    })
 }
 
 /// GET /api/risk/portfolios/:portfolio_id/cache-status
@@ -676,3 +708,5 @@ pub async fn invalidate_cache(
         caches_invalidated,
     }))
 }
+
+// Note: Job-related admin endpoints are in routes/jobs.rs

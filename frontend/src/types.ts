@@ -409,10 +409,19 @@ export type InsiderSentiment = {
     notable_transactions: InsiderTransaction[];
 };
 
+export type NewsArticle = {
+    title: string;
+    url: string;
+    source: string;
+    published_at: string;
+    snippet: string;
+};
+
 export type EnhancedSentimentSignal = {
     ticker: string;
     news_sentiment: number;
     news_confidence: string;
+    news_articles: NewsArticle[];
     material_events: MaterialEvent[];
     sec_filing_score?: number;
     insider_sentiment: InsiderSentiment;

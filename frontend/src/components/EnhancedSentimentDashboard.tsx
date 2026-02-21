@@ -47,6 +47,7 @@ interface EnhancedSentimentDashboardProps {
 
 export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboardProps) {
     const [days] = useState(30);
+    const [expandedNewsArticles, setExpandedNewsArticles] = useState(false);
     const [expandedMaterialEvents, setExpandedMaterialEvents] = useState(false);
     const [expandedInsiderActivity, setExpandedInsiderActivity] = useState(false);
 
@@ -227,6 +228,84 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                     </Card>
                 </Grid>
             </Grid>
+
+            {/* News Articles Section */}
+            {signal.news_articles && signal.news_articles.length > 0 && (
+                <Card elevation={2} sx={{ mb: 2 }}>
+                    <CardContent>
+                        <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            alignItems="center"
+                            sx={{ cursor: 'pointer' }}
+                            onClick={() => setExpandedNewsArticles(!expandedNewsArticles)}
+                        >
+                            <Typography variant="h6">
+                                News Articles ({signal.news_articles.length})
+                            </Typography>
+                            <IconButton size="small">
+                                <ExpandMore
+                                    sx={{
+                                        transform: expandedNewsArticles ? 'rotate(180deg)' : 'rotate(0deg)',
+                                        transition: 'transform 0.3s',
+                                    }}
+                                />
+                            </IconButton>
+                        </Stack>
+                        <Collapse in={expandedNewsArticles}>
+                            <Divider sx={{ my: 2 }} />
+                            <List>
+                                {signal.news_articles.map((article, idx) => (
+                                    <ListItem
+                                        key={idx}
+                                        sx={{
+                                            bgcolor: 'background.default',
+                                            mb: 1,
+                                            borderRadius: 1,
+                                        }}
+                                    >
+                                        <ListItemText
+                                            primary={
+                                                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                                                    <Article color="primary" fontSize="small" />
+                                                    <Typography variant="subtitle2" sx={{ flex: 1 }}>
+                                                        {article.title}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {new Date(article.published_at).toLocaleDateString()}
+                                                    </Typography>
+                                                </Stack>
+                                            }
+                                            secondary={
+                                                <>
+                                                    <Typography variant="body2" sx={{ mt: 1 }}>
+                                                        {article.snippet}
+                                                    </Typography>
+                                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                                                        <Chip
+                                                            label={article.source}
+                                                            size="small"
+                                                            variant="outlined"
+                                                        />
+                                                        <IconButton
+                                                            size="small"
+                                                            href={article.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                        >
+                                                            <OpenInNew fontSize="small" />
+                                                        </IconButton>
+                                                    </Stack>
+                                                </>
+                                            }
+                                        />
+                                    </ListItem>
+                                ))}
+                            </List>
+                        </Collapse>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Material Events Section */}
             {signal.material_events.length > 0 && (

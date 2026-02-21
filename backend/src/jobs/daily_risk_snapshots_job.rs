@@ -200,7 +200,7 @@ async fn query_portfolios_with_holdings(pool: &PgPool) -> Result<Vec<Uuid>, AppE
         SELECT DISTINCT p.id
         FROM portfolios p
         INNER JOIN accounts a ON a.portfolio_id = p.id
-        INNER JOIN holding_snapshots hs ON hs.account_id = a.id
+        INNER JOIN holdings_snapshots hs ON hs.account_id = a.id
         ORDER BY p.id
         "#,
     )
