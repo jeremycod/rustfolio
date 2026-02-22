@@ -320,6 +320,7 @@ pub async fn clear_sentiment_cache(
 }
 
 /// Helper function to fetch sentiment for a single ticker
+#[allow(dead_code)]
 async fn fetch_ticker_sentiment(
     state: &AppState,
     ticker: &str,

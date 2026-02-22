@@ -16,6 +16,9 @@ import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { RollingBetaPage } from "./components/RollingBetaPage";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { usePreferences } from "./contexts/PreferencesContext";
+import NotificationsPage from "./components/NotificationsPage";
+import AlertRulesPage from "./components/AlertRulesPage";
+import AlertHistoryPage from "./components/AlertHistoryPage";
 
 export default function App() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
@@ -119,6 +122,12 @@ export default function App() {
                 return <Settings />;
             case 'admin':
                 return <AdminDashboard />;
+            case 'notifications':
+                return <NotificationsPage />;
+            case 'alerts':
+                return <AlertRulesPage />;
+            case 'alert-history':
+                return <AlertHistoryPage />;
             default:
                 return (
                     <Dashboard

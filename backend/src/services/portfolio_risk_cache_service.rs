@@ -124,6 +124,7 @@ use crate::errors::AppError;
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub struct CacheHealthStatus {
     /// Total number of portfolio risk cache entries
     pub risk_cache_total: i64,
@@ -196,6 +197,7 @@ pub struct CacheHealthStatus {
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub struct PortfolioCacheStatus {
     /// Portfolio ID this status is for
     pub portfolio_id: Uuid,
@@ -268,6 +270,7 @@ pub struct PortfolioCacheStatus {
 ///
 /// info!("Portfolio {} caches marked as stale, will refresh on next job run", portfolio_id);
 /// ```
+#[allow(dead_code)]
 pub async fn invalidate_portfolio_caches(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -359,6 +362,7 @@ pub async fn invalidate_portfolio_caches(
 ///     warn!("More than 50% of risk caches are currently calculating - possible job backlog");
 /// }
 /// ```
+#[allow(dead_code)]
 pub async fn get_cache_health(pool: &PgPool) -> Result<CacheHealthStatus, AppError> {
     info!("Querying cache health statistics");
 
@@ -524,6 +528,7 @@ pub async fn get_cache_health(pool: &PgPool) -> Result<CacheHealthStatus, AppErr
 ///     _ => println!("Unknown status"),
 /// }
 /// ```
+#[allow(dead_code)]
 pub async fn get_portfolio_cache_status(
     pool: &PgPool,
     portfolio_id: Uuid,

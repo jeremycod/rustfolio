@@ -10,7 +10,10 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Badge,
 } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { getUnreadNotificationCount } from '../lib/endpoints';
 import {
   Dashboard as DashboardIcon,
   AccountBalance,
@@ -23,6 +26,9 @@ import {
   GridOn,
   Timeline,
   AdminPanelSettings,
+  Notifications as NotificationsIcon,
+  NotificationsActive,
+  History,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -37,6 +43,9 @@ const menuItems = [
   { text: 'Risk Comparison', icon: <Compare />, path: 'risk-comparison' },
   { text: 'Correlations', icon: <GridOn />, path: 'correlations' },
   { text: 'Rolling Beta', icon: <Timeline />, path: 'rolling-beta' },
+  { text: 'Alert Rules', icon: <NotificationsActive />, path: 'alerts' },
+  { text: 'Notifications', icon: <NotificationsIcon />, path: 'notifications' },
+  { text: 'Alert History', icon: <History />, path: 'alert-history' },
   { text: 'Admin', icon: <AdminPanelSettings />, path: 'admin' },
   { text: 'Settings', icon: <Settings />, path: 'settings' },
 ];
@@ -48,6 +57,15 @@ interface LayoutProps {
 }
 
 export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
+  // Fetch unread notification count with auto-refresh
+  const { data: notificationCount } = useQuery({
+    queryKey: ['notificationCount'],
+    queryFn: getUnreadNotificationCount,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  const unreadCount = notificationCount?.unread || 0;
+
   return (
     <Box sx={{ display: 'flex' }}>
       <AppBar
@@ -81,7 +99,15 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
                 selected={currentPage === item.path}
                 onClick={() => onPageChange(item.path)}
               >
-                <ListItemIcon>{item.icon}</ListItemIcon>
+                <ListItemIcon>
+                  {item.path === 'notifications' ? (
+                    <Badge badgeContent={unreadCount} color="error">
+                      {item.icon}
+                    </Badge>
+                  ) : (
+                    item.icon
+                  )}
+                </ListItemIcon>
                 <ListItemText primary={item.text} />
               </ListItemButton>
             </ListItem>

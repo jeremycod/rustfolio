@@ -29,6 +29,7 @@ import { RiskThresholdSettings } from './RiskThresholdSettings';
 import UserSettingsDialog from './UserSettingsDialog';
 import AIBadge from './AIBadge';
 import { usePreferences } from '../contexts/PreferencesContext';
+import NotificationPreferencesSection from './NotificationPreferencesSection';
 import type { Portfolio } from '../types';
 
 export function Settings() {
@@ -203,6 +204,9 @@ export function Settings() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Notification Preferences Section */}
+      <NotificationPreferencesSection />
 
       <Paper sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>

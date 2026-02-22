@@ -746,3 +746,147 @@ export type CacheHealthStatus = {
     tables: CacheTableHealth[];
     summary: CacheHealthSummary;
 };
+
+// Alerts & Notifications Types
+
+// Alert Rules
+export type AlertRule = {
+    id: string;
+    user_id: string;
+    portfolio_id: string | null;
+    ticker: string | null;
+    rule_type: string;
+    threshold: number;
+    comparison: string;
+    enabled: boolean;
+    name: string;
+    description: string | null;
+    notification_channels: string[];
+    cooldown_hours: number;
+    last_triggered_at: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+export type CreateAlertRuleRequest = {
+    portfolio_id?: string;
+    ticker?: string;
+    rule_type: any; // Tagged union - will be { type: string, config: object }
+    threshold: number;
+    comparison: Comparison;
+    name: string;
+    description?: string;
+    notification_channels?: NotificationChannel[];
+    cooldown_hours?: number;
+};
+
+export type UpdateAlertRuleRequest = {
+    threshold?: number;
+    comparison?: Comparison;
+    enabled?: boolean;
+    name?: string;
+    description?: string;
+    notification_channels?: NotificationChannel[];
+    cooldown_hours?: number;
+};
+
+// Alert Enums
+export type Comparison = 'gt' | 'lt' | 'gte' | 'lte' | 'eq';
+export type Direction = 'up' | 'down' | 'either';
+export type Timeframe = 'intraday' | 'daily' | 'weekly' | 'monthly';
+export type RiskMetric = 'risk_score' | 'volatility' | 'sharpe_ratio' | 'max_drawdown' | 'var_95' | 'cvar_95';
+export type NotificationChannel = 'email' | 'in_app' | 'webhook';
+export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+// Alert Types (used for rule_type string in AlertRule)
+export type AlertRuleType =
+    | 'price_change'
+    | 'volatility_spike'
+    | 'drawdown_exceeded'
+    | 'risk_threshold'
+    | 'sentiment_change'
+    | 'divergence';
+
+// Alert History
+export type AlertHistory = {
+    id: string;
+    alert_rule_id: string;
+    user_id: string;
+    portfolio_id: string | null;
+    ticker: string | null;
+    rule_type: string;
+    threshold: number;
+    actual_value: number;
+    message: string;
+    severity: string;
+    metadata: Record<string, any>;
+    triggered_at: string;
+};
+
+// Notifications
+export type Notification = {
+    id: string;
+    user_id: string;
+    title: string;
+    message: string;
+    notification_type: string;
+    read: boolean;
+    read_at: string | null;
+    related_alert_id: string | null;
+    created_at: string;
+};
+
+export type NotificationCountResponse = {
+    total: number;
+    unread: number;
+};
+
+// Notification Preferences
+export type NotificationPreferences = {
+    id: string;
+    user_id: string;
+    email_enabled: boolean;
+    in_app_enabled: boolean;
+    webhook_enabled: boolean;
+    webhook_url: string | null;
+    quiet_hours_start: string | null;
+    quiet_hours_end: string | null;
+    timezone: string;
+    max_daily_emails: number;
+    created_at: string;
+    updated_at: string;
+};
+
+export type UpdateNotificationPreferences = {
+    email_enabled?: boolean;
+    in_app_enabled?: boolean;
+    webhook_enabled?: boolean;
+    webhook_url?: string;
+    quiet_hours_start?: string;
+    quiet_hours_end?: string;
+    timezone?: string;
+    max_daily_emails?: number;
+};
+
+// Evaluation
+export type AlertEvaluationResult = {
+    rule_id: string;
+    triggered: boolean;
+    actual_value: number;
+    threshold: number;
+    message: string;
+    severity: string;
+    metadata: Record<string, any>;
+};
+
+export type AlertEvaluationResponse = {
+    evaluated_rules: number;
+    triggered_alerts: number;
+    results: AlertEvaluationResult[];
+};
+
+export type TestAlertResponse = {
+    rule: AlertRule;
+    evaluation: AlertEvaluationResult | null;
+    would_trigger: boolean;
+};

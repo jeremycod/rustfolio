@@ -29,7 +29,7 @@ import {
   TrendingDown,
   Warning,
   Info,
-  Error,
+  Error as ErrorIcon,
   CheckCircle,
   LocalFireDepartment,
   Psychology,
@@ -548,7 +548,7 @@ function getSeverityIcon(severity: Severity) {
     case 'warning':
       return <Warning color="warning" />;
     case 'high':
-      return <Error color="error" />;
+      return <ErrorIcon color="error" />;
     case 'critical':
       return <LocalFireDepartment color="error" />;
   }

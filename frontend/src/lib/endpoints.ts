@@ -42,7 +42,17 @@ import type {
     JobRun,
     ScheduledJob,
     JobStats,
-    CacheHealthStatus
+    CacheHealthStatus,
+    AlertRule,
+    CreateAlertRuleRequest,
+    UpdateAlertRuleRequest,
+    AlertHistory,
+    Notification,
+    NotificationCountResponse,
+    NotificationPreferences,
+    UpdateNotificationPreferences,
+    AlertEvaluationResponse,
+    TestAlertResponse
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -562,5 +572,112 @@ export async function triggerJob(jobName: string): Promise<{ success: boolean; m
 
 export async function getCacheHealth(): Promise<CacheHealthStatus> {
     const res = await api.get('/api/admin/cache-health');
+    return res.data;
+}
+
+// Alert Rules Endpoints
+export async function listAlertRules(): Promise<AlertRule[]> {
+    const res = await api.get('/api/alerts/rules');
+    return res.data;
+}
+
+export async function getAlertRule(ruleId: string): Promise<AlertRule> {
+    const res = await api.get(`/api/alerts/rules/${ruleId}`);
+    return res.data;
+}
+
+export async function createAlertRule(data: CreateAlertRuleRequest): Promise<AlertRule> {
+    const res = await api.post('/api/alerts/rules', data);
+    return res.data;
+}
+
+export async function updateAlertRule(ruleId: string, data: UpdateAlertRuleRequest): Promise<AlertRule> {
+    const res = await api.put(`/api/alerts/rules/${ruleId}`, data);
+    return res.data;
+}
+
+export async function deleteAlertRule(ruleId: string): Promise<void> {
+    await api.delete(`/api/alerts/rules/${ruleId}`);
+}
+
+export async function enableAlertRule(ruleId: string): Promise<AlertRule> {
+    const res = await api.post(`/api/alerts/rules/${ruleId}/enable`);
+    return res.data;
+}
+
+export async function disableAlertRule(ruleId: string): Promise<AlertRule> {
+    const res = await api.post(`/api/alerts/rules/${ruleId}/disable`);
+    return res.data;
+}
+
+export async function testAlertRule(ruleId: string): Promise<TestAlertResponse> {
+    const res = await api.post(`/api/alerts/rules/${ruleId}/test`);
+    return res.data;
+}
+
+// Alert History Endpoints
+export async function getAlertHistory(limit?: number, offset?: number): Promise<AlertHistory[]> {
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit.toString());
+    if (offset) params.append('offset', offset.toString());
+    const url = `/api/alerts/history${params.toString() ? '?' + params.toString() : ''}`;
+    const res = await api.get(url);
+    return res.data;
+}
+
+export async function getAlertHistoryById(id: string): Promise<AlertHistory> {
+    const res = await api.get(`/api/alerts/history/${id}`);
+    return res.data;
+}
+
+export async function getRuleHistory(ruleId: string, limit?: number): Promise<AlertHistory[]> {
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit.toString());
+    const url = `/api/alerts/rules/${ruleId}/history${params.toString() ? '?' + params.toString() : ''}`;
+    const res = await api.get(url);
+    return res.data;
+}
+
+// Notifications Endpoints
+export async function getNotifications(limit?: number, offset?: number): Promise<Notification[]> {
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit.toString());
+    if (offset) params.append('offset', offset.toString());
+    const url = `/api/notifications${params.toString() ? '?' + params.toString() : ''}`;
+    const res = await api.get(url);
+    return res.data;
+}
+
+export async function getUnreadNotificationCount(): Promise<NotificationCountResponse> {
+    const res = await api.get('/api/notifications/unread');
+    return res.data;
+}
+
+export async function markNotificationRead(notificationId: string): Promise<void> {
+    await api.post(`/api/notifications/${notificationId}/read`);
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+    await api.post('/api/notifications/mark-all-read');
+}
+
+export async function deleteNotification(notificationId: string): Promise<void> {
+    await api.delete(`/api/notifications/${notificationId}`);
+}
+
+// Notification Preferences Endpoints
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+    const res = await api.get('/api/notifications/preferences');
+    return res.data;
+}
+
+export async function updateNotificationPreferences(data: UpdateNotificationPreferences): Promise<NotificationPreferences> {
+    const res = await api.put('/api/notifications/preferences', data);
+    return res.data;
+}
+
+// Evaluation Endpoint
+export async function evaluateAllAlerts(): Promise<AlertEvaluationResponse> {
+    const res = await api.post('/api/alerts/evaluate-all');
     return res.data;
 }
