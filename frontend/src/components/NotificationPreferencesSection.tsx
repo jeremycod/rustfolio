@@ -15,9 +15,9 @@ import {
     Alert,
     CircularProgress
 } from '@mui/material';
-import { Save } from '@mui/icons-material';
+import { Save, Email } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getNotificationPreferences, updateNotificationPreferences } from '../lib/endpoints';
+import { getNotificationPreferences, updateNotificationPreferences, sendTestEmail } from '../lib/endpoints';
 import type { UpdateNotificationPreferences } from '../types';
 
 export default function NotificationPreferencesSection() {
@@ -67,6 +67,21 @@ export default function NotificationPreferencesSection() {
         },
         onError: (error: any) => {
             setSnackbarMessage(`Failed: ${error.response?.data || error.message}`);
+            setSnackbarSeverity('error');
+            setSnackbarOpen(true);
+        }
+    });
+
+    // Send test email mutation
+    const testEmailM = useMutation({
+        mutationFn: sendTestEmail,
+        onSuccess: () => {
+            setSnackbarMessage('Test email sent successfully! Check your inbox.');
+            setSnackbarSeverity('success');
+            setSnackbarOpen(true);
+        },
+        onError: (error: any) => {
+            setSnackbarMessage(`Failed to send test email: ${error.response?.data || error.message}`);
             setSnackbarSeverity('error');
             setSnackbarOpen(true);
         }
@@ -239,6 +254,28 @@ export default function NotificationPreferencesSection() {
                         </Button>
                     </Box>
                 </Box>
+            </Paper>
+
+            <Paper sx={{ p: 3, mb: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                    Test Email Configuration
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Send a test email to verify your SMTP configuration is working correctly
+                </Typography>
+                <Button
+                    variant="outlined"
+                    startIcon={<Email />}
+                    onClick={() => testEmailM.mutate()}
+                    disabled={testEmailM.isPending || !emailEnabled}
+                >
+                    {testEmailM.isPending ? 'Sending...' : 'Send Test Email'}
+                </Button>
+                {!emailEnabled && (
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                        Email notifications are disabled
+                    </Typography>
+                )}
             </Paper>
 
             <Snackbar

@@ -78,6 +78,13 @@ export default function AlertRuleFormDialog({
 
     const [divergenceType, setDivergenceType] = useState<string>('rsi');
 
+    // Auto-select first portfolio when portfolios load
+    useEffect(() => {
+        if (portfoliosQ.data && portfoliosQ.data.length > 0 && !editRule && scope === 'portfolio' && !portfolioId) {
+            setPortfolioId(portfoliosQ.data[0].id);
+        }
+    }, [portfoliosQ.data, editRule, scope, portfolioId]);
+
     // Load edit rule data
     useEffect(() => {
         if (editRule) {

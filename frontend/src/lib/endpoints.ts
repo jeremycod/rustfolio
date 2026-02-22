@@ -676,6 +676,11 @@ export async function updateNotificationPreferences(data: UpdateNotificationPref
     return res.data;
 }
 
+export async function sendTestEmail(): Promise<{ message: string }> {
+    const res = await api.post('/api/notifications/test-email');
+    return res.data;
+}
+
 // Evaluation Endpoint
 export async function evaluateAllAlerts(): Promise<AlertEvaluationResponse> {
     const res = await api.post('/api/alerts/evaluate-all');

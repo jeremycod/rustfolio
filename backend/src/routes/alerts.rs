@@ -42,6 +42,8 @@ pub fn router() -> Router<AppState> {
         // Notification Preferences
         .route("/notifications/preferences", get(get_preferences))
         .route("/notifications/preferences", put(update_preferences))
+        // Test Email
+        .route("/notifications/test-email", post(send_test_email))
         // Evaluation
         .route("/alerts/evaluate-all", post(evaluate_all_alerts))
 }
@@ -466,6 +468,25 @@ async fn evaluate_all_alerts(
     };
 
     Ok(Json(response))
+}
+
+// ==============================================================================
+// Test Email Handler
+// ==============================================================================
+
+async fn send_test_email(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+    let user_id = get_default_user_id(pool).await?;
+
+    notification_service::send_test_email(pool, user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "message": "Test email sent successfully"
+    })))
 }
 
 // ==============================================================================

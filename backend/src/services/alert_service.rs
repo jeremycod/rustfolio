@@ -1,7 +1,8 @@
-// Simplified alert service - placeholder implementations for demonstration
+// Alert service with real price change detection
 // Full implementation would integrate deeply with existing risk and sentiment services
 
 use crate::db::alert_queries::*;
+use crate::db::price_queries;
 use crate::models::alert::*;
 use chrono::{DateTime, Duration, Utc};
 use serde_json::json;
@@ -31,7 +32,7 @@ pub async fn evaluate_all_alerts(
 
 /// Simplified alert evaluation (placeholder logic)
 pub async fn evaluate_alert_rule_simple(
-    _pool: &PgPool,
+    pool: &PgPool,
     rule: &AlertRule,
 ) -> Result<Option<AlertEvaluationResult>, sqlx::Error> {
     // Check cooldown first
@@ -46,14 +47,31 @@ pub async fn evaluate_alert_rule_simple(
     // Simplified evaluation - would integrate with actual services in production
     let (triggered, actual_value, message) = match rule.rule_type.as_str() {
         "price_change" => {
-            // Placeholder: simulate price change detection
-            let simulated_change = 5.5; // Would get from price_queries
-            let triggered = comparison.evaluate(simulated_change, rule.threshold);
-            let message = format!(
-                "Price changed by {:.2}% (threshold: {:.2}%)",
-                simulated_change, rule.threshold
-            );
-            (triggered, simulated_change, message)
+            // Real price change detection
+            if let Some(ticker) = &rule.ticker {
+                match calculate_price_change(pool, ticker).await {
+                    Ok(Some(change_pct)) => {
+                        let abs_change = change_pct.abs();
+                        let triggered = comparison.evaluate(abs_change, rule.threshold);
+                        let direction_str = if change_pct > 0.0 { "increased" } else { "decreased" };
+                        let message = format!(
+                            "{} price {} by {:.2}% (threshold: {:.2}%)",
+                            ticker, direction_str, abs_change, rule.threshold
+                        );
+                        (triggered, abs_change, message)
+                    }
+                    Ok(None) => {
+                        // No price data available
+                        (false, 0.0, format!("{}: No recent price data available", ticker))
+                    }
+                    Err(e) => {
+                        eprintln!("Error calculating price change for {}: {:?}", ticker, e);
+                        (false, 0.0, format!("{}: Error fetching price data", ticker))
+                    }
+                }
+            } else {
+                (false, 0.0, "No ticker specified for price change alert".to_string())
+            }
         }
         "volatility_spike" => {
             let simulated_volatility = 45.0; // Would get from risk_service
@@ -123,6 +141,31 @@ pub async fn evaluate_alert_rule_simple(
 // ==============================================================================
 // Helper Functions
 // ==============================================================================
+
+/// Calculate price change percentage for a ticker
+async fn calculate_price_change(pool: &PgPool, ticker: &str) -> Result<Option<f64>, sqlx::Error> {
+    // Get the last 2 days of prices to calculate daily change
+    let prices = price_queries::fetch_window(pool, ticker, 2).await?;
+
+    if prices.len() < 2 {
+        // Need at least 2 data points
+        return Ok(None);
+    }
+
+    // fetch_window returns DESC order (most recent first)
+    // Convert BigDecimal to f64 for calculations
+    let latest_price: f64 = prices[0].close_price.to_string().parse().unwrap_or(0.0);
+    let previous_price: f64 = prices[1].close_price.to_string().parse().unwrap_or(0.0);
+
+    if previous_price == 0.0 {
+        return Ok(None);
+    }
+
+    // Calculate percentage change: ((new - old) / old) * 100
+    let change_pct = ((latest_price - previous_price) / previous_price) * 100.0;
+
+    Ok(Some(change_pct))
+}
 
 /// Check if alert is in cooldown period
 pub fn is_in_cooldown(last_triggered: Option<DateTime<Utc>>, cooldown_hours: i32) -> bool {
