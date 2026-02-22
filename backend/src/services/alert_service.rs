@@ -40,91 +40,95 @@ pub async fn evaluate_alert_rule_simple(
         return Ok(None);
     }
 
+    // Parse rule_type JSON to get the AlertType enum with config
+    let alert_type: AlertType = serde_json::from_str(&rule.rule_type)
+        .map_err(|e| sqlx::Error::Protocol(format!("Failed to parse rule_type: {}", e)))?;
+
     // Parse comparison
     let comparison = Comparison::from_str(&rule.comparison)
         .ok_or_else(|| sqlx::Error::Protocol(format!("Invalid comparison: {}", rule.comparison)))?;
 
-    // Simplified evaluation - would integrate with actual services in production
-    let (triggered, actual_value, message) = match rule.rule_type.as_str() {
-        "price_change" => {
-            // Real price change detection
+    // Evaluate based on alert type
+    let (triggered, actual_value, message, threshold) = match alert_type {
+        AlertType::PriceChange { percentage, direction: _, timeframe: _ } => {
+            // Real price change detection using configured percentage
             if let Some(ticker) = &rule.ticker {
                 match calculate_price_change(pool, ticker).await {
                     Ok(Some(change_pct)) => {
                         let abs_change = change_pct.abs();
-                        let triggered = comparison.evaluate(abs_change, rule.threshold);
+                        // Use the configured percentage as threshold
+                        let triggered = comparison.evaluate(abs_change, percentage);
                         let direction_str = if change_pct > 0.0 { "increased" } else { "decreased" };
                         let message = format!(
                             "{} price {} by {:.2}% (threshold: {:.2}%)",
-                            ticker, direction_str, abs_change, rule.threshold
+                            ticker, direction_str, abs_change, percentage
                         );
-                        (triggered, abs_change, message)
+                        (triggered, abs_change, message, percentage)
                     }
                     Ok(None) => {
                         // No price data available
-                        (false, 0.0, format!("{}: No recent price data available", ticker))
+                        (false, 0.0, format!("{}: No recent price data available", ticker), percentage)
                     }
                     Err(e) => {
                         eprintln!("Error calculating price change for {}: {:?}", ticker, e);
-                        (false, 0.0, format!("{}: Error fetching price data", ticker))
+                        (false, 0.0, format!("{}: Error fetching price data", ticker), percentage)
                     }
                 }
             } else {
-                (false, 0.0, "No ticker specified for price change alert".to_string())
+                (false, 0.0, "No ticker specified for price change alert".to_string(), percentage)
             }
         }
-        "volatility_spike" => {
+        AlertType::VolatilitySpike { threshold } => {
             let simulated_volatility = 45.0; // Would get from risk_service
-            let triggered = comparison.evaluate(simulated_volatility, rule.threshold);
+            let triggered = comparison.evaluate(simulated_volatility, threshold);
             let message = format!(
                 "Volatility: {:.2}% (threshold: {:.2}%)",
-                simulated_volatility, rule.threshold
+                simulated_volatility, threshold
             );
-            (triggered, simulated_volatility, message)
+            (triggered, simulated_volatility, message, threshold)
         }
-        "drawdown_exceeded" => {
+        AlertType::DrawdownExceeded { percentage } => {
             let simulated_drawdown = 12.0; // Would calculate from price history
-            let triggered = comparison.evaluate(simulated_drawdown, rule.threshold);
+            let triggered = comparison.evaluate(simulated_drawdown, percentage);
             let message = format!(
                 "Drawdown: {:.2}% (threshold: {:.2}%)",
-                simulated_drawdown, rule.threshold
+                simulated_drawdown, percentage
             );
-            (triggered, simulated_drawdown, message)
+            (triggered, simulated_drawdown, message, percentage)
         }
-        "risk_threshold" => {
+        AlertType::RiskThreshold { metric: _, threshold } => {
             let simulated_risk = 75.0; // Would get from risk_service
-            let triggered = comparison.evaluate(simulated_risk, rule.threshold);
+            let triggered = comparison.evaluate(simulated_risk, threshold);
             let message = format!(
                 "Risk score: {:.2} (threshold: {:.2})",
-                simulated_risk, rule.threshold
+                simulated_risk, threshold
             );
-            (triggered, simulated_risk, message)
+            (triggered, simulated_risk, message, threshold)
         }
-        "sentiment_change" => {
+        AlertType::SentimentChange { sentiment_threshold, trend: _ } => {
             let simulated_sentiment = -0.4; // Would get from sentiment_service
-            let triggered = comparison.evaluate(simulated_sentiment, rule.threshold);
+            let triggered = comparison.evaluate(simulated_sentiment, sentiment_threshold);
             let message = format!(
                 "Sentiment: {:.2} (threshold: {:.2})",
-                simulated_sentiment, rule.threshold
+                simulated_sentiment, sentiment_threshold
             );
-            (triggered, simulated_sentiment, message)
+            (triggered, simulated_sentiment, message, sentiment_threshold)
         }
-        "divergence" => {
+        AlertType::Divergence { divergence_type: _ } => {
             let triggered = false; // Would check for divergence
             let message = "No divergence detected".to_string();
-            (triggered, 0.0, message)
+            (triggered, 0.0, message, 0.0)
         }
-        _ => (false, 0.0, "Unknown alert type".to_string()),
     };
 
     if triggered {
-        let severity = calculate_severity(&rule.rule_type, rule.threshold, actual_value);
+        let severity = calculate_severity(&rule.rule_type, threshold, actual_value);
 
         Ok(Some(AlertEvaluationResult {
             rule_id: rule.id,
             triggered: true,
             actual_value,
-            threshold: rule.threshold,
+            threshold,  // Use the threshold from rule config
             message,
             severity,
             metadata: json!({

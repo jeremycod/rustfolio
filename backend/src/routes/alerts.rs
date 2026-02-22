@@ -76,7 +76,10 @@ async fn create_alert_rule(
     // TODO: Get user_id from auth middleware
     let user_id = get_default_user_id(pool).await?;
 
-    let rule_type_str = req.rule_type.to_string();
+    // Serialize the full AlertType to JSON to preserve config
+    let rule_type_json = serde_json::to_string(&req.rule_type)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to serialize rule_type: {}", e)))?;
+
     let comparison_str = req.comparison.to_string();
     let channels: Vec<String> = req
         .notification_channels
@@ -90,7 +93,7 @@ async fn create_alert_rule(
         user_id,
         req.portfolio_id,
         req.ticker,
-        &rule_type_str,
+        &rule_type_json,
         req.threshold,
         &comparison_str,
         &req.name,

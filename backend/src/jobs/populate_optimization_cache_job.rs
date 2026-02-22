@@ -164,6 +164,16 @@ async fn is_cache_fresh(pool: &sqlx::PgPool, portfolio_id: &Uuid) -> Result<bool
     Ok(cache_exists.is_some())
 }
 
+/// Public function to manually calculate optimization for a single portfolio
+/// (used by API endpoint for on-demand generation)
+pub async fn calculate_single_portfolio_optimization(
+    ctx: &JobContext,
+    portfolio_id: Uuid,
+) -> Result<(), AppError> {
+    info!("📊 Manually calculating optimization for portfolio {}", portfolio_id);
+    calculate_and_cache_optimization(ctx, &portfolio_id).await
+}
+
 /// Calculate optimization and store in cache
 async fn calculate_and_cache_optimization(
     ctx: &JobContext,

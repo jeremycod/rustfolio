@@ -88,6 +88,7 @@ pub enum AlertType {
 }
 
 impl AlertType {
+    #[allow(dead_code)]
     pub fn to_string(&self) -> String {
         match self {
             AlertType::PriceChange { .. } => "price_change".to_string(),

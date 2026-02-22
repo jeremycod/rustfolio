@@ -686,3 +686,9 @@ export async function evaluateAllAlerts(): Promise<AlertEvaluationResponse> {
     const res = await api.post('/api/alerts/evaluate-all');
     return res.data;
 }
+
+// Optimization Generation Endpoint
+export async function generateOptimizationAnalysis(portfolioId: string): Promise<{ message: string; portfolio_id: string }> {
+    const res = await api.post(`/api/optimization/portfolios/${portfolioId}/generate`);
+    return res.data;
+}

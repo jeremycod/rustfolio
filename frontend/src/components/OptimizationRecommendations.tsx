@@ -22,6 +22,7 @@ import {
   Divider,
   Stack,
   Tooltip,
+  Button,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -34,9 +35,10 @@ import {
   LocalFireDepartment,
   Psychology,
   BarChart,
+  Refresh,
 } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
-import { getPortfolioOptimization } from '../lib/endpoints';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getPortfolioOptimization, generateOptimizationAnalysis } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
 import type {
   OptimizationRecommendation,
@@ -51,6 +53,7 @@ interface OptimizationRecommendationsProps {
 
 export function OptimizationRecommendations({ portfolioId }: OptimizationRecommendationsProps) {
   const [expandedRec, setExpandedRec] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data: analysis, isLoading, error } = useQuery({
     queryKey: ['portfolioOptimization', portfolioId],
@@ -58,8 +61,20 @@ export function OptimizationRecommendations({ portfolioId }: OptimizationRecomme
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
+  const generateMutation = useMutation({
+    mutationFn: () => generateOptimizationAnalysis(portfolioId),
+    onSuccess: () => {
+      // Refresh the optimization data after successful generation
+      queryClient.invalidateQueries({ queryKey: ['portfolioOptimization', portfolioId] });
+    },
+  });
+
   const handleAccordionChange = (recId: string) => {
     setExpandedRec(expandedRec === recId ? null : recId);
+  };
+
+  const handleRefreshAnalysis = () => {
+    generateMutation.mutate();
   };
 
   if (isLoading) {
@@ -158,9 +173,35 @@ export function OptimizationRecommendations({ portfolioId }: OptimizationRecomme
 
           {analysis.summary.key_findings.length > 0 && (
             <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
-              <Typography variant="body2" fontWeight={600} sx={{ color: 'rgba(255,255,255,0.9)', mb: 1 }}>
-                Key Findings:
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="body2" fontWeight={600} sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                  Key Findings:
+                </Typography>
+                {/* Show refresh button if analysis is stale or empty */}
+                {(analysis.summary.key_findings.some(f => f.includes('stale') || f.includes('not available'))) && (
+                  <Button
+                    size="small"
+                    startIcon={generateMutation.isPending ? <CircularProgress size={16} sx={{ color: 'white' }} /> : <Refresh />}
+                    onClick={handleRefreshAnalysis}
+                    disabled={generateMutation.isPending}
+                    sx={{
+                      color: 'white',
+                      borderColor: 'rgba(255,255,255,0.5)',
+                      '&:hover': {
+                        borderColor: 'white',
+                        bgcolor: 'rgba(255,255,255,0.1)',
+                      },
+                    }}
+                    variant="outlined"
+                  >
+                    {generateMutation.isPending
+                      ? 'Generating...'
+                      : analysis.summary.key_findings.some(f => f.includes('not available'))
+                        ? 'Generate Analysis'
+                        : 'Refresh Analysis'}
+                  </Button>
+                )}
+              </Box>
               <Stack spacing={0.5}>
                 {analysis.summary.key_findings.map((finding, idx) => (
                   <Typography key={idx} variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
