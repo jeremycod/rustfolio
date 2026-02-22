@@ -117,6 +117,18 @@ pub struct PortfolioRisk {
     /// Portfolio Sharpe ratio (weighted average)
     pub portfolio_sharpe: Option<f64>,
 
+    /// Portfolio VaR at 95% confidence (weighted average)
+    pub portfolio_var_95: Option<f64>,
+
+    /// Portfolio VaR at 99% confidence (weighted average)
+    pub portfolio_var_99: Option<f64>,
+
+    /// Portfolio Expected Shortfall at 95% confidence (weighted average)
+    pub portfolio_expected_shortfall_95: Option<f64>,
+
+    /// Portfolio Expected Shortfall at 99% confidence (weighted average)
+    pub portfolio_expected_shortfall_99: Option<f64>,
+
     /// Overall portfolio risk score
     pub portfolio_risk_score: f64,
 
@@ -161,6 +173,30 @@ pub struct CorrelationMatrix {
     /// matrix_2d[i][j] = correlation between tickers[i] and tickers[j]
     /// Diagonal values are 1.0 (perfect self-correlation)
     pub matrix_2d: Vec<Vec<f64>>,
+    /// Clustering results (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clusters: Option<Vec<AssetCluster>>,
+    /// Map of ticker symbol to cluster ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cluster_labels: Option<std::collections::HashMap<String, usize>>,
+    /// Correlation matrix between cluster centroids
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inter_cluster_correlations: Option<Vec<Vec<f64>>>,
+}
+
+/// A cluster of correlated assets
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssetCluster {
+    /// Cluster ID (0-indexed)
+    pub cluster_id: usize,
+    /// Tickers in this cluster
+    pub tickers: Vec<String>,
+    /// Average intra-cluster correlation
+    pub avg_correlation: f64,
+    /// Suggested visualization color (hex)
+    pub color: String,
+    /// Cluster name based on dominant characteristics
+    pub name: String,
 }
 
 /// Risk decomposition into systematic and idiosyncratic components.
@@ -304,5 +340,69 @@ pub struct RollingBetaAnalysis {
     pub current_beta: f64,
     /// Beta volatility (standard deviation of 90d beta)
     pub beta_volatility: f64,
+}
+
+/// Downside risk metrics for a position or portfolio
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownsideRiskMetrics {
+    /// Downside deviation (semi-deviation), as a percentage
+    /// Only considers returns below the minimum acceptable return (MAR)
+    pub downside_deviation: f64,
+
+    /// Sortino ratio (risk-adjusted return using downside deviation)
+    /// Higher is better. Sortino > 2.0 is considered excellent
+    pub sortino_ratio: Option<f64>,
+
+    /// Minimum Acceptable Return (MAR) used in calculations, as a percentage
+    /// Typically the risk-free rate
+    pub mar: f64,
+
+    /// Sharpe ratio for comparison
+    pub sharpe_ratio: Option<f64>,
+
+    /// Interpretation guidance
+    pub interpretation: DownsideInterpretation,
+}
+
+/// Interpretation guidance for downside risk metrics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownsideInterpretation {
+    /// Risk level based on downside deviation
+    pub downside_risk_level: String,
+
+    /// Sortino ratio rating (e.g., "Excellent", "Good", "Fair", "Poor")
+    pub sortino_rating: String,
+
+    /// Comparison between Sortino and Sharpe
+    pub sortino_vs_sharpe: String,
+
+    /// Summary message
+    pub summary: String,
+}
+
+/// Portfolio-level downside risk assessment
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioDownsideRisk {
+    pub portfolio_id: String,
+
+    /// Aggregated portfolio-level downside metrics
+    pub portfolio_metrics: DownsideRiskMetrics,
+
+    /// Individual position downside risk contributions
+    pub position_downside_risks: Vec<PositionDownsideContribution>,
+
+    /// Analysis period in days
+    pub days: i64,
+
+    /// Benchmark used
+    pub benchmark: String,
+}
+
+/// Individual position's downside risk contribution
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PositionDownsideContribution {
+    pub ticker: String,
+    pub weight: f64,
+    pub downside_metrics: DownsideRiskMetrics,
 }
 

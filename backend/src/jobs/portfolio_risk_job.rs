@@ -539,8 +539,16 @@ async fn calculate_portfolio_risk_internal(
     let mut weighted_max_drawdown = 0.0;
     let mut weighted_beta = 0.0;
     let mut weighted_sharpe = 0.0;
+    let mut weighted_var_95 = 0.0;
+    let mut weighted_var_99 = 0.0;
+    let mut weighted_es_95 = 0.0;
+    let mut weighted_es_99 = 0.0;
     let mut beta_count = 0;
     let mut sharpe_count = 0;
+    let mut var_95_count = 0;
+    let mut var_99_count = 0;
+    let mut es_95_count = 0;
+    let mut es_99_count = 0;
 
     // Get risk free rate from environment or use default
     let risk_free_rate = std::env::var("RISK_FREE_RATE")
@@ -579,6 +587,26 @@ async fn calculate_portfolio_risk_internal(
                 if let Some(sharpe) = assessment.metrics.sharpe {
                     weighted_sharpe += sharpe * weight;
                     sharpe_count += 1;
+                }
+
+                if let Some(var_95) = assessment.metrics.var_95 {
+                    weighted_var_95 += var_95 * weight;
+                    var_95_count += 1;
+                }
+
+                if let Some(var_99) = assessment.metrics.var_99 {
+                    weighted_var_99 += var_99 * weight;
+                    var_99_count += 1;
+                }
+
+                if let Some(es_95) = assessment.metrics.expected_shortfall_95 {
+                    weighted_es_95 += es_95 * weight;
+                    es_95_count += 1;
+                }
+
+                if let Some(es_99) = assessment.metrics.expected_shortfall_99 {
+                    weighted_es_99 += es_99 * weight;
+                    es_99_count += 1;
                 }
 
                 position_risks.push(PositionRiskContribution {
@@ -634,18 +662,34 @@ async fn calculate_portfolio_risk_internal(
         portfolio_max_drawdown: weighted_max_drawdown,
         portfolio_beta: if beta_count > 0 { Some(weighted_beta) } else { None },
         portfolio_sharpe: if sharpe_count > 0 { Some(weighted_sharpe) } else { None },
+        portfolio_var_95: if var_95_count > 0 { Some(weighted_var_95) } else { None },
+        portfolio_var_99: if var_99_count > 0 { Some(weighted_var_99) } else { None },
+        portfolio_expected_shortfall_95: if es_95_count > 0 { Some(weighted_es_95) } else { None },
+        portfolio_expected_shortfall_99: if es_99_count > 0 { Some(weighted_es_99) } else { None },
         portfolio_risk_score,
         risk_level,
         position_risks: position_risks.clone(),
     };
 
     // 6. Fetch risk thresholds
-    let thresholds = crate::db::risk_threshold_queries::get_thresholds(pool, portfolio_id)
+    let base_thresholds = crate::db::risk_threshold_queries::get_thresholds(pool, portfolio_id)
         .await
         .map_err(|e| {
             error!("Failed to fetch risk thresholds: {}", e);
             AppError::Db(e)
         })?;
+
+    // 6b. Apply market regime adjustment to thresholds
+    let thresholds = match crate::services::market_regime_service::calculate_adaptive_thresholds(pool, &base_thresholds).await {
+        Ok(adjusted) => {
+            info!("Applied market regime adjustments to thresholds for portfolio {}", portfolio_id);
+            adjusted
+        }
+        Err(e) => {
+            warn!("Failed to apply regime adjustments (using base thresholds): {}", e);
+            base_thresholds
+        }
+    };
 
     // 7. Detect threshold violations
     let violations = detect_violations(&portfolio_risk, &thresholds);

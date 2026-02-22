@@ -41,6 +41,9 @@ regex = "1.12.3"
 parking_lot = "0.12"
 tokio-cron-scheduler = "0.10"
 lettre = { version = "0.11", default-features = false, features = ["tokio1", "tokio1-rustls-tls", "smtp-transport", "builder"] }
+ndarray = "0.15"
+linfa = "0.7"
+linfa-clustering = "0.7"
 
 [features]
 default = ["loki"]

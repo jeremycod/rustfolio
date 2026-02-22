@@ -16,6 +16,7 @@ pub mod forecast;
 pub mod sentiment;
 pub mod sec_filing;
 pub mod alert;
+pub mod market_regime;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -51,6 +52,10 @@ pub use sec_filing::{
     FilingType, SecFiling, EventImportance, MaterialEvent,
     InsiderTransactionType, InsiderTransaction, InsiderConfidence, InsiderSentiment,
     ConfidenceLevel, EnhancedSentimentSignal,
+};
+pub use market_regime::{
+    MarketRegime, CreateMarketRegime, RegimeType, RegimeDetectionParams,
+    RegimeHistoryParams, CurrentRegimeWithThresholds, AdjustedThresholds,
 };
 // Alert module models are used internally by routes/services
 // Re-export only when needed by other modules

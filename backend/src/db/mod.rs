@@ -11,3 +11,4 @@ pub mod ticker_fetch_failure_queries;
 pub mod llm_queries;
 pub mod user_preferences_queries;
 pub mod alert_queries;
+pub mod market_regime_queries;

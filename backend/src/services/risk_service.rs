@@ -411,6 +411,166 @@ fn compute_sortino(series: &[PricePoint], risk_free_rate: f64) -> Option<f64> {
     Some(((mean - risk_free_daily) * 252.0) / downside_deviation)
 }
 
+/// Compute downside deviation separately (returns it as a percentage).
+///
+/// This is useful for API endpoints that need to report downside deviation
+/// independently from the Sortino ratio.
+///
+/// # Arguments
+/// * `series` - Price history for the asset
+/// * `risk_free_rate` - Annual risk-free rate (e.g., 0.045 for 4.5%)
+///
+/// # Returns
+/// Annualized downside deviation as a percentage, or None if insufficient data
+pub fn compute_downside_deviation(series: &[PricePoint], risk_free_rate: f64) -> Option<f64> {
+    if series.len() < 2 {
+        return None;
+    }
+
+    // Convert to f64 prices
+    let prices: Vec<f64> = series
+        .iter()
+        .filter_map(|p| p.close_price.to_f64())
+        .collect();
+
+    if prices.len() < 2 {
+        return None;
+    }
+
+    // Calculate daily returns
+    let mut returns = Vec::new();
+    for i in 1..prices.len() {
+        let prev = prices[i - 1];
+        let cur = prices[i];
+        if prev > 0.0 {
+            returns.push((cur - prev) / prev);
+        }
+    }
+
+    if returns.is_empty() {
+        return None;
+    }
+
+    // Daily risk-free rate
+    let risk_free_daily = risk_free_rate / 252.0;
+
+    // Calculate downside deviation (only negative returns below risk-free rate)
+    let downside_returns: Vec<f64> = returns
+        .iter()
+        .filter(|&&r| r < risk_free_daily)
+        .copied()
+        .collect();
+
+    if downside_returns.is_empty() {
+        // No negative returns - return a very small downside deviation
+        return Some(0.0);
+    }
+
+    let downside_variance: f64 = downside_returns
+        .iter()
+        .map(|r| (r - risk_free_daily).powi(2))
+        .sum::<f64>()
+        / (downside_returns.len() as f64 - 1.0);
+
+    let downside_deviation = downside_variance.sqrt() * (252.0_f64).sqrt(); // Annualized
+
+    // Convert to percentage
+    Some(downside_deviation * 100.0)
+}
+
+/// Create interpretation guidance for downside risk metrics
+pub fn interpret_downside_metrics(
+    downside_deviation: f64,
+    sortino: Option<f64>,
+    sharpe: Option<f64>,
+) -> crate::models::risk::DownsideInterpretation {
+    // Determine downside risk level based on downside deviation
+    let downside_risk_level = if downside_deviation < 10.0 {
+        "Low".to_string()
+    } else if downside_deviation < 20.0 {
+        "Moderate".to_string()
+    } else if downside_deviation < 30.0 {
+        "High".to_string()
+    } else {
+        "Very High".to_string()
+    };
+
+    // Rate Sortino ratio
+    let sortino_rating = match sortino {
+        Some(s) if s > 2.0 => "Excellent".to_string(),
+        Some(s) if s > 1.0 => "Good".to_string(),
+        Some(s) if s > 0.0 => "Fair".to_string(),
+        Some(_) => "Poor".to_string(),
+        None => "Insufficient data".to_string(),
+    };
+
+    // Compare Sortino vs Sharpe
+    let sortino_vs_sharpe = match (sortino, sharpe) {
+        (Some(sor), Some(sha)) if (sor - sha).abs() < 0.1 => {
+            "Sortino and Sharpe are similar, indicating symmetric return distribution".to_string()
+        }
+        (Some(sor), Some(sha)) if sor > sha => {
+            format!(
+                "Sortino ({:.2}) > Sharpe ({:.2}), indicating the asset has less downside risk relative to upside volatility - good for risk-averse investors",
+                sor, sha
+            )
+        }
+        (Some(sor), Some(sha)) => {
+            format!(
+                "Sortino ({:.2}) < Sharpe ({:.2}), indicating significant downside volatility - higher tail risk",
+                sor, sha
+            )
+        }
+        (Some(_), None) => "Sharpe ratio not available for comparison".to_string(),
+        (None, Some(_)) => "Sortino ratio not available for comparison".to_string(),
+        (None, None) => "Neither metric available for comparison".to_string(),
+    };
+
+    // Create summary message
+    let summary = match sortino {
+        Some(s) if s > 2.0 => {
+            format!(
+                "Excellent downside-adjusted returns (Sortino: {:.2}). Downside risk is {} with {}% downside deviation.",
+                s,
+                downside_risk_level.to_lowercase(),
+                downside_deviation
+            )
+        }
+        Some(s) if s > 1.0 => {
+            format!(
+                "Good downside-adjusted returns (Sortino: {:.2}). {} downside risk with {}% downside deviation.",
+                s, downside_risk_level, downside_deviation
+            )
+        }
+        Some(s) if s > 0.0 => {
+            format!(
+                "Fair downside-adjusted returns (Sortino: {:.2}). {} downside risk with {}% downside deviation.",
+                s, downside_risk_level, downside_deviation
+            )
+        }
+        Some(s) => {
+            format!(
+                "Poor downside-adjusted returns (Sortino: {:.2}). {} downside risk with {}% downside deviation.",
+                s, downside_risk_level, downside_deviation
+            )
+        }
+        None => {
+            format!(
+                "Insufficient data to calculate Sortino ratio. Downside risk is {} with {}% downside deviation.",
+                downside_risk_level.to_lowercase(),
+                downside_deviation
+            )
+        }
+    };
+
+    crate::models::risk::DownsideInterpretation {
+        downside_risk_level,
+        sortino_rating,
+        sortino_vs_sharpe,
+        summary,
+    }
+}
+
 /// Compute a 5% Value at Risk (VaR) using historical simulation.
 ///
 /// VaR represents the maximum expected loss at a given confidence level.
@@ -878,6 +1038,182 @@ fn calculate_adjusted_diversification_score(
     (base_score + correlation_bonus).min(10.0).max(0.0)
 }
 
+/// Compute portfolio-level downside risk metrics by aggregating position-level metrics.
+///
+/// This function calculates weighted-average downside deviation and Sortino ratio
+/// for an entire portfolio, along with position-level contributions.
+///
+/// # Arguments
+/// * `pool` - Database connection pool
+/// * `portfolio_id` - Portfolio UUID
+/// * `days` - Rolling window in days (default: 90)
+/// * `benchmark` - Benchmark ticker for beta (default: "SPY")
+/// * `price_provider` - Provider for fetching price data
+/// * `failure_cache` - Cache to avoid repeated failed fetches
+/// * `rate_limiter` - Rate limiter for API requests
+/// * `risk_free_rate` - Annual risk-free rate (e.g., 0.045)
+///
+/// # Returns
+/// PortfolioDownsideRisk with aggregated metrics and position contributions
+pub async fn compute_portfolio_downside_risk(
+    pool: &PgPool,
+    portfolio_id: uuid::Uuid,
+    days: i64,
+    benchmark: &str,
+    _price_provider: &dyn PriceProvider,
+    _failure_cache: &FailureCache,
+    _rate_limiter: &RateLimiter,
+    risk_free_rate: f64,
+) -> Result<crate::models::risk::PortfolioDownsideRisk, AppError> {
+    use crate::db::holding_snapshot_queries;
+    use std::collections::HashMap;
+
+    // 1. Fetch all latest holdings for the portfolio
+    let holdings = holding_snapshot_queries::fetch_portfolio_latest_holdings(pool, portfolio_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch portfolio holdings: {}", e);
+            AppError::Db(e)
+        })?;
+
+    if holdings.is_empty() {
+        return Err(AppError::External(
+            "Portfolio has no holdings".to_string()
+        ));
+    }
+
+    // 2. Aggregate holdings by ticker
+    let mut ticker_aggregates: HashMap<String, (f64, f64)> = HashMap::new(); // (quantity, market_value)
+
+    for holding in &holdings {
+        let market_value = holding.market_value.to_string().parse::<f64>().unwrap_or(0.0);
+        let quantity = holding.quantity.to_string().parse::<f64>().unwrap_or(0.0);
+
+        ticker_aggregates
+            .entry(holding.ticker.clone())
+            .and_modify(|(q, mv)| {
+                *q += quantity;
+                *mv += market_value;
+            })
+            .or_insert((quantity, market_value));
+    }
+
+    let total_value: f64 = ticker_aggregates.values().map(|(_, mv)| mv).sum();
+
+    if total_value == 0.0 {
+        return Err(AppError::External(
+            "Portfolio has no holdings with market value".to_string()
+        ));
+    }
+
+    // 3. Compute downside metrics for each ticker
+    let mut position_downside_risks = Vec::new();
+    let mut weighted_downside_deviation = 0.0;
+    let mut weighted_sortino = 0.0;
+    let mut sortino_count = 0;
+    let mut weighted_sharpe = 0.0;
+    let mut sharpe_count = 0;
+
+    for (ticker, (_quantity, market_value)) in ticker_aggregates {
+        let weight = market_value / total_value;
+        if weight < 0.001 {
+            continue; // Skip negligible positions
+        }
+
+        // Fetch price data for this ticker
+        match price_queries::fetch_window(pool, &ticker, days).await {
+            Ok(series) if series.len() >= 2 => {
+                let downside_deviation = compute_downside_deviation(&series, risk_free_rate);
+                let sortino = compute_sortino(&series, risk_free_rate);
+                let sharpe = compute_sharpe(&series, risk_free_rate);
+
+                if let Some(dd) = downside_deviation {
+                    weighted_downside_deviation += dd * weight;
+
+                    if let Some(sor) = sortino {
+                        weighted_sortino += sor * weight;
+                        sortino_count += 1;
+                    }
+
+                    if let Some(sha) = sharpe {
+                        weighted_sharpe += sha * weight;
+                        sharpe_count += 1;
+                    }
+
+                    let interpretation = interpret_downside_metrics(dd, sortino, sharpe);
+
+                    position_downside_risks.push(crate::models::risk::PositionDownsideContribution {
+                        ticker: ticker.clone(),
+                        weight,
+                        downside_metrics: crate::models::risk::DownsideRiskMetrics {
+                            downside_deviation: dd,
+                            sortino_ratio: sortino,
+                            mar: risk_free_rate * 100.0, // Convert to percentage
+                            sharpe_ratio: sharpe,
+                            interpretation,
+                        },
+                    });
+                }
+            }
+            Ok(_) => {
+                tracing::warn!("Insufficient price data for {} (< 2 points)", ticker);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to fetch price data for {}: {}", ticker, e);
+            }
+        }
+    }
+
+    if position_downside_risks.is_empty() {
+        return Err(AppError::External(
+            "No positions in portfolio have available downside risk data".to_string()
+        ));
+    }
+
+    // 4. Create portfolio-level aggregated metrics
+    let portfolio_sortino = if sortino_count > 0 {
+        Some(weighted_sortino)
+    } else {
+        None
+    };
+
+    let portfolio_sharpe = if sharpe_count > 0 {
+        Some(weighted_sharpe)
+    } else {
+        None
+    };
+
+    let portfolio_interpretation = interpret_downside_metrics(
+        weighted_downside_deviation,
+        portfolio_sortino,
+        portfolio_sharpe,
+    );
+
+    let portfolio_metrics = crate::models::risk::DownsideRiskMetrics {
+        downside_deviation: weighted_downside_deviation,
+        sortino_ratio: portfolio_sortino,
+        mar: risk_free_rate * 100.0,
+        sharpe_ratio: portfolio_sharpe,
+        interpretation: portfolio_interpretation,
+    };
+
+    // 5. Sort positions by downside deviation (highest risk first)
+    position_downside_risks.sort_by(|a, b| {
+        b.downside_metrics
+            .downside_deviation
+            .partial_cmp(&a.downside_metrics.downside_deviation)
+            .unwrap()
+    });
+
+    Ok(crate::models::risk::PortfolioDownsideRisk {
+        portfolio_id: portfolio_id.to_string(),
+        portfolio_metrics,
+        position_downside_risks,
+        days,
+        benchmark: benchmark.to_string(),
+    })
+}
+
 /// Compute rolling beta over multiple window sizes (30, 60, 90 days).
 ///
 /// This function calculates how beta changes over time by sliding windows
@@ -1250,5 +1586,126 @@ mod tests {
         assert_eq!(RiskLevel::from_score(20.0), RiskLevel::Low);
         assert_eq!(RiskLevel::from_score(50.0), RiskLevel::Moderate);
         assert_eq!(RiskLevel::from_score(80.0), RiskLevel::High);
+    }
+
+    #[test]
+    fn test_compute_downside_deviation_with_positive_returns() {
+        // All positive returns should result in very low downside deviation
+        let series = vec![
+            create_test_price_point("2024-01-01", 100.0),
+            create_test_price_point("2024-01-02", 105.0),
+            create_test_price_point("2024-01-03", 110.0),
+            create_test_price_point("2024-01-04", 115.0),
+        ];
+
+        let dd = compute_downside_deviation(&series, 0.04);
+        assert!(dd.is_some());
+        assert_eq!(dd.unwrap(), 0.0); // No downside returns
+    }
+
+    #[test]
+    fn test_compute_downside_deviation_with_mixed_returns() {
+        // Mixed returns should have measurable downside deviation
+        let series = vec![
+            create_test_price_point("2024-01-01", 100.0),
+            create_test_price_point("2024-01-02", 95.0),  // -5% (downside)
+            create_test_price_point("2024-01-03", 105.0), // +10.5%
+            create_test_price_point("2024-01-04", 100.0), // -4.76% (downside)
+        ];
+
+        let dd = compute_downside_deviation(&series, 0.04);
+        assert!(dd.is_some());
+        assert!(dd.unwrap() > 0.0); // Should have downside deviation
+    }
+
+    #[test]
+    fn test_interpret_downside_metrics_excellent() {
+        let interpretation = interpret_downside_metrics(8.0, Some(2.5), Some(2.0));
+
+        assert_eq!(interpretation.downside_risk_level, "Low");
+        assert_eq!(interpretation.sortino_rating, "Excellent");
+        assert!(interpretation.sortino_vs_sharpe.contains("Sortino (2.50) > Sharpe (2.00)"));
+        assert!(interpretation.summary.contains("Excellent"));
+    }
+
+    #[test]
+    fn test_interpret_downside_metrics_high_risk() {
+        let interpretation = interpret_downside_metrics(35.0, Some(0.5), Some(1.0));
+
+        assert_eq!(interpretation.downside_risk_level, "Very High");
+        assert_eq!(interpretation.sortino_rating, "Fair");
+        assert!(interpretation.sortino_vs_sharpe.contains("Sortino (0.50) < Sharpe (1.00)"));
+    }
+
+    #[test]
+    fn test_interpret_downside_metrics_no_sortino() {
+        let interpretation = interpret_downside_metrics(15.0, None, Some(1.5));
+
+        assert_eq!(interpretation.downside_risk_level, "Moderate");
+        assert_eq!(interpretation.sortino_rating, "Insufficient data");
+        assert!(interpretation.summary.contains("Insufficient data"));
+    }
+
+    #[test]
+    fn test_compute_expected_shortfall_normal_returns() {
+        // Test CVaR with a series that includes some negative returns
+        let series = vec![
+            create_test_price_point("2024-01-01", 100.0),
+            create_test_price_point("2024-01-02", 95.0),  // -5% loss
+            create_test_price_point("2024-01-03", 90.0),  // ~-5.26% loss
+            create_test_price_point("2024-01-04", 85.0),  // ~-5.56% loss
+            create_test_price_point("2024-01-05", 92.0),  // +8.24% gain
+            create_test_price_point("2024-01-06", 88.0),  // -4.35% loss
+            create_test_price_point("2024-01-07", 94.0),  // +6.82% gain
+            create_test_price_point("2024-01-08", 91.0),  // -3.19% loss
+            create_test_price_point("2024-01-09", 87.0),  // -4.40% loss
+            create_test_price_point("2024-01-10", 95.0),  // +9.20% gain
+        ];
+
+        let (es_95, es_99) = compute_expected_shortfall(&series);
+
+        // CVaR should exist for this data series
+        assert!(es_95.is_some(), "Expected Shortfall 95% should exist");
+        assert!(es_99.is_some(), "Expected Shortfall 99% should exist");
+
+        // CVaR should be negative (representing losses)
+        assert!(es_95.unwrap() < 0.0, "CVaR 95% should be negative");
+        assert!(es_99.unwrap() < 0.0, "CVaR 99% should be negative");
+
+        // CVaR at 99% should be more severe (more negative) than at 95%
+        assert!(es_99.unwrap() < es_95.unwrap(), "CVaR 99% should be more negative than CVaR 95%");
+    }
+
+    #[test]
+    fn test_compute_expected_shortfall_insufficient_data() {
+        // Test with only one data point
+        let series = vec![create_test_price_point("2024-01-01", 100.0)];
+
+        let (es_95, es_99) = compute_expected_shortfall(&series);
+
+        // Should return None for insufficient data
+        assert!(es_95.is_none(), "CVaR 95% should be None with insufficient data");
+        assert!(es_99.is_none(), "CVaR 99% should be None with insufficient data");
+    }
+
+    #[test]
+    fn test_compute_expected_shortfall_all_positive_returns() {
+        // Test with only positive returns (no tail risk)
+        let series = vec![
+            create_test_price_point("2024-01-01", 100.0),
+            create_test_price_point("2024-01-02", 105.0),
+            create_test_price_point("2024-01-03", 110.0),
+            create_test_price_point("2024-01-04", 115.0),
+            create_test_price_point("2024-01-05", 120.0),
+        ];
+
+        let (es_95, es_99) = compute_expected_shortfall(&series);
+
+        // CVaR should still be calculated but should reflect very low tail risk
+        assert!(es_95.is_some());
+        assert!(es_99.is_some());
+
+        // With all positive returns, CVaR should be close to zero or positive
+        assert!(es_95.unwrap() >= 0.0, "CVaR 95% should be non-negative with all positive returns");
     }
 }

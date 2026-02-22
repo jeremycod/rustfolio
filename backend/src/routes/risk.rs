@@ -21,6 +21,7 @@ pub fn router() -> Router<AppState> {
         .route("/positions/:ticker/rolling-beta", get(get_rolling_beta))
         .route("/positions/:ticker/beta-forecast", get(get_beta_forecast))
         .route("/portfolios/:portfolio_id", get(get_portfolio_risk))
+        .route("/portfolios/:portfolio_id/downside", get(get_portfolio_downside_risk))
         .route("/portfolios/:portfolio_id/correlations", get(get_portfolio_correlations))
         .route("/portfolios/:portfolio_id/snapshot", post(create_portfolio_snapshot))
         .route("/portfolios/:portfolio_id/history", get(get_risk_history))
@@ -378,6 +379,53 @@ pub async fn get_beta_forecast(
     Ok(Json(forecast))
 }
 
+/// GET /api/risk/portfolios/:portfolio_id/downside
+///
+/// Calculate downside risk metrics (Sortino ratio, downside deviation) for a portfolio.
+///
+/// Query parameters:
+/// - `days`: Rolling window in days (default: 90)
+/// - `benchmark`: Benchmark ticker for beta (default: SPY) - used for MAR calculation
+///
+/// Returns downside deviation, Sortino ratio, MAR, and comparison to Sharpe ratio
+/// with interpretation guidance.
+///
+/// Example: GET /api/risk/portfolios/{uuid}/downside?days=90&benchmark=SPY
+pub async fn get_portfolio_downside_risk(
+    Path(portfolio_id): Path<Uuid>,
+    Query(params): Query<RiskQueryParams>,
+    State(state): State<AppState>,
+) -> Result<Json<crate::models::risk::PortfolioDownsideRisk>, AppError> {
+    use std::time::Instant;
+
+    let start = Instant::now();
+    info!(
+        "GET /api/risk/portfolios/{}/downside - Computing downside risk metrics (days={}, benchmark={})",
+        portfolio_id, params.days, params.benchmark
+    );
+
+    // Compute downside risk metrics using risk service
+    let downside_risk = risk_service::compute_portfolio_downside_risk(
+        &state.pool,
+        portfolio_id,
+        params.days,
+        &params.benchmark,
+        state.price_provider.as_ref(),
+        &state.failure_cache,
+        &state.rate_limiter,
+        state.risk_free_rate,
+    )
+    .await?;
+
+    info!(
+        "Successfully computed downside risk for portfolio {} in {:?}",
+        portfolio_id,
+        start.elapsed()
+    );
+
+    Ok(Json(downside_risk))
+}
+
 /// Represents the state of cached portfolio risk data
 #[derive(Debug)]
 enum CacheResult {
@@ -587,8 +635,16 @@ pub async fn get_portfolio_risk(
     let mut weighted_max_drawdown = 0.0;
     let mut weighted_beta = 0.0;
     let mut weighted_sharpe = 0.0;
+    let mut weighted_var_95 = 0.0;
+    let mut weighted_var_99 = 0.0;
+    let mut weighted_es_95 = 0.0;
+    let mut weighted_es_99 = 0.0;
     let mut beta_count = 0;
     let mut sharpe_count = 0;
+    let mut var_95_count = 0;
+    let mut var_99_count = 0;
+    let mut es_95_count = 0;
+    let mut es_99_count = 0;
 
     for (ticker, (_quantity, market_value)) in ticker_aggregates {
         // Skip positions with negligible value (< 0.1% of portfolio)
@@ -621,6 +677,26 @@ pub async fn get_portfolio_risk(
                 if let Some(sharpe) = assessment.metrics.sharpe {
                     weighted_sharpe += sharpe * weight;
                     sharpe_count += 1;
+                }
+
+                if let Some(var_95) = assessment.metrics.var_95 {
+                    weighted_var_95 += var_95 * weight;
+                    var_95_count += 1;
+                }
+
+                if let Some(var_99) = assessment.metrics.var_99 {
+                    weighted_var_99 += var_99 * weight;
+                    var_99_count += 1;
+                }
+
+                if let Some(es_95) = assessment.metrics.expected_shortfall_95 {
+                    weighted_es_95 += es_95 * weight;
+                    es_95_count += 1;
+                }
+
+                if let Some(es_99) = assessment.metrics.expected_shortfall_99 {
+                    weighted_es_99 += es_99 * weight;
+                    es_99_count += 1;
                 }
 
                 position_risks.push(PositionRiskContribution {
@@ -676,18 +752,34 @@ pub async fn get_portfolio_risk(
         portfolio_max_drawdown: weighted_max_drawdown,
         portfolio_beta: if beta_count > 0 { Some(weighted_beta) } else { None },
         portfolio_sharpe: if sharpe_count > 0 { Some(weighted_sharpe) } else { None },
+        portfolio_var_95: if var_95_count > 0 { Some(weighted_var_95) } else { None },
+        portfolio_var_99: if var_99_count > 0 { Some(weighted_var_99) } else { None },
+        portfolio_expected_shortfall_95: if es_95_count > 0 { Some(weighted_es_95) } else { None },
+        portfolio_expected_shortfall_99: if es_99_count > 0 { Some(weighted_es_99) } else { None },
         portfolio_risk_score,
         risk_level,
         position_risks: position_risks.clone(),
     };
 
     // Fetch risk thresholds
-    let thresholds = crate::db::risk_threshold_queries::get_thresholds(&state.pool, portfolio_id)
+    let base_thresholds = crate::db::risk_threshold_queries::get_thresholds(&state.pool, portfolio_id)
         .await
         .map_err(|e| {
             error!("Failed to fetch risk thresholds: {}", e);
             AppError::Db(e)
         })?;
+
+    // Apply market regime adjustment to thresholds
+    let thresholds = match crate::services::market_regime_service::calculate_adaptive_thresholds(&state.pool, &base_thresholds).await {
+        Ok(adjusted) => {
+            info!("Applied market regime adjustments to thresholds for portfolio {}", portfolio_id);
+            adjusted
+        }
+        Err(e) => {
+            warn!("Failed to apply regime adjustments (using base thresholds): {}", e);
+            base_thresholds
+        }
+    };
 
     // Detect threshold violations
     let violations = detect_violations(&portfolio_risk, &thresholds);
@@ -1185,12 +1277,30 @@ pub async fn get_portfolio_correlations(
         }
     }
 
-    let matrix = CorrelationMatrix {
+    let mut matrix = CorrelationMatrix {
         portfolio_id: portfolio_id.to_string(),
         tickers: tickers.clone(),
         correlations,
         matrix_2d,
+        clusters: None,
+        cluster_labels: None,
+        inter_cluster_correlations: None,
     };
+
+    // Perform clustering analysis if we have 2+ tickers
+    if tickers.len() >= 2 {
+        info!("Step 6: Performing clustering analysis...");
+        let cluster_start = Instant::now();
+
+        let (clusters, cluster_labels, inter_cluster_corr) =
+            crate::services::clustering::identify_correlation_clusters(&matrix);
+
+        info!("Identified {} clusters in {:?}", clusters.len(), cluster_start.elapsed());
+
+        matrix.clusters = Some(clusters);
+        matrix.cluster_labels = Some(cluster_labels);
+        matrix.inter_cluster_correlations = Some(inter_cluster_corr);
+    }
 
     // Calculate correlation statistics
     let position_count = tickers.len();
@@ -1388,6 +1498,10 @@ pub async fn export_portfolio_risk_csv(
         "Beta",
         "Sharpe Ratio",
         "Value at Risk %",
+        "VaR 95% %",
+        "VaR 99% %",
+        "Expected Shortfall 95% %",
+        "Expected Shortfall 99% %",
         "Risk Score",
         "Risk Level",
     ]).map_err(|e| {
@@ -1422,6 +1536,10 @@ pub async fn export_portfolio_risk_csv(
                     assessment.metrics.beta.map(|b| format!("{:.2}", b)).unwrap_or_else(|| "—".to_string()),
                     assessment.metrics.sharpe.map(|s| format!("{:.2}", s)).unwrap_or_else(|| "—".to_string()),
                     assessment.metrics.value_at_risk.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "—".to_string()),
+                    assessment.metrics.var_95.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "—".to_string()),
+                    assessment.metrics.var_99.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "—".to_string()),
+                    assessment.metrics.expected_shortfall_95.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "—".to_string()),
+                    assessment.metrics.expected_shortfall_99.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "—".to_string()),
                     format!("{:.2}", assessment.risk_score),
                     assessment.risk_level.to_string().to_uppercase(),
                 ]).map_err(|e| {
@@ -1438,6 +1556,10 @@ pub async fn export_portfolio_risk_csv(
                     holding_name.unwrap_or_else(|| "—".to_string()),
                     format!("{:.2}", market_value),
                     format!("{:.2}", weight),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
                     "N/A".to_string(),
                     "N/A".to_string(),
                     "N/A".to_string(),
@@ -1582,8 +1704,16 @@ pub async fn get_portfolio_narrative(
     let mut weighted_max_drawdown = 0.0;
     let mut weighted_beta = 0.0;
     let mut weighted_sharpe = 0.0;
+    let mut weighted_var_95 = 0.0;
+    let mut weighted_var_99 = 0.0;
+    let mut weighted_es_95 = 0.0;
+    let mut weighted_es_99 = 0.0;
     let mut beta_count = 0;
     let mut sharpe_count = 0;
+    let mut var_95_count = 0;
+    let mut var_99_count = 0;
+    let mut es_95_count = 0;
+    let mut es_99_count = 0;
 
     for (ticker, (_quantity, market_value)) in ticker_aggregates {
         let weight = market_value / total_value;
@@ -1613,6 +1743,26 @@ pub async fn get_portfolio_narrative(
                 if let Some(sharpe) = assessment.metrics.sharpe {
                     weighted_sharpe += sharpe * weight;
                     sharpe_count += 1;
+                }
+
+                if let Some(var_95) = assessment.metrics.var_95 {
+                    weighted_var_95 += var_95 * weight;
+                    var_95_count += 1;
+                }
+
+                if let Some(var_99) = assessment.metrics.var_99 {
+                    weighted_var_99 += var_99 * weight;
+                    var_99_count += 1;
+                }
+
+                if let Some(es_95) = assessment.metrics.expected_shortfall_95 {
+                    weighted_es_95 += es_95 * weight;
+                    es_95_count += 1;
+                }
+
+                if let Some(es_99) = assessment.metrics.expected_shortfall_99 {
+                    weighted_es_99 += es_99 * weight;
+                    es_99_count += 1;
                 }
 
                 position_risks.push(crate::models::PositionRiskContribution {
@@ -1666,6 +1816,10 @@ pub async fn get_portfolio_narrative(
         portfolio_max_drawdown: weighted_max_drawdown,
         portfolio_beta: if beta_count > 0 { Some(weighted_beta) } else { None },
         portfolio_sharpe: if sharpe_count > 0 { Some(weighted_sharpe) } else { None },
+        portfolio_var_95: if var_95_count > 0 { Some(weighted_var_95) } else { None },
+        portfolio_var_99: if var_99_count > 0 { Some(weighted_var_99) } else { None },
+        portfolio_expected_shortfall_95: if es_95_count > 0 { Some(weighted_es_95) } else { None },
+        portfolio_expected_shortfall_99: if es_99_count > 0 { Some(weighted_es_99) } else { None },
         portfolio_risk_score,
         risk_level,
         position_risks,

@@ -222,6 +222,10 @@ mod tests {
             portfolio_max_drawdown: -12.0,
             portfolio_beta: Some(1.1),
             portfolio_sharpe: Some(1.3),
+            portfolio_var_95: Some(-4.5),
+            portfolio_var_99: Some(-7.0),
+            portfolio_expected_shortfall_95: Some(-5.5),
+            portfolio_expected_shortfall_99: Some(-8.5),
             portfolio_risk_score: 65.0,
             risk_level: RiskLevel::Moderate,
             position_risks: vec![

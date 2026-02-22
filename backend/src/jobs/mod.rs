@@ -28,3 +28,4 @@ pub mod portfolio_correlations_job;
 pub mod daily_risk_snapshots_job;
 // pub mod populate_sentiment_cache_job; // TODO: Fix sentiment job
 pub mod populate_optimization_cache_job;
+pub mod market_regime_update_job;

@@ -128,6 +128,10 @@ async fn create_position_snapshot(
         beta: position_risk.beta.and_then(|b| BigDecimal::from_f64(b)),
         sharpe: position_risk.sharpe.and_then(|s| BigDecimal::from_f64(s)),
         value_at_risk: position_risk.value_at_risk.and_then(|v| BigDecimal::from_f64(v)),
+        var_95: position_risk.var_95.and_then(|v| BigDecimal::from_f64(v)),
+        var_99: position_risk.var_99.and_then(|v| BigDecimal::from_f64(v)),
+        expected_shortfall_95: position_risk.expected_shortfall_95.and_then(|v| BigDecimal::from_f64(v)),
+        expected_shortfall_99: position_risk.expected_shortfall_99.and_then(|v| BigDecimal::from_f64(v)),
         risk_score: BigDecimal::from_f64(risk_assessment.risk_score).unwrap_or_else(|| BigDecimal::from(0)),
         risk_level: risk_assessment.risk_level.to_string(),
         total_value: None,
@@ -164,8 +168,16 @@ async fn create_portfolio_snapshot(
     let mut weighted_max_drawdown = 0.0;
     let mut weighted_beta = 0.0;
     let mut weighted_sharpe = 0.0;
+    let mut weighted_var_95 = 0.0;
+    let mut weighted_var_99 = 0.0;
+    let mut weighted_es_95 = 0.0;
+    let mut weighted_es_99 = 0.0;
     let mut beta_count = 0;
     let mut sharpe_count = 0;
+    let mut var_95_count = 0;
+    let mut var_99_count = 0;
+    let mut es_95_count = 0;
+    let mut es_99_count = 0;
 
     for (ticker, (_quantity, market_value)) in ticker_aggregates {
         let weight = market_value / total_value;
@@ -195,6 +207,26 @@ async fn create_portfolio_snapshot(
                 if let Some(sharpe) = assessment.metrics.sharpe {
                     weighted_sharpe += sharpe * weight;
                     sharpe_count += 1;
+                }
+
+                if let Some(var_95) = assessment.metrics.var_95 {
+                    weighted_var_95 += var_95 * weight;
+                    var_95_count += 1;
+                }
+
+                if let Some(var_99) = assessment.metrics.var_99 {
+                    weighted_var_99 += var_99 * weight;
+                    var_99_count += 1;
+                }
+
+                if let Some(es_95) = assessment.metrics.expected_shortfall_95 {
+                    weighted_es_95 += es_95 * weight;
+                    es_95_count += 1;
+                }
+
+                if let Some(es_99) = assessment.metrics.expected_shortfall_99 {
+                    weighted_es_99 += es_99 * weight;
+                    es_99_count += 1;
                 }
             },
             Err(e) => {
@@ -234,6 +266,10 @@ async fn create_portfolio_snapshot(
         beta: if beta_count > 0 { BigDecimal::from_f64(weighted_beta) } else { None },
         sharpe: if sharpe_count > 0 { BigDecimal::from_f64(weighted_sharpe) } else { None },
         value_at_risk: None,
+        var_95: if var_95_count > 0 { BigDecimal::from_f64(weighted_var_95) } else { None },
+        var_99: if var_99_count > 0 { BigDecimal::from_f64(weighted_var_99) } else { None },
+        expected_shortfall_95: if es_95_count > 0 { BigDecimal::from_f64(weighted_es_95) } else { None },
+        expected_shortfall_99: if es_99_count > 0 { BigDecimal::from_f64(weighted_es_99) } else { None },
         risk_score: BigDecimal::from_f64(portfolio_risk_score).unwrap_or_else(|| BigDecimal::from(0)),
         risk_level: risk_level.to_string(),
         total_value: Some(BigDecimal::from_f64(total_value).unwrap_or_else(|| BigDecimal::from(0))),

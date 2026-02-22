@@ -14,9 +14,10 @@ pub async fn upsert_snapshot(
         INSERT INTO risk_snapshots (
             portfolio_id, ticker, snapshot_date, snapshot_type,
             volatility, max_drawdown, beta, sharpe, value_at_risk,
+            var_95, var_99, expected_shortfall_95, expected_shortfall_99,
             risk_score, risk_level, total_value, market_value
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         ON CONFLICT (portfolio_id, ticker, snapshot_date, snapshot_type)
         DO UPDATE SET
             volatility = EXCLUDED.volatility,
@@ -24,6 +25,10 @@ pub async fn upsert_snapshot(
             beta = EXCLUDED.beta,
             sharpe = EXCLUDED.sharpe,
             value_at_risk = EXCLUDED.value_at_risk,
+            var_95 = EXCLUDED.var_95,
+            var_99 = EXCLUDED.var_99,
+            expected_shortfall_95 = EXCLUDED.expected_shortfall_95,
+            expected_shortfall_99 = EXCLUDED.expected_shortfall_99,
             risk_score = EXCLUDED.risk_score,
             risk_level = EXCLUDED.risk_level,
             total_value = EXCLUDED.total_value,
@@ -41,6 +46,10 @@ pub async fn upsert_snapshot(
     .bind(snapshot.beta)
     .bind(snapshot.sharpe)
     .bind(snapshot.value_at_risk)
+    .bind(snapshot.var_95)
+    .bind(snapshot.var_99)
+    .bind(snapshot.expected_shortfall_95)
+    .bind(snapshot.expected_shortfall_99)
     .bind(snapshot.risk_score)
     .bind(snapshot.risk_level)
     .bind(snapshot.total_value)

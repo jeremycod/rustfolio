@@ -502,14 +502,28 @@ async fn calculate_portfolio_correlations_internal(
         }
     }
 
-    let matrix = CorrelationMatrix {
+    let mut matrix = CorrelationMatrix {
         portfolio_id: portfolio_id.to_string(),
         tickers: tickers.clone(),
         correlations,
         matrix_2d,
+        clusters: None,
+        cluster_labels: None,
+        inter_cluster_correlations: None,
     };
 
-    // 6. Calculate correlation statistics
+    // 6. Perform clustering analysis if we have 2+ tickers
+    if tickers.len() >= 2 {
+        info!("Performing clustering analysis for {} tickers...", tickers.len());
+        let (clusters, cluster_labels, inter_cluster_corr) =
+            crate::services::clustering::identify_correlation_clusters(&matrix);
+
+        matrix.clusters = Some(clusters);
+        matrix.cluster_labels = Some(cluster_labels);
+        matrix.inter_cluster_correlations = Some(inter_cluster_corr);
+    }
+
+    // 7. Calculate correlation statistics
     let position_count = tickers.len();
     let statistics = risk_service::calculate_correlation_statistics(&matrix, position_count);
 
