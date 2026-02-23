@@ -15,19 +15,21 @@ import {
   TableHead,
   TableRow,
   CircularProgress,
-  Tooltip,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   Autocomplete,
+  IconButton,
 } from '@mui/material';
 import {
   Compare,
   Add,
   Close,
   Download,
+  HelpOutline,
 } from '@mui/icons-material';
+import { MetricHelpDialog } from './MetricHelpDialog';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { getPositionRisk, listPortfolios } from '../lib/endpoints';
 import { RiskLevel } from '../types';
@@ -48,6 +50,7 @@ export function RiskComparison() {
   const [days] = useState(90);
   const [benchmark] = useState('SPY');
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
+  const [helpDialogOpen, setHelpDialogOpen] = useState<string | null>(null);
 
   // Fetch portfolios for dropdown
   const portfoliosQ = useQuery({
@@ -337,7 +340,18 @@ export function RiskComparison() {
                 </TableHead>
                 <TableBody>
                   <TableRow>
-                    <TableCell>Risk Score</TableCell>
+                    <TableCell>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        Risk Score
+                        <IconButton
+                          size="small"
+                          onClick={() => setHelpDialogOpen('risk_score')}
+                          sx={{ p: 0.5 }}
+                        >
+                          <HelpOutline sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </Box>
+                    </TableCell>
                     {comparisonData.map((item) => {
                       const scores = comparisonData.map((d) => d.data?.risk_score || 0);
                       const indicator = getBestWorstIndicator(scores, item.data?.risk_score || 0, true);
@@ -366,9 +380,16 @@ export function RiskComparison() {
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <Tooltip title="Annualized standard deviation of returns">
-                        <span>Volatility (%)</span>
-                      </Tooltip>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        Volatility (%)
+                        <IconButton
+                          size="small"
+                          onClick={() => setHelpDialogOpen('volatility')}
+                          sx={{ p: 0.5 }}
+                        >
+                          <HelpOutline sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                     {comparisonData.map((item) => {
                       const values = comparisonData.map((d) => d.data?.metrics.volatility || 0);
@@ -382,9 +403,16 @@ export function RiskComparison() {
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <Tooltip title="Worst peak-to-trough decline">
-                        <span>Max Drawdown (%)</span>
-                      </Tooltip>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        Max Drawdown (%)
+                        <IconButton
+                          size="small"
+                          onClick={() => setHelpDialogOpen('max_drawdown')}
+                          sx={{ p: 0.5 }}
+                        >
+                          <HelpOutline sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                     {comparisonData.map((item) => {
                       const values = comparisonData.map((d) => d.data?.metrics.max_drawdown || 0);
@@ -398,9 +426,16 @@ export function RiskComparison() {
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <Tooltip title={`Correlation with ${benchmark} benchmark`}>
-                        <span>Beta</span>
-                      </Tooltip>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        Beta
+                        <IconButton
+                          size="small"
+                          onClick={() => setHelpDialogOpen('beta')}
+                          sx={{ p: 0.5 }}
+                        >
+                          <HelpOutline sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                     {comparisonData.map((item) => (
                       <TableCell key={item.ticker} align="right">
@@ -412,9 +447,16 @@ export function RiskComparison() {
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <Tooltip title="Risk-adjusted return">
-                        <span>Sharpe Ratio</span>
-                      </Tooltip>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        Sharpe Ratio
+                        <IconButton
+                          size="small"
+                          onClick={() => setHelpDialogOpen('sharpe_ratio')}
+                          sx={{ p: 0.5 }}
+                        >
+                          <HelpOutline sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                     {comparisonData.map((item) => {
                       const values = comparisonData
@@ -579,6 +621,15 @@ export function RiskComparison() {
         <Alert severity="warning" sx={{ mt: 2 }}>
           Some tickers failed to load. They may not have sufficient price history or could be invalid symbols.
         </Alert>
+      )}
+
+      {/* Help Dialog */}
+      {helpDialogOpen && (
+        <MetricHelpDialog
+          open={true}
+          onClose={() => setHelpDialogOpen(null)}
+          metricKey={helpDialogOpen}
+        />
       )}
     </Box>
   );

@@ -6,8 +6,8 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{SentimentSignal, PortfolioSentimentAnalysis, DivergenceType, EnhancedSentimentSignal, SentimentTrend, MomentumTrend, SentimentDataPoint};
-use crate::services::{sentiment_service, price_service, enhanced_sentiment_service, sec_edgar_service};
+use crate::models::{SentimentSignal, PortfolioSentimentAnalysis, DivergenceType, EnhancedSentimentSignal, SentimentTrend, MomentumTrend, SentimentDataPoint, SentimentAwareForecast};
+use crate::services::{sentiment_service, price_service, enhanced_sentiment_service, sec_edgar_service, sentiment_forecasting_service};
 use crate::state::AppState;
 
 /// Query parameters for sentiment analysis
@@ -18,7 +18,19 @@ pub struct SentimentQueryParams {
     pub days: i32,
 }
 
+/// Query parameters for sentiment forecast
+#[derive(Debug, Deserialize)]
+pub struct SentimentForecastParams {
+    /// Number of days to forecast (default: 30)
+    #[serde(default = "default_forecast_days")]
+    pub days: i32,
+}
+
 fn default_days() -> i32 {
+    30
+}
+
+fn default_forecast_days() -> i32 {
     30
 }
 
@@ -131,7 +143,8 @@ pub async fn get_enhanced_position_sentiment(
 
 /// GET /api/sentiment/portfolios/:portfolio_id/sentiment
 ///
-/// FAST VERSION: Reads from sentiment_signal_cache instead of fetching fresh data
+/// FAST VERSION: Reads from sentiment_signal_cache instead of fetching fresh data.
+/// Returns cached data even if expired, with warnings about staleness.
 pub async fn get_portfolio_sentiment(
     Path(portfolio_id): Path<Uuid>,
     State(state): State<AppState>,
@@ -162,14 +175,16 @@ pub async fn get_portfolio_sentiment(
     info!("Found {} positions in portfolio", positions.len());
 
     // 2. Read cached sentiment for each position from sentiment_signal_cache
+    // Accept even expired cache, but warn the user
     let mut signals = Vec::new();
     let mut bullish_divergences = 0;
     let mut bearish_divergences = 0;
+    let mut missing_tickers = Vec::new();
 
     for position in positions {
         let ticker = &position.ticker;
 
-        // Read from cache instead of fetching fresh data
+        // Read from cache - accept even expired data
         let cached = sqlx::query!(
             r#"
             SELECT
@@ -183,10 +198,12 @@ pub async fn get_portfolio_sentiment(
                 historical_sentiment,
                 news_articles_analyzed,
                 warnings,
-                calculated_at
+                calculated_at,
+                expires_at
             FROM sentiment_signal_cache
             WHERE ticker = $1
-              AND expires_at > NOW()
+            ORDER BY calculated_at DESC
+            LIMIT 1
             "#,
             ticker
         )
@@ -194,12 +211,23 @@ pub async fn get_portfolio_sentiment(
         .await?;
 
         if let Some(cache) = cached {
+            // Check if data is stale
+            let is_expired = cache.expires_at < chrono::Utc::now().naive_utc();
+            let age_hours = (chrono::Utc::now().naive_utc() - cache.calculated_at).num_hours();
             // Parse the cached data into SentimentSignal
             let historical: Vec<SentimentDataPoint> = serde_json::from_value(cache.historical_sentiment)
                 .unwrap_or_default();
 
-            let warnings: Vec<String> = serde_json::from_value(cache.warnings)
+            let mut warnings: Vec<String> = serde_json::from_value(cache.warnings)
                 .unwrap_or_default();
+
+            // Add staleness warning if expired
+            if is_expired {
+                warnings.insert(0, format!(
+                    "⚠️ Data is {} hours old and may be stale. Click Refresh Sentiment to update.",
+                    age_hours
+                ));
+            }
 
             let divergence = match cache.divergence.as_str() {
                 "Bullish" => {
@@ -254,14 +282,21 @@ pub async fn get_portfolio_sentiment(
 
             signals.push(signal);
         } else {
-            // No cached data for this ticker - skip it
+            // No cached data for this ticker - track it
             info!("No cached sentiment data for ticker: {}", ticker);
+            missing_tickers.push(ticker.clone());
         }
     }
 
+    // If no data at all, return helpful error
     if signals.is_empty() {
         return Err(AppError::Validation(
-            "No cached sentiment data available for portfolio positions. Please wait for the sentiment cache to be populated by background jobs.".to_string()
+            format!(
+                "No sentiment data available yet. Sentiment analysis requires news data which is fetched on-demand. \
+                Missing data for: {}. \
+                Sentiment data will be available after the first analysis is triggered.",
+                missing_tickers.join(", ")
+            )
         ));
     }
 
@@ -319,6 +354,122 @@ pub async fn clear_sentiment_cache(
     })))
 }
 
+/// GET /api/sentiment/portfolios/:portfolio_id/cache-status
+/// Get cache status for portfolio sentiment data
+pub async fn get_portfolio_sentiment_cache_status(
+    Path(portfolio_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    info!("Checking sentiment cache status for portfolio_id: {}", portfolio_id);
+
+    // Get all tickers in the portfolio
+    let tickers = sqlx::query!(
+        r#"
+        SELECT DISTINCT hs.ticker
+        FROM holdings_snapshots hs
+        JOIN accounts a ON hs.account_id = a.id
+        WHERE a.portfolio_id = $1
+          AND hs.quantity > 0
+        "#,
+        portfolio_id
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    if tickers.is_empty() {
+        return Ok(Json(serde_json::json!({
+            "portfolio_id": portfolio_id.to_string(),
+            "total_positions": 0,
+            "cached_positions": 0,
+            "missing_positions": 0,
+            "expired_positions": 0,
+            "is_complete": true,
+            "is_fresh": true,
+            "message": "Portfolio has no positions"
+        })));
+    }
+
+    let mut cached = 0;
+    let mut expired = 0;
+    let mut missing = 0;
+    let mut oldest_update: Option<chrono::DateTime<chrono::Utc>> = None;
+    let mut missing_list = Vec::new();
+
+    for ticker_row in &tickers {
+        let ticker = &ticker_row.ticker;
+
+        let cache_row = sqlx::query!(
+            r#"
+            SELECT calculated_at, expires_at
+            FROM sentiment_signal_cache
+            WHERE ticker = $1
+            ORDER BY calculated_at DESC
+            LIMIT 1
+            "#,
+            ticker
+        )
+        .fetch_optional(&state.pool)
+        .await?;
+
+        if let Some(cache) = cache_row {
+            let calc_at = cache.calculated_at.and_utc();
+            cached += 1;
+
+            if cache.expires_at < chrono::Utc::now().naive_utc() {
+                expired += 1;
+            }
+
+            // Track oldest update
+            if oldest_update.is_none() || calc_at < oldest_update.unwrap() {
+                oldest_update = Some(calc_at);
+            }
+        } else {
+            missing += 1;
+            missing_list.push(ticker.clone());
+        }
+    }
+
+    let total = tickers.len();
+    let is_complete = missing == 0;
+    let is_fresh = expired == 0;
+    let cache_age_hours = oldest_update
+        .map(|dt| (chrono::Utc::now() - dt).num_hours())
+        .unwrap_or(0);
+
+    let message = if missing > 0 {
+        format!(
+            "Sentiment data is missing for {} position(s). News data is fetched on-demand.",
+            missing
+        )
+    } else if expired > 0 {
+        format!(
+            "Sentiment data for {} position(s) is stale (oldest: {} hours old). Refresh recommended.",
+            expired, cache_age_hours
+        )
+    } else {
+        "All sentiment data is up to date".to_string()
+    };
+
+    Ok(Json(serde_json::json!({
+        "portfolio_id": portfolio_id.to_string(),
+        "total_positions": total,
+        "cached_positions": cached,
+        "missing_positions": missing,
+        "expired_positions": expired,
+        "missing_tickers": missing_list,
+        "is_complete": is_complete,
+        "is_fresh": is_fresh,
+        "oldest_update": oldest_update,
+        "cache_age_hours": cache_age_hours,
+        "message": message,
+        "recommendation": if !is_complete || !is_fresh {
+            "Sentiment analysis requires news data. Use the Refresh button to fetch the latest news and generate sentiment analysis."
+        } else {
+            "Cache is healthy"
+        }
+    })))
+}
+
 /// Helper function to fetch sentiment for a single ticker
 #[allow(dead_code)]
 async fn fetch_ticker_sentiment(
@@ -364,10 +515,61 @@ async fn fetch_ticker_sentiment(
     ).await
 }
 
+/// GET /api/sentiment/positions/:ticker/sentiment-forecast
+/// Generate sentiment-aware price forecast for a stock
+/// Query params: days (default: 30)
+pub async fn get_sentiment_aware_forecast(
+    Path(ticker): Path<String>,
+    Query(params): Query<SentimentForecastParams>,
+    State(state): State<AppState>,
+) -> Result<Json<SentimentAwareForecast>, AppError> {
+    info!("Generating sentiment-aware forecast for {}, days: {}", ticker, params.days);
+
+    // Check if news service is enabled
+    if !state.news_service.is_enabled() {
+        return Err(AppError::External(
+            "News service is not enabled. Please configure NEWS_ENABLED=true and NEWS_API_KEY to use sentiment-aware forecasts.".to_string()
+        ));
+    }
+
+    // 1. Get enhanced sentiment (includes news, SEC, insider)
+    let edgar_service = sec_edgar_service::SecEdgarService::new();
+    let enhanced_sentiment = enhanced_sentiment_service::generate_enhanced_sentiment(
+        &state.pool,
+        &edgar_service,
+        &state.llm_service,
+        &state.news_service,
+        &ticker,
+        30, // Use 30 days of sentiment data
+    ).await?;
+
+    info!(
+        "Enhanced sentiment for {}: combined={:.2}, confidence={:?}",
+        ticker, enhanced_sentiment.combined_sentiment, enhanced_sentiment.confidence_level
+    );
+
+    // 2. Generate sentiment-aware forecast
+    let forecast = sentiment_forecasting_service::generate_sentiment_aware_stock_forecast(
+        &state.pool,
+        &ticker,
+        &enhanced_sentiment,
+        params.days,
+    ).await?;
+
+    info!(
+        "Generated sentiment-aware forecast for {}: reversal_prob={:.2}, divergence={}",
+        ticker, forecast.reversal_probability, forecast.sentiment_factors.divergence_detected
+    );
+
+    Ok(Json(forecast))
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/positions/:ticker/sentiment", get(get_position_sentiment))
         .route("/positions/:ticker/enhanced-sentiment", get(get_enhanced_position_sentiment))
+        .route("/positions/:ticker/sentiment-forecast", get(get_sentiment_aware_forecast))
         .route("/portfolios/:portfolio_id/sentiment", get(get_portfolio_sentiment))
+        .route("/portfolios/:portfolio_id/cache-status", get(get_portfolio_sentiment_cache_status))
         .route("/cache/clear", post(clear_sentiment_cache))
 }

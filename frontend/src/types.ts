@@ -890,3 +890,218 @@ export type TestAlertResponse = {
     evaluation: AlertEvaluationResult | null;
     would_trigger: boolean;
 };
+
+// ============================================================================
+// Phase 1 & Phase 2 Enhanced Features Types
+// ============================================================================
+
+// Downside Risk Analysis Types (Phase 1)
+export type DownsideRiskMetrics = {
+    downside_deviation: number;
+    sortino_ratio: number;
+    mar: number; // Minimum Acceptable Return
+    sharpe_ratio: number; // For comparison
+    interpretation: {
+        downside_risk_level: 'Low' | 'Moderate' | 'High' | 'Very High';
+        sortino_rating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
+        sortino_vs_sharpe: string;
+        summary: string;
+    };
+};
+
+export type PositionDownsideContribution = {
+    ticker: string;
+    weight: number;
+    downside_metrics: DownsideRiskMetrics;
+};
+
+export type PortfolioDownsideRisk = {
+    portfolio_id: string;
+    portfolio_metrics: DownsideRiskMetrics;
+    position_downside_risks: PositionDownsideContribution[];
+    days: number;
+    benchmark: string;
+};
+
+// Correlation Clustering Types (Phase 1)
+export type AssetCluster = {
+    cluster_id: number;
+    tickers: string[];
+    avg_correlation: number;
+    color: string; // Hex color for visualization
+    name: string; // "Cluster A (3 assets)"
+};
+
+export type CorrelationMatrixEnhanced = CorrelationMatrixWithStats & {
+    clusters?: AssetCluster[];
+    cluster_labels?: Record<string, number>; // ticker -> cluster_id
+    inter_cluster_correlations?: number[][];
+};
+
+// Market Regime Types (Phase 1)
+export type RegimeType = 'Bull' | 'Bear' | 'HighVolatility' | 'Normal';
+
+export type StateProbabilities = {
+    bull: number;
+    bear: number;
+    high_volatility: number;
+    normal: number;
+};
+
+export type MarketRegime = {
+    date: string;
+    regime_type: RegimeType;
+    volatility_level: number;
+    market_return: number;
+    confidence: number;
+    threshold_multiplier: number;
+    hmm_probabilities?: StateProbabilities;
+    predicted_regime?: string;
+    transition_probability?: number;
+    ensemble_confidence?: number;
+};
+
+export type RegimeForecast = {
+    days_ahead: number;
+    predicted_regime: string;
+    confidence: number;
+    state_probabilities: StateProbabilities;
+    transition_probability: number;
+};
+
+export type RegimeForecastResponse = {
+    forecasts: RegimeForecast[];
+};
+
+// GARCH Volatility Forecasting Types (Phase 2)
+export type GarchParameters = {
+    omega: number;
+    alpha: number;
+    beta: number;
+    persistence: number;
+    long_run_volatility: number;
+};
+
+export type VolatilityForecastPoint = {
+    day: number;
+    predicted_volatility: number;
+    confidence_lower: number;
+    confidence_upper: number;
+};
+
+export type VolatilityForecast = {
+    ticker: string;
+    current_volatility: number;
+    forecast_days: number;
+    confidence_level: number;
+    garch_parameters: GarchParameters;
+    forecasts: VolatilityForecastPoint[];
+    warnings: string[];
+};
+
+// Trading Signals Types (Phase 2)
+export type SignalType = 'Momentum' | 'MeanReversion' | 'Trend' | 'Combined';
+export type SignalDirection = 'Bullish' | 'Bearish' | 'Neutral';
+export type SignalConfidence = 'High' | 'Medium' | 'Low';
+
+export type SignalFactor = {
+    indicator: string;
+    value: number;
+    weight: number;
+    direction: 'bullish' | 'bearish' | 'neutral';
+    interpretation: string;
+};
+
+export type ContributingFactors = {
+    factors: SignalFactor[];
+    bullish_score: number;
+    bearish_score: number;
+    total_factors: number;
+};
+
+export type TradingSignal = {
+    signal_type: SignalType;
+    probability: number; // 0.0-1.0
+    direction: SignalDirection;
+    confidence: SignalConfidence;
+    explanation: string;
+    contributing_factors: ContributingFactors;
+};
+
+export type OverallRecommendation = {
+    action: 'Buy' | 'Sell' | 'Hold';
+    strength: 'Strong' | 'Weak';
+    probability: number;
+    rationale: string;
+};
+
+export type SignalResponse = {
+    ticker: string;
+    horizon_months: number;
+    signals: TradingSignal[];
+    overall_recommendation?: OverallRecommendation;
+};
+
+// Sentiment Forecasting Types (Phase 2)
+export type SentimentFactors = {
+    news_sentiment?: number;
+    sec_sentiment?: number;
+    insider_sentiment?: number;
+    combined_sentiment?: number;
+};
+
+export type SentimentMomentum = {
+    change_7d?: number;
+    change_30d?: number;
+    acceleration?: number;
+};
+
+export type SentimentDivergence = {
+    detected: boolean;
+    type?: 'Bullish' | 'Bearish';
+    score?: number;
+    reversal_probability?: number;
+    explanation?: string;
+};
+
+export type SentimentAwareForecast = {
+    ticker: string;
+    days: number;
+    base_forecast: ForecastPoint[];
+    adjusted_forecast: ForecastPoint[];
+    sentiment_factors: SentimentFactors;
+    sentiment_momentum: SentimentMomentum;
+    sentiment_spike: {
+        detected: boolean;
+        z_score: number;
+    };
+    divergence: SentimentDivergence;
+    interpretation: string;
+};
+
+// User Risk Preferences Types (Phase 2)
+export type RiskAppetite = 'Conservative' | 'Balanced' | 'Aggressive';
+export type SignalSensitivity = 'Low' | 'Medium' | 'High';
+
+export type RiskPreferences = {
+    id: string;
+    user_id: string;
+    risk_appetite: RiskAppetite;
+    forecast_horizon_preference: number; // 1-24 months
+    signal_sensitivity: SignalSensitivity;
+    sentiment_weight: number; // 0.0-1.0
+    technical_weight: number;
+    fundamental_weight: number;
+    custom_settings?: Record<string, any>;
+    created_at: string;
+    updated_at: string;
+};
+
+export type RiskProfile = {
+    risk_appetite: string;
+    description: string;
+    risk_threshold_multiplier: number;
+    signal_confidence_threshold: number;
+    forecast_horizon_days: number;
+    characteristics: string[];
+};

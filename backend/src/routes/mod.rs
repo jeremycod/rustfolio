@@ -16,4 +16,6 @@ pub mod sentiment;
 pub mod jobs;
 pub mod alerts;
 pub mod market;
+pub mod preferences;
+pub mod signals;
 

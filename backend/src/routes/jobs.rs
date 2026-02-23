@@ -89,7 +89,11 @@ async fn list_jobs(
         ("calculate_portfolio_risks", "0 15 * * * *", "Every hour at :15"),
         ("calculate_portfolio_correlations", "0 45 */2 * * *", "Every 2 hours at :45"),
         ("create_daily_risk_snapshots", "0 0 17 * * *", "Daily at 5:00 PM ET"),
+        ("update_market_regime", "0 5 17 * * *", "Daily at 5:05 PM ET"),
+        ("train_hmm_model", "0 0 0 1 * *", "Monthly on 1st at midnight"),
         ("populate_optimization_cache", if test_mode { "0 */15 * * * *" } else { "0 0 */6 * * *" }, if test_mode { "Every 15 minutes (TEST MODE)" } else { "Every 6 hours" }),
+        ("populate_rolling_beta_cache", "0 30 */6 * * *", "Every 6 hours at :30"),
+        ("populate_downside_risk_cache", "0 45 */6 * * *", "Every 6 hours at :45"),
         ("cleanup_cache", if test_mode { "0 */3 * * * *" } else { "0 0 3 * * SUN" }, if test_mode { "Every 3 minutes (TEST MODE)" } else { "Every Sunday at 3:00 AM" }),
         ("archive_snapshots", "0 30 3 * * SUN", "Every Sunday at 3:30 AM"),
     ];
@@ -268,8 +272,10 @@ async fn trigger_job(
     let known_jobs = vec![
         "refresh_prices", "fetch_news", "generate_forecasts", "analyze_sec_filings",
         "check_thresholds", "warm_caches", "calculate_portfolio_risks",
-        "calculate_portfolio_correlations", "create_daily_risk_snapshots",
-        "populate_optimization_cache",
+        "calculate_portfolio_correlations", "populate_rolling_beta_cache",
+        "create_daily_risk_snapshots", "populate_optimization_cache",
+        "update_market_regime", "train_hmm_model",
+        "populate_downside_risk_cache",
         "cleanup_cache", "archive_snapshots"
     ];
 
@@ -339,6 +345,10 @@ async fn trigger_job(
             info!("🔗 Executing portfolio correlations calculation job...");
             crate::jobs::portfolio_correlations_job::calculate_all_portfolio_correlations(job_context).await
         }
+        "populate_rolling_beta_cache" => {
+            info!("📊 Executing rolling beta cache population job...");
+            crate::jobs::rolling_beta_cache_job::populate_rolling_beta_caches(job_context).await
+        }
         "create_daily_risk_snapshots" => {
             info!("📸 Executing daily risk snapshots job...");
             crate::jobs::daily_risk_snapshots_job::create_all_daily_risk_snapshots(job_context).await
@@ -346,6 +356,22 @@ async fn trigger_job(
         "populate_optimization_cache" => {
             info!("🎯 Executing optimization cache population job...");
             crate::jobs::populate_optimization_cache_job::populate_all_optimization_caches(job_context).await
+        }
+        "update_market_regime" => {
+            info!("📊 Executing market regime update job...");
+            crate::jobs::market_regime_update_job::update_market_regime(job_context).await
+        }
+        "train_hmm_model" => {
+            info!("🧠 Executing HMM model training job...");
+            crate::services::job_scheduler_service::train_hmm_wrapper(job_context).await
+        }
+        "generate_regime_forecasts" => {
+            info!("🔮 Executing regime forecast generation job...");
+            crate::jobs::regime_forecast_job::generate_all_regime_forecasts(job_context).await
+        }
+        "populate_downside_risk_cache" => {
+            info!("📉 Executing downside risk cache population job...");
+            crate::jobs::downside_risk_cache_job::populate_downside_risk_caches(job_context).await
         }
         "cleanup_cache" => {
             info!("🧹 Executing cleanup cache job...");

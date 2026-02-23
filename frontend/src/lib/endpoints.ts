@@ -52,7 +52,16 @@ import type {
     NotificationPreferences,
     UpdateNotificationPreferences,
     AlertEvaluationResponse,
-    TestAlertResponse
+    TestAlertResponse,
+    // Phase 1 & 2 types
+    PortfolioDownsideRisk,
+    MarketRegime,
+    RegimeForecastResponse,
+    VolatilityForecast,
+    SignalResponse,
+    SentimentAwareForecast,
+    RiskPreferences,
+    RiskProfile
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -322,6 +331,28 @@ export async function getPortfolioSentiment(
     const res = await api.get(
         `/api/sentiment/portfolios/${portfolioId}/sentiment`,
         { timeout: 10000 } // 10 second timeout
+    );
+    return res.data;
+}
+
+export async function getPortfolioSentimentCacheStatus(
+    portfolioId: string
+): Promise<{
+    portfolio_id: string;
+    total_positions: number;
+    cached_positions: number;
+    missing_positions: number;
+    expired_positions: number;
+    missing_tickers: string[];
+    is_complete: boolean;
+    is_fresh: boolean;
+    oldest_update: string | null;
+    cache_age_hours: number;
+    message: string;
+    recommendation: string;
+}> {
+    const res = await api.get(
+        `/api/sentiment/portfolios/${portfolioId}/cache-status`
     );
     return res.data;
 }
@@ -690,5 +721,120 @@ export async function evaluateAllAlerts(): Promise<AlertEvaluationResponse> {
 // Optimization Generation Endpoint
 export async function generateOptimizationAnalysis(portfolioId: string): Promise<{ message: string; portfolio_id: string }> {
     const res = await api.post(`/api/optimization/portfolios/${portfolioId}/generate`);
+    return res.data;
+}
+
+// ============================================================================
+// Phase 1 & Phase 2 Enhanced Features Endpoints
+// ============================================================================
+
+// Phase 1: Downside Risk Analysis
+export async function getPortfolioDownsideRisk(
+    portfolioId: string,
+    days: number = 90,
+    benchmark: string = 'SPY'
+): Promise<any> {
+    const params = new URLSearchParams();
+    params.append('days', days.toString());
+    params.append('benchmark', benchmark);
+
+    const url = `/api/risk/portfolios/${portfolioId}/downside?${params.toString()}`;
+    const res = await api.get(url, { timeout: 120000 });
+    // Return full response including cache metadata
+    return res.data;
+}
+
+// Phase 1: Market Regime Detection
+export async function getMarketRegime(): Promise<MarketRegime> {
+    const res = await api.get('/api/market/regime');
+    return res.data;
+}
+
+export async function getRegimeForecast(days: number = 30): Promise<RegimeForecastResponse> {
+    const res = await api.get(`/api/market/regime/forecast?days=${days}`);
+    return res.data;
+}
+
+export async function getMarketRegimeHistory(days: number = 90): Promise<MarketRegime[]> {
+    const res = await api.get(`/api/market/regime/history?days=${days}`);
+    return res.data;
+}
+
+// Phase 2: Volatility Forecasting (GARCH)
+export async function getVolatilityForecast(
+    ticker: string,
+    days: number = 30,
+    confidence_level: number = 0.95
+): Promise<VolatilityForecast> {
+    const params = new URLSearchParams();
+    params.append('days', days.toString());
+    params.append('confidence_level', confidence_level.toString());
+
+    const url = `/api/risk/positions/${ticker}/volatility-forecast?${params.toString()}`;
+    const res = await api.get(url, { timeout: 60000 });
+    return res.data;
+}
+
+// Phase 2: Trading Signals
+export async function getTradingSignals(
+    symbol: string,
+    horizon: number = 3,
+    signalTypes?: string[],
+    minProbability?: number
+): Promise<SignalResponse> {
+    const params = new URLSearchParams();
+    params.append('horizon', horizon.toString());
+    if (signalTypes && signalTypes.length > 0) {
+        params.append('signal_types', signalTypes.join(','));
+    }
+    if (minProbability !== undefined) {
+        params.append('min_probability', minProbability.toString());
+    }
+
+    const url = `/api/stocks/${symbol}/signals?${params.toString()}`;
+    const res = await api.get(url, { timeout: 60000 });
+    return res.data;
+}
+
+export async function getSignalHistory(
+    symbol: string,
+    days: number = 30
+): Promise<any[]> {
+    const url = `/api/stocks/${symbol}/signals/history?days=${days}`;
+    const res = await api.get(url);
+    return res.data;
+}
+
+// Phase 2: Sentiment Forecasting
+export async function getSentimentForecast(
+    ticker: string,
+    days: number = 30
+): Promise<SentimentAwareForecast> {
+    const url = `/api/sentiment/positions/${ticker}/sentiment-forecast?days=${days}`;
+    const res = await api.get(url, { timeout: 120000 });
+    return res.data;
+}
+
+// Phase 2: User Risk Preferences
+export async function getUserRiskPreferences(userId: string): Promise<RiskPreferences> {
+    const res = await api.get(`/api/users/${userId}/preferences`);
+    return res.data;
+}
+
+export async function updateUserRiskPreferences(
+    userId: string,
+    preferences: Partial<RiskPreferences>
+): Promise<RiskPreferences> {
+    const res = await api.put(`/api/users/${userId}/preferences`, preferences);
+    return res.data;
+}
+
+export async function resetUserRiskPreferences(userId: string): Promise<RiskPreferences> {
+    const res = await api.post(`/api/users/${userId}/preferences/reset`);
+    return res.data;
+}
+
+export async function getUserRiskProfile(userId: string): Promise<RiskProfile> {
+    const res = await api.get(`/api/users/${userId}/risk-profile`);
     return res.data;
 }

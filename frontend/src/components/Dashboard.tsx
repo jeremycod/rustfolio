@@ -27,6 +27,7 @@ import {
   CircularProgress,
   LinearProgress,
   Divider,
+  IconButton,
 } from '@mui/material';
 import {
   Add,
@@ -37,7 +38,9 @@ import {
   Warning,
   ArrowForward,
   Info,
+  HelpOutline,
 } from '@mui/icons-material';
+import { MetricHelpDialog } from './MetricHelpDialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createPortfolio,
@@ -49,6 +52,7 @@ import {
   getRiskAlerts,
   getPortfolioNews,
   getPortfolioSentiment,
+  getPortfolioSentimentCacheStatus,
   getPortfolioOptimization,
   getPortfolioNarrative,
 } from '../lib/endpoints';
@@ -56,6 +60,71 @@ interface DashboardProps {
   selectedPortfolioId: string | null;
   onPortfolioChange: (id: string) => void;
   onNavigate?: (page: string) => void;
+}
+
+interface MetricCardWithHelpProps {
+  label: string;
+  value: React.ReactNode;
+  subValue?: string;
+  helpKey?: string;
+  isLoading?: boolean;
+}
+
+function MetricCardWithHelp({ label, value, subValue, helpKey, isLoading }: MetricCardWithHelpProps) {
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  return (
+    <>
+      <Card>
+        <CardContent>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+            <Typography color="textSecondary" variant="body2">
+              {label}
+            </Typography>
+            {helpKey && (
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHelpOpen(true);
+                }}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
+          {isLoading ? (
+            <CircularProgress size={20} />
+          ) : (
+            <>
+              {value}
+              {subValue && (
+                <Typography variant="caption" color="textSecondary" display="block">
+                  {subValue}
+                </Typography>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {helpKey && (
+        <MetricHelpDialog
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          metricKey={helpKey}
+        />
+      )}
+    </>
+  );
 }
 
 export function Dashboard({ selectedPortfolioId, onPortfolioChange, onNavigate }: DashboardProps) {
@@ -115,6 +184,14 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange, onNavigate }
     retry: 0, // Don't retry on failure
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 5 * 60 * 1000,
+  });
+
+  const sentimentCacheStatusQ = useQuery({
+    queryKey: ['portfolioSentimentCacheStatus', selectedPortfolioId],
+    queryFn: () => getPortfolioSentimentCacheStatus(selectedPortfolioId!),
+    enabled: !!selectedPortfolioId && sentimentQ.isError,
+    retry: 0,
+    staleTime: 1 * 60 * 1000, // 1 minute
   });
 
   const optimizationQ = useQuery({
@@ -381,12 +458,10 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange, onNavigate }
 
         {/* Row 2: Risk Metrics */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom variant="body2">
-                Portfolio Risk Score
-              </Typography>
-              {riskScore !== null ? (
+          <MetricCardWithHelp
+            label="Portfolio Risk Score"
+            value={
+              riskScore !== null ? (
                 <Box>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
                     <Typography variant="h5">
@@ -404,60 +479,48 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange, onNavigate }
                   />
                 </Box>
               ) : (
-                <Typography variant="body2" color="textSecondary">
-                  {riskQ.isLoading ? <CircularProgress size={20} /> : 'N/A'}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
+                <Typography variant="body2" color="textSecondary">N/A</Typography>
+              )
+            }
+            helpKey="risk_score"
+            isLoading={riskQ.isLoading}
+          />
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom variant="body2">
-                Portfolio Volatility
-              </Typography>
-              {volatility !== null ? (
-                <Box>
-                  <Typography variant="h5">
-                    {(volatility * 100).toFixed(2)}%
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    Annualized
-                  </Typography>
-                </Box>
-              ) : (
-                <Typography variant="body2" color="textSecondary">
-                  {riskQ.isLoading ? <CircularProgress size={20} /> : 'N/A'}
+          <MetricCardWithHelp
+            label="Portfolio Volatility"
+            value={
+              volatility !== null ? (
+                <Typography variant="h5">
+                  {(volatility * 100).toFixed(2)}%
                 </Typography>
-              )}
-            </CardContent>
-          </Card>
+              ) : (
+                <Typography variant="body2" color="textSecondary">N/A</Typography>
+              )
+            }
+            subValue="Annualized"
+            helpKey="volatility"
+            isLoading={riskQ.isLoading}
+          />
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom variant="body2">
-                Sharpe Ratio
-              </Typography>
-              {sharpeRatio !== null ? (
-                <Box>
-                  <Typography variant="h5" color={getSharpeColor(sharpeRatio)}>
-                    {sharpeRatio.toFixed(2)}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    Risk-adjusted return
-                  </Typography>
-                </Box>
-              ) : (
-                <Typography variant="body2" color="textSecondary">
-                  {riskQ.isLoading ? <CircularProgress size={20} /> : 'N/A'}
+          <MetricCardWithHelp
+            label="Sharpe Ratio"
+            value={
+              sharpeRatio !== null ? (
+                <Typography variant="h5" color={getSharpeColor(sharpeRatio)}>
+                  {sharpeRatio.toFixed(2)}
                 </Typography>
-              )}
-            </CardContent>
-          </Card>
+              ) : (
+                <Typography variant="body2" color="textSecondary">N/A</Typography>
+              )
+            }
+            subValue="Risk-adjusted return"
+            helpKey="sharpe_ratio"
+            isLoading={riskQ.isLoading}
+          />
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
@@ -474,14 +537,19 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange, onNavigate }
                   </Typography>
                 </Box>
               ) : sentimentQ.isError ? (
-                <Typography variant="caption" color="error">
-                  Failed to load sentiment
-                  {sentimentQ.error && (
-                    <Typography variant="caption" display="block" sx={{ fontSize: '0.7rem' }}>
-                      {String(sentimentQ.error)}
+                <Box>
+                  <Typography variant="caption" color="textSecondary" display="block" sx={{ mb: 1 }}>
+                    Not available yet
+                  </Typography>
+                  {sentimentCacheStatusQ.data && (
+                    <Typography variant="caption" color="textSecondary" display="block" sx={{ fontSize: '0.65rem', fontStyle: 'italic' }}>
+                      {sentimentCacheStatusQ.data.recommendation}
                     </Typography>
                   )}
-                </Typography>
+                  <Typography variant="caption" color="textSecondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.5 }}>
+                    💡 Fetched on-demand when you visit Sentiment page
+                  </Typography>
+                </Box>
               ) : sentimentQ.data ? (
                 <Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>

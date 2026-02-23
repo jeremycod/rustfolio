@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                ticker,\n                current_sentiment,\n                sentiment_trend,\n                momentum_trend,\n                divergence,\n                sentiment_price_correlation,\n                correlation_lag_days,\n                historical_sentiment,\n                news_articles_analyzed,\n                warnings,\n                calculated_at,\n                expires_at\n            FROM sentiment_signal_cache\n            WHERE ticker = $1\n            ORDER BY calculated_at DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ticker",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "current_sentiment",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 2,
+        "name": "sentiment_trend",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "momentum_trend",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "divergence",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "sentiment_price_correlation",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "correlation_lag_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "historical_sentiment",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "news_articles_analyzed",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "warnings",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "calculated_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 11,
+        "name": "expires_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "22262b4d4f2e02b76921e15c09ab2bb360681d5a4a32c4ae723f342298a8507c"
+}

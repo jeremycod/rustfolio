@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT hs.ticker\n        FROM holdings_snapshots hs\n        JOIN accounts a ON hs.account_id = a.id\n        WHERE a.portfolio_id = $1\n          AND hs.quantity > 0\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ticker",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ee605713f737ebb3084caf84ff1756209cde29c2d14b0a80dcda01fc7687cf06"
+}

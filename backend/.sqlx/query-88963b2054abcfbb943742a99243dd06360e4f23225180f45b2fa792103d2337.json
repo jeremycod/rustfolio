@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            recommendations,\n            risk_free_rate,\n            calculated_at,\n            expires_at\n        FROM portfolio_optimization_cache\n        WHERE portfolio_id = $1\n        ORDER BY calculated_at DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recommendations",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "risk_free_rate",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 2,
+        "name": "calculated_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "expires_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "88963b2054abcfbb943742a99243dd06360e4f23225180f45b2fa792103d2337"
+}

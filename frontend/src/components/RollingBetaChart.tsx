@@ -19,6 +19,7 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  IconButton,
 } from '@mui/material';
 import {
   LineChart,
@@ -37,10 +38,14 @@ import {
   Download,
   CheckCircle,
   Info,
-  Timeline
+  Timeline,
+  HelpOutline,
+  Refresh,
+  AccessTime,
 } from '@mui/icons-material';
 import { getRollingBeta, updatePriceHistory } from '../lib/endpoints';
 import type { RollingBetaAnalysis, BetaPoint } from '../types';
+import { MetricHelpDialog } from './MetricHelpDialog';
 
 interface RollingBetaChartProps {
   ticker: string;
@@ -52,6 +57,7 @@ type WindowSize = '30d' | '60d' | '90d';
 
 export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: RollingBetaChartProps) {
   const [selectedWindow, setSelectedWindow] = useState<WindowSize>('90d');
+  const [helpOpen, setHelpOpen] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch rolling beta data
@@ -264,14 +270,48 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
     );
   }
 
-  const analysis: RollingBetaAnalysis = rollingBetaQuery.data;
+  // Handle new cached response format
+  const response = rollingBetaQuery.data as any;
+  const analysis: RollingBetaAnalysis = response.data || response; // Support both old and new format
+  const cacheStatus = response.cache_status;
+  const actions = response.actions;
+
+  // Validate data structure
+  if (!analysis || typeof analysis !== 'object') {
+    return (
+      <Alert severity="error">
+        Invalid data structure received. Please refresh the page or contact support.
+      </Alert>
+    );
+  }
 
   // Select data based on window
-  const selectedData: BetaPoint[] = {
+  const selectedData: BetaPoint[] | undefined = {
     '30d': analysis.beta_30d,
     '60d': analysis.beta_60d,
     '90d': analysis.beta_90d,
   }[selectedWindow];
+
+  // Check if data exists for the selected window
+  if (!selectedData || !Array.isArray(selectedData) || selectedData.length === 0) {
+    return (
+      <Alert severity="warning" sx={{ mt: 2 }}>
+        <Typography variant="body2" fontWeight="bold" gutterBottom>
+          No {selectedWindow} rolling beta data available
+        </Typography>
+        <Typography variant="body2">
+          This could mean:
+        </Typography>
+        <Typography variant="body2" component="div" sx={{ mt: 1 }}>
+          • Insufficient price history (need at least {selectedWindow === '30d' ? '30' : selectedWindow === '60d' ? '60' : '90'} days)
+          <br />
+          • Data hasn't been calculated yet (background job runs every 6 hours)
+          <br />
+          • Try selecting a different time window or refresh the data
+        </Typography>
+      </Alert>
+    );
+  }
 
   // Transform data for recharts
   const chartData = selectedData.map((point) => ({
@@ -297,9 +337,59 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
     return 'success';
   };
 
+  // Format cache age
+  const formatCacheAge = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (diffHours > 0) {
+      return `${diffHours}h ${diffMinutes}m ago`;
+    }
+    return `${diffMinutes}m ago`;
+  };
+
+  // Force refresh handler
+  const handleForceRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['rolling-beta', ticker, days, benchmark] });
+    // Refetch with force=true
+    const endpoint = `/api/risk/positions/${ticker}/rolling-beta?days=${days}&benchmark=${benchmark}&force=true`;
+    fetch(endpoint).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['rolling-beta', ticker, days, benchmark] });
+    });
+  };
+
   return (
     <Card elevation={2}>
       <CardContent>
+        {/* Cache Status Banner */}
+        {cacheStatus && (
+          <Alert
+            severity={cacheStatus.is_stale ? "warning" : "info"}
+            sx={{ mb: 2 }}
+            icon={<AccessTime />}
+            action={
+              cacheStatus.is_stale && actions && actions.length > 0 && (
+                <Button
+                  color="inherit"
+                  size="small"
+                  startIcon={<Refresh />}
+                  onClick={handleForceRefresh}
+                >
+                  Refresh Data
+                </Button>
+              )
+            }
+          >
+            <Typography variant="body2">
+              <strong>Cache Status:</strong> Last updated {formatCacheAge(cacheStatus.last_updated)}
+              {cacheStatus.is_stale && ' - Data may be outdated'}
+            </Typography>
+          </Alert>
+        )}
+
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Box>
             <Typography variant="h6" gutterBottom>
@@ -311,23 +401,51 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
           </Box>
 
           <Stack direction="row" spacing={2} alignItems="center">
-            <MuiTooltip title="Current beta coefficient">
+            <Box display="flex" alignItems="center" gap={0.5}>
               <Chip
                 icon={<TrendingUp />}
                 label={`β: ${analysis.current_beta.toFixed(2)}`}
                 color={getBetaColor(analysis.current_beta) as any}
                 size="small"
               />
-            </MuiTooltip>
+              <IconButton
+                size="small"
+                onClick={() => setHelpOpen('beta')}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
 
-            <MuiTooltip title="Beta volatility (standard deviation)">
+            <Box display="flex" alignItems="center" gap={0.5}>
               <Chip
                 icon={<ShowChart />}
                 label={`σ: ${analysis.beta_volatility.toFixed(2)}`}
                 color="default"
                 size="small"
               />
-            </MuiTooltip>
+              <IconButton
+                size="small"
+                onClick={() => setHelpOpen('beta_volatility')}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
           </Stack>
         </Box>
 
@@ -445,6 +563,15 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
           </Alert>
         )}
       </CardContent>
+
+      {/* Help Dialog */}
+      {helpOpen && (
+        <MetricHelpDialog
+          open={true}
+          onClose={() => setHelpOpen(null)}
+          metricKey={helpOpen}
+        />
+      )}
     </Card>
   );
 }

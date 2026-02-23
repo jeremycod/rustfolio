@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            beta_30d, beta_60d, beta_90d,\n            current_beta, beta_volatility,\n            calculated_at, expires_at\n        FROM rolling_beta_cache\n        WHERE ticker = $1 AND benchmark = $2 AND total_days = $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "beta_30d",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "beta_60d",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "beta_90d",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "current_beta",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "beta_volatility",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "calculated_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "expires_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e7ba0988da030df1eaad7cec23bf5763265691f8ae65ab1e52ba1860ec5b8d4e"
+}

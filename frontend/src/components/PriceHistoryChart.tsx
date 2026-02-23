@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -7,8 +7,10 @@ import {
   Grid,
   CircularProgress,
   Alert,
+  IconButton,
 } from '@mui/material';
-import { TrendingUp, TrendingDown } from '@mui/icons-material';
+import { TrendingUp, TrendingDown, HelpOutline } from '@mui/icons-material';
+import { MetricHelpDialog } from './MetricHelpDialog';
 import { useQuery } from '@tanstack/react-query';
 import {
   LineChart,
@@ -31,6 +33,64 @@ interface PriceHistoryChartProps {
   ticker: string;
   days: number;
   companyName?: string | null;
+}
+
+interface PriceStatCardProps {
+  label: string;
+  value: React.ReactNode;
+  subValue?: string;
+  helpKey?: string;
+}
+
+function PriceStatCard({ label, value, subValue, helpKey }: PriceStatCardProps) {
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  return (
+    <>
+      <Card>
+        <CardContent>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+            <Typography color="textSecondary" variant="body2">
+              {label}
+            </Typography>
+            {helpKey && (
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHelpOpen(true);
+                }}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
+          {value}
+          {subValue && (
+            <Typography variant="caption" color="textSecondary">
+              {subValue}
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+
+      {helpKey && (
+        <MetricHelpDialog
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          metricKey={helpKey}
+        />
+      )}
+    </>
+  );
 }
 
 export function PriceHistoryChart({ ticker, days, companyName }: PriceHistoryChartProps) {
@@ -143,11 +203,9 @@ export function PriceHistoryChart({ ticker, days, companyName }: PriceHistoryCha
       {/* Statistics Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" variant="body2" gutterBottom>
-                Period Change
-              </Typography>
+          <PriceStatCard
+            label="Period Change"
+            value={
               <Box display="flex" alignItems="center" gap={1}>
                 <Typography variant="h5" fontWeight="bold" color={stats.change >= 0 ? 'success.main' : 'error.main'}>
                   {formatPercentage(stats.changePercent)}
@@ -158,59 +216,49 @@ export function PriceHistoryChart({ ticker, days, companyName }: PriceHistoryCha
                   <TrendingDown sx={{ color: 'error.main' }} />
                 )}
               </Box>
-              <Typography variant="caption" color="textSecondary">
-                {formatCurrency(stats.change)}
-              </Typography>
-            </CardContent>
-          </Card>
+            }
+            subValue={formatCurrency(stats.change)}
+            helpKey="period_change"
+          />
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" variant="body2" gutterBottom>
-                Current Price
-              </Typography>
+          <PriceStatCard
+            label="Current Price"
+            value={
               <Typography variant="h5" fontWeight="bold">
                 {formatCurrency(stats.endPrice)}
               </Typography>
-              <Typography variant="caption" color="textSecondary">
-                Started at {formatCurrency(stats.startPrice)}
-              </Typography>
-            </CardContent>
-          </Card>
+            }
+            subValue={`Started at ${formatCurrency(stats.startPrice)}`}
+            helpKey="current_price"
+          />
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" variant="body2" gutterBottom>
-                Period High
-              </Typography>
+          <PriceStatCard
+            label="Period High"
+            value={
               <Typography variant="h5" fontWeight="bold" color="success.main">
                 {formatCurrency(stats.maxPrice)}
               </Typography>
-              <Typography variant="caption" color="textSecondary">
-                Peak value in period
-              </Typography>
-            </CardContent>
-          </Card>
+            }
+            subValue="Peak value in period"
+            helpKey="period_high"
+          />
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" variant="body2" gutterBottom>
-                Period Low
-              </Typography>
+          <PriceStatCard
+            label="Period Low"
+            value={
               <Typography variant="h5" fontWeight="bold" color="error.main">
                 {formatCurrency(stats.minPrice)}
               </Typography>
-              <Typography variant="caption" color="textSecondary">
-                Lowest value in period
-              </Typography>
-            </CardContent>
-          </Card>
+            }
+            subValue="Lowest value in period"
+            helpKey="period_low"
+          />
         </Grid>
       </Grid>
 

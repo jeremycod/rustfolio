@@ -234,6 +234,84 @@ pub async fn get_cache_health(
         }
     }
 
+    // Query portfolio_news_cache
+    match query_cache_table_health(&state.pool, "portfolio_news_cache").await {
+        Ok(health) => {
+            info!("portfolio_news_cache: {} total entries", health.total_entries);
+            tables.push(health);
+        }
+        Err(e) => {
+            warn!("Failed to query portfolio_news_cache health (table might not exist): {}", e);
+            // Don't fail the entire request if this cache doesn't exist
+        }
+    }
+
+    // Query rolling_beta_cache (uses calculated_at, no status column)
+    match query_simple_cache_health(&state.pool, "rolling_beta_cache", "calculated_at").await {
+        Ok(health) => {
+            info!("rolling_beta_cache: {} total entries", health.total_entries);
+            tables.push(health);
+        }
+        Err(e) => {
+            warn!("Failed to query rolling_beta_cache health: {}", e);
+        }
+    }
+
+    // Query beta_forecast_cache (uses calculated_at, no status column)
+    match query_simple_cache_health(&state.pool, "beta_forecast_cache", "calculated_at").await {
+        Ok(health) => {
+            info!("beta_forecast_cache: {} total entries", health.total_entries);
+            tables.push(health);
+        }
+        Err(e) => {
+            warn!("Failed to query beta_forecast_cache health: {}", e);
+        }
+    }
+
+    // Query sentiment_signal_cache
+    match query_simple_cache_health(&state.pool, "sentiment_signal_cache", "calculated_at").await {
+        Ok(health) => {
+            info!("sentiment_signal_cache: {} total entries", health.total_entries);
+            tables.push(health);
+        }
+        Err(e) => {
+            warn!("Failed to query sentiment_signal_cache health: {}", e);
+        }
+    }
+
+    // Query sentiment_forecast_cache
+    match query_simple_cache_health(&state.pool, "sentiment_forecast_cache", "calculated_at").await {
+        Ok(health) => {
+            info!("sentiment_forecast_cache: {} total entries", health.total_entries);
+            tables.push(health);
+        }
+        Err(e) => {
+            warn!("Failed to query sentiment_forecast_cache health: {}", e);
+        }
+    }
+
+    // Query enhanced_sentiment_cache
+    match query_simple_cache_health(&state.pool, "enhanced_sentiment_cache", "calculated_at").await {
+        Ok(health) => {
+            info!("enhanced_sentiment_cache: {} total entries", health.total_entries);
+            tables.push(health);
+        }
+        Err(e) => {
+            warn!("Failed to query enhanced_sentiment_cache health: {}", e);
+        }
+    }
+
+    // Query portfolio_optimization_cache
+    match query_cache_table_health(&state.pool, "portfolio_optimization_cache").await {
+        Ok(health) => {
+            info!("portfolio_optimization_cache: {} total entries", health.total_entries);
+            tables.push(health);
+        }
+        Err(e) => {
+            warn!("Failed to query portfolio_optimization_cache health: {}", e);
+        }
+    }
+
     // Calculate summary statistics
     let total_entries: i64 = tables.iter().map(|t| t.total_entries).sum();
     let total_fresh: i64 = tables.iter().map(|t| t.fresh_entries).sum();
@@ -289,6 +367,41 @@ pub async fn get_cache_health(
         tables,
         summary,
     }))
+}
+
+/// Query health statistics for simple cache tables (no status column, just expires_at)
+async fn query_simple_cache_health(
+    pool: &sqlx::PgPool,
+    table_name: &str,
+    timestamp_column: &str,
+) -> Result<CacheTableHealth, AppError> {
+    let result = sqlx::query_as::<_, (i64, i64, i64, Option<f64>)>(
+        &format!(
+            r#"
+            SELECT
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE expires_at > NOW()) as fresh,
+                COUNT(*) FILTER (WHERE expires_at <= NOW()) as stale,
+                AVG(EXTRACT(EPOCH FROM (NOW() - {})) / 3600.0)::FLOAT8 as avg_age_hours
+            FROM {}
+            "#,
+            timestamp_column, table_name
+        ),
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Db)?;
+
+    Ok(CacheTableHealth {
+        table_name: table_name.to_string(),
+        total_entries: result.0,
+        fresh_entries: result.1,
+        stale_entries: result.2,
+        calculating_entries: 0,
+        error_entries: 0,
+        hit_rate_pct: None,
+        avg_age_hours: result.3,
+    })
 }
 
 /// Query health statistics for a specific cache table

@@ -30,9 +30,11 @@ import {
     Article,
     Business,
     PersonOutline,
+    HelpOutline,
 } from '@mui/icons-material';
 import { getEnhancedSentiment } from '../lib/endpoints';
 import { ExperimentalBanner } from './ExperimentalBanner';
+import { MetricHelpDialog } from './MetricHelpDialog';
 import type {
     EnhancedSentimentSignal,
     MaterialEvent,
@@ -50,6 +52,7 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
     const [expandedNewsArticles, setExpandedNewsArticles] = useState(false);
     const [expandedMaterialEvents, setExpandedMaterialEvents] = useState(false);
     const [expandedInsiderActivity, setExpandedInsiderActivity] = useState(false);
+    const [helpOpen, setHelpOpen] = useState<string | null>(null);
 
     const sentimentQuery = useQuery({
         queryKey: ['enhanced-sentiment', ticker, days],
@@ -98,9 +101,25 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
 
             {/* Combined Sentiment Overview */}
             <Paper elevation={3} sx={{ p: 3, mb: 3, bgcolor: 'background.paper' }}>
-                <Typography variant="h5" gutterBottom>
-                    Combined Sentiment Analysis
-                </Typography>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                    <Typography variant="h5">
+                        Combined Sentiment Analysis
+                    </Typography>
+                    <IconButton
+                        size="small"
+                        onClick={() => setHelpOpen('combined_sentiment')}
+                        sx={{
+                            p: 0.5,
+                            color: 'text.secondary',
+                            '&:hover': {
+                                color: 'primary.main',
+                                backgroundColor: 'primary.50',
+                            },
+                        }}
+                    >
+                        <HelpOutline sx={{ fontSize: 18 }} />
+                    </IconButton>
+                </Box>
                 <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={6}>
                         <Stack direction="row" spacing={2} alignItems="center">
@@ -119,11 +138,27 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                     </Grid>
                     <Grid item xs={12} md={6}>
                         <Stack spacing={1}>
-                            <Chip
-                                label={`Confidence: ${formatConfidence(signal.confidence_level)}`}
-                                color={getConfidenceColor(signal.confidence_level)}
-                                icon={<CheckCircle />}
-                            />
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                                <Chip
+                                    label={`Confidence: ${formatConfidence(signal.confidence_level)}`}
+                                    color={getConfidenceColor(signal.confidence_level)}
+                                    icon={<CheckCircle />}
+                                />
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setHelpOpen('combined_confidence')}
+                                    sx={{
+                                        p: 0.5,
+                                        color: 'text.secondary',
+                                        '&:hover': {
+                                            color: 'primary.main',
+                                            backgroundColor: 'primary.50',
+                                        },
+                                    }}
+                                >
+                                    <HelpOutline sx={{ fontSize: 16 }} />
+                                </IconButton>
+                            </Box>
                             <Typography variant="caption" color="text.secondary">
                                 Based on: News, SEC Filings, and Insider Activity
                             </Typography>
@@ -156,9 +191,25 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                 <Grid item xs={12} md={4}>
                     <Card elevation={2}>
                         <CardContent>
-                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                                <Article color="primary" />
-                                <Typography variant="h6">News Sentiment</Typography>
+                            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Article color="primary" />
+                                    <Typography variant="h6">News Sentiment</Typography>
+                                </Stack>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setHelpOpen('news_sentiment_enhanced')}
+                                    sx={{
+                                        p: 0.5,
+                                        color: 'text.secondary',
+                                        '&:hover': {
+                                            color: 'primary.main',
+                                            backgroundColor: 'primary.50',
+                                        },
+                                    }}
+                                >
+                                    <HelpOutline sx={{ fontSize: 16 }} />
+                                </IconButton>
                             </Stack>
                             <Typography variant="h4" color={getSentimentColor(signal.news_sentiment)}>
                                 {(signal.news_sentiment * 100).toFixed(1)}
@@ -177,9 +228,25 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                 <Grid item xs={12} md={4}>
                     <Card elevation={2}>
                         <CardContent>
-                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                                <Business color="secondary" />
-                                <Typography variant="h6">SEC Filings</Typography>
+                            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Business color="secondary" />
+                                    <Typography variant="h6">SEC Filings</Typography>
+                                </Stack>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setHelpOpen('sec_filing_sentiment')}
+                                    sx={{
+                                        p: 0.5,
+                                        color: 'text.secondary',
+                                        '&:hover': {
+                                            color: 'primary.main',
+                                            backgroundColor: 'primary.50',
+                                        },
+                                    }}
+                                >
+                                    <HelpOutline sx={{ fontSize: 16 }} />
+                                </IconButton>
                             </Stack>
                             <Typography variant="h4" color={signal.sec_filing_score !== undefined ? getSentimentColor(signal.sec_filing_score) : 'text.disabled'}>
                                 {signal.sec_filing_score !== undefined
@@ -200,9 +267,25 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                 <Grid item xs={12} md={4}>
                     <Card elevation={2}>
                         <CardContent>
-                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                                <PersonOutline color="action" />
-                                <Typography variant="h6">Insider Activity</Typography>
+                            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <PersonOutline color="action" />
+                                    <Typography variant="h6">Insider Activity</Typography>
+                                </Stack>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setHelpOpen('insider_sentiment')}
+                                    sx={{
+                                        p: 0.5,
+                                        color: 'text.secondary',
+                                        '&:hover': {
+                                            color: 'primary.main',
+                                            backgroundColor: 'primary.50',
+                                        },
+                                    }}
+                                >
+                                    <HelpOutline sx={{ fontSize: 16 }} />
+                                </IconButton>
                             </Stack>
                             <Typography variant="h4" color={getSentimentColor(signal.insider_sentiment.sentiment_score)}>
                                 {(signal.insider_sentiment.sentiment_score * 100).toFixed(1)}
@@ -471,6 +554,15 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                     Last updated: {new Date(signal.calculated_at).toLocaleString()}
                 </Typography>
             </Box>
+
+            {/* Help Dialog */}
+            {helpOpen && (
+                <MetricHelpDialog
+                    open={true}
+                    onClose={() => setHelpOpen(null)}
+                    metricKey={helpOpen}
+                />
+            )}
         </Box>
     );
 }

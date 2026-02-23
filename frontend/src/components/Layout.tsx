@@ -29,6 +29,10 @@ import {
   Notifications as NotificationsIcon,
   NotificationsActive,
   History,
+  TrendingDown,
+  ShowChart,
+  SignalCellularAlt,
+  Psychology,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -43,6 +47,15 @@ const menuItems = [
   { text: 'Risk Comparison', icon: <Compare />, path: 'risk-comparison' },
   { text: 'Correlations', icon: <GridOn />, path: 'correlations' },
   { text: 'Rolling Beta', icon: <Timeline />, path: 'rolling-beta' },
+  // Phase 1 features
+  { text: 'CVaR Analysis', icon: <TrendingDown />, path: 'cvar' },
+  { text: 'Downside Risk', icon: <TrendingDown />, path: 'downside-risk' },
+  { text: 'Market Regime', icon: <ShowChart />, path: 'market-regime' },
+  // Phase 2 features
+  { text: 'Volatility Forecast', icon: <ShowChart />, path: 'volatility-forecast' },
+  { text: 'Trading Signals', icon: <SignalCellularAlt />, path: 'trading-signals' },
+  { text: 'Sentiment Forecast', icon: <Psychology />, path: 'sentiment-forecast' },
+  // Notifications & Admin
   { text: 'Alert Rules', icon: <NotificationsActive />, path: 'alerts' },
   { text: 'Notifications', icon: <NotificationsIcon />, path: 'notifications' },
   { text: 'Alert History', icon: <History />, path: 'alert-history' },

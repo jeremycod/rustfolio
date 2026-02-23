@@ -13,6 +13,7 @@ import {
   Stack,
   Tooltip as MuiTooltip,
   Paper,
+  IconButton,
 } from '@mui/material';
 import {
   ComposedChart,
@@ -32,9 +33,11 @@ import {
   ShowChart,
   Warning,
   Science,
+  HelpOutline,
 } from '@mui/icons-material';
 import { getBetaForecast } from '../lib/endpoints';
 import type { BetaForecast, ForecastMethod } from '../types';
+import { MetricHelpDialog } from './MetricHelpDialog';
 
 interface BetaForecastChartProps {
   ticker: string;
@@ -51,6 +54,7 @@ export function BetaForecastChart({
 }: BetaForecastChartProps) {
   const [forecastDays, setForecastDays] = useState<ForecastHorizon>(30);
   const [method, setMethod] = useState<ForecastMethod>('ensemble');
+  const [helpOpen, setHelpOpen] = useState<string | null>(null);
 
   // Fetch beta forecast data
   const forecastQuery = useQuery({
@@ -193,32 +197,74 @@ export function BetaForecastChart({
           </Box>
 
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-            <MuiTooltip title="Current beta">
+            <Box display="flex" alignItems="center" gap={0.5}>
               <Chip
                 icon={<TrendingUp />}
                 label={`Current: ${forecast.current_beta.toFixed(2)}`}
                 color={getBetaColor(forecast.current_beta) as any}
                 size="small"
               />
-            </MuiTooltip>
+              <IconButton
+                size="small"
+                onClick={() => setHelpOpen('beta')}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
 
-            <MuiTooltip title={`Predicted beta at end of ${forecastDays}-day period`}>
+            <Box display="flex" alignItems="center" gap={0.5}>
               <Chip
                 icon={<Science />}
                 label={`Forecast: ${finalBeta.toFixed(2)}`}
                 color="primary"
                 size="small"
               />
-            </MuiTooltip>
+              <IconButton
+                size="small"
+                onClick={() => setHelpOpen('beta_forecast')}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
 
-            <MuiTooltip title="Beta volatility">
+            <Box display="flex" alignItems="center" gap={0.5}>
               <Chip
                 icon={<ShowChart />}
                 label={`σ: ${forecast.beta_volatility.toFixed(2)}`}
                 color="default"
                 size="small"
               />
-            </MuiTooltip>
+              <IconButton
+                size="small"
+                onClick={() => setHelpOpen('beta_volatility')}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
           </Stack>
         </Box>
 
@@ -401,6 +447,15 @@ export function BetaForecastChart({
           </Typography>
         </Paper>
       </CardContent>
+
+      {/* Help Dialog */}
+      {helpOpen && (
+        <MetricHelpDialog
+          open={true}
+          onClose={() => setHelpOpen(null)}
+          metricKey={helpOpen}
+        />
+      )}
     </Card>
   );
 }

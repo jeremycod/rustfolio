@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO rolling_beta_cache (\n            ticker, benchmark, total_days,\n            beta_30d, beta_60d, beta_90d,\n            current_beta, beta_volatility,\n            calculated_at, expires_at\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9)\n        ON CONFLICT (ticker, benchmark, total_days)\n        DO UPDATE SET\n            beta_30d = EXCLUDED.beta_30d,\n            beta_60d = EXCLUDED.beta_60d,\n            beta_90d = EXCLUDED.beta_90d,\n            current_beta = EXCLUDED.current_beta,\n            beta_volatility = EXCLUDED.beta_volatility,\n            calculated_at = NOW(),\n            expires_at = EXCLUDED.expires_at\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Float8",
+        "Float8",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b6a16205b18ff7cfff9b28216d4e6a0e35febd461bd8f30a63b84b8eb3fc32e8"
+}

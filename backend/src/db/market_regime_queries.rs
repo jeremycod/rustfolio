@@ -213,8 +213,6 @@ pub async fn delete_old_regimes(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_queries_compile() {
         // This test just ensures the queries compile

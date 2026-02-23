@@ -15,6 +15,8 @@ import {
   CircularProgress,
   Chip,
   Stack,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
   LineChart,
@@ -22,14 +24,15 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
   ReferenceDot,
   ReferenceLine,
 } from 'recharts';
-import { Warning as WarningIcon } from '@mui/icons-material';
+import { Warning as WarningIcon, HelpOutline } from '@mui/icons-material';
 import { getRiskHistory, getRiskAlerts } from '../lib/endpoints';
+import { MetricHelpDialog } from './MetricHelpDialog';
 import type { RiskSnapshot, RiskAlert, RiskThresholdSettings } from '../types';
 
 interface RiskHistoryChartProps {
@@ -41,9 +44,20 @@ interface RiskHistoryChartProps {
 type TimeRange = 30 | 90 | 180 | 365;
 type MetricType = 'risk_score' | 'volatility' | 'max_drawdown' | 'sharpe' | 'sortino' | 'annualized_return' | 'beta';
 
+const METRIC_HELP_KEYS: Record<MetricType, string> = {
+  risk_score: 'risk_score',
+  volatility: 'volatility',
+  max_drawdown: 'max_drawdown',
+  sharpe: 'sharpe_ratio',
+  sortino: 'sortino_ratio',
+  annualized_return: 'annualized_return',
+  beta: 'beta',
+};
+
 export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistoryChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>(90);
   const [selectedMetrics, setSelectedMetrics] = useState<MetricType[]>(['risk_score']);
+  const [helpDialogOpen, setHelpDialogOpen] = useState<string | null>(null);
 
   // Fetch risk history
   const historyQuery = useQuery({
@@ -213,38 +227,219 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
 
         {/* Metric selection */}
         <Box mb={2}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Select metrics to display:
-          </Typography>
-          <ToggleButtonGroup
-            value={selectedMetrics}
-            onChange={handleMetricToggle}
-            size="small"
-            aria-label="metric selection"
-          >
-            <ToggleButton value="risk_score" aria-label="risk score">
-              Risk Score
-            </ToggleButton>
-            <ToggleButton value="volatility" aria-label="volatility">
-              Volatility
-            </ToggleButton>
-            <ToggleButton value="max_drawdown" aria-label="max drawdown">
-              Max Drawdown
-            </ToggleButton>
-            <ToggleButton value="sharpe" aria-label="sharpe ratio">
-              Sharpe
-            </ToggleButton>
-            <ToggleButton value="sortino" aria-label="sortino ratio">
-              Sortino
-            </ToggleButton>
-            <ToggleButton value="annualized_return" aria-label="annualized return">
-              Ann. Return
-            </ToggleButton>
-            <ToggleButton value="beta" aria-label="beta">
-              Beta
-            </ToggleButton>
-          </ToggleButtonGroup>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+            <Typography variant="body2" color="text.secondary">
+              Select metrics to display (click ? for explanations):
+            </Typography>
+          </Box>
+          <Box display="flex" flexDirection="column" gap={2}>
+            {/* Row 1: Risk Score, Volatility, Max Drawdown, Beta */}
+            <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+              <ToggleButtonGroup
+                value={selectedMetrics}
+                onChange={handleMetricToggle}
+                size="small"
+                aria-label="metric selection"
+              >
+                <ToggleButton value="risk_score" aria-label="risk score">
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    Risk Score
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHelpDialogOpen(METRIC_HELP_KEYS['risk_score']);
+                      }}
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        p: 0,
+                        color: 'inherit',
+                        opacity: 0.6,
+                        '&:hover': {
+                          opacity: 1,
+                          backgroundColor: 'transparent',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="volatility" aria-label="volatility">
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    Volatility
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHelpDialogOpen(METRIC_HELP_KEYS['volatility']);
+                      }}
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        p: 0,
+                        color: 'inherit',
+                        opacity: 0.6,
+                        '&:hover': {
+                          opacity: 1,
+                          backgroundColor: 'transparent',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="max_drawdown" aria-label="max drawdown">
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    Max Drawdown
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHelpDialogOpen(METRIC_HELP_KEYS['max_drawdown']);
+                      }}
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        p: 0,
+                        color: 'inherit',
+                        opacity: 0.6,
+                        '&:hover': {
+                          opacity: 1,
+                          backgroundColor: 'transparent',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="beta" aria-label="beta">
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    Beta
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHelpDialogOpen(METRIC_HELP_KEYS['beta']);
+                      }}
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        p: 0,
+                        color: 'inherit',
+                        opacity: 0.6,
+                        '&:hover': {
+                          opacity: 1,
+                          backgroundColor: 'transparent',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+
+            {/* Row 2: Sharpe, Sortino, Ann. Return */}
+            <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+              <ToggleButtonGroup
+                value={selectedMetrics}
+                onChange={handleMetricToggle}
+                size="small"
+                aria-label="metric selection"
+              >
+                <ToggleButton value="sharpe" aria-label="sharpe ratio">
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    Sharpe Ratio
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHelpDialogOpen(METRIC_HELP_KEYS['sharpe']);
+                      }}
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        p: 0,
+                        color: 'inherit',
+                        opacity: 0.6,
+                        '&:hover': {
+                          opacity: 1,
+                          backgroundColor: 'transparent',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="sortino" aria-label="sortino ratio">
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    Sortino Ratio
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHelpDialogOpen(METRIC_HELP_KEYS['sortino']);
+                      }}
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        p: 0,
+                        color: 'inherit',
+                        opacity: 0.6,
+                        '&:hover': {
+                          opacity: 1,
+                          backgroundColor: 'transparent',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="annualized_return" aria-label="annualized return">
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    Ann. Return
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHelpDialogOpen(METRIC_HELP_KEYS['annualized_return']);
+                      }}
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        p: 0,
+                        color: 'inherit',
+                        opacity: 0.6,
+                        '&:hover': {
+                          opacity: 1,
+                          backgroundColor: 'transparent',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          </Box>
         </Box>
+
+        {/* Help Dialog */}
+        {helpDialogOpen && (
+          <MetricHelpDialog
+            open={true}
+            onClose={() => setHelpDialogOpen(null)}
+            metricKey={helpDialogOpen}
+          />
+        )}
 
         {/* Alerts */}
         {!ticker && alertsQuery.data && alertsQuery.data.length > 0 && (

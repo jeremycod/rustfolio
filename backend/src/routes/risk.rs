@@ -20,6 +20,7 @@ pub fn router() -> Router<AppState> {
         .route("/positions/:ticker", get(get_position_risk))
         .route("/positions/:ticker/rolling-beta", get(get_rolling_beta))
         .route("/positions/:ticker/beta-forecast", get(get_beta_forecast))
+        .route("/positions/:ticker/volatility-forecast", get(get_volatility_forecast))
         .route("/portfolios/:portfolio_id", get(get_portfolio_risk))
         .route("/portfolios/:portfolio_id/downside", get(get_portfolio_downside_risk))
         .route("/portfolios/:portfolio_id/correlations", get(get_portfolio_correlations))
@@ -261,50 +262,150 @@ pub async fn get_position_risk(
 
 /// GET /api/risk/positions/:ticker/rolling-beta
 ///
-/// Calculate rolling beta analysis for a position across multiple time windows.
-/// Tracks how beta changes over time to identify beta stability and market regime changes.
+/// Get rolling beta analysis from cache. Returns cached data with metadata about freshness.
 ///
 /// Query parameters:
 /// - `days`: Total days of history to analyze (default: 180, max: 365)
 /// - `benchmark`: Benchmark ticker for beta calculation (default: "SPY")
+/// - `force`: Force recalculation bypassing cache (default: false)
 ///
 /// Returns rolling beta for 30, 60, and 90-day windows plus beta volatility.
-/// Results are cached for 24 hours.
+/// Cache is updated every 6 hours by background job.
 ///
 /// Example: GET /api/risk/positions/AAPL/rolling-beta?days=180&benchmark=SPY
 pub async fn get_rolling_beta(
     Path(ticker): Path<String>,
     Query(params): Query<RiskQueryParams>,
     State(state): State<AppState>,
-) -> Result<Json<crate::models::risk::RollingBetaAnalysis>, AppError> {
-    use std::time::Instant;
-
+) -> Result<Json<serde_json::Value>, AppError> {
     let days = params.days.min(365); // Cap at 1 year
 
-    let start = Instant::now();
     info!(
-        "GET /api/risk/positions/{}/rolling-beta - Computing rolling beta (days={}, benchmark={})",
-        ticker, days, params.benchmark
+        "GET /api/risk/positions/{}/rolling-beta - days={}, benchmark={}, force={}",
+        ticker, days, params.benchmark, params.force
     );
 
-    // Compute rolling beta using risk service
-    let analysis = risk_service::compute_rolling_beta(
-        &state.pool,
-        &ticker,
-        &params.benchmark,
-        days,
-        state.price_provider.as_ref(),
-        &state.failure_cache,
+    // If force refresh requested, compute directly
+    if params.force {
+        info!("Force refresh requested for {}", ticker);
+        let analysis = risk_service::compute_rolling_beta(
+            &state.pool,
+            &ticker,
+            &params.benchmark,
+            days,
+            state.price_provider.as_ref(),
+            &state.failure_cache,
+        )
+        .await?;
+
+        return Ok(Json(serde_json::json!({
+            "data": analysis,
+            "cache_status": {
+                "source": "computed_on_demand",
+                "last_updated": chrono::Utc::now(),
+                "is_stale": false,
+            }
+        })));
+    }
+
+    // Try to get from cache
+    let cached = get_cached_rolling_beta(&state.pool, &ticker, &params.benchmark, days).await?;
+
+    match cached {
+        Some((analysis, calculated_at_utc, expires_at_utc)) => {
+            let age = Utc::now() - calculated_at_utc;
+            let age_hours = age.num_hours();
+            let is_stale = expires_at_utc < Utc::now();
+
+            info!(
+                "Serving rolling beta for {} from cache (age: {} hours, stale: {})",
+                ticker, age_hours, is_stale
+            );
+
+            let actions = if is_stale {
+                Some(vec![serde_json::json!({
+                    "label": "Refresh Data",
+                    "endpoint": format!("/api/risk/positions/{}/rolling-beta?force=true", ticker),
+                    "method": "GET"
+                })])
+            } else {
+                None
+            };
+
+            Ok(Json(serde_json::json!({
+                "data": analysis,
+                "cache_status": {
+                    "source": "cache",
+                    "last_updated": calculated_at_utc,
+                    "age_hours": age_hours,
+                    "is_stale": is_stale,
+                },
+                "actions": actions
+            })))
+        }
+        None => {
+            warn!("No cached rolling beta found for {}", ticker);
+            Err(AppError::NotFound(format!(
+                "Rolling beta data not available for {}. The background job will calculate it within 6 hours, or you can request immediate calculation using force=true",
+                ticker
+            )))
+        }
+    }
+}
+
+/// Get cached rolling beta from database
+async fn get_cached_rolling_beta(
+    pool: &PgPool,
+    ticker: &str,
+    benchmark: &str,
+    days: i64,
+) -> Result<Option<(crate::models::risk::RollingBetaAnalysis, chrono::DateTime<Utc>, chrono::DateTime<Utc>)>, AppError> {
+    let result = sqlx::query!(
+        r#"
+        SELECT
+            beta_30d, beta_60d, beta_90d,
+            current_beta, beta_volatility,
+            calculated_at, expires_at
+        FROM rolling_beta_cache
+        WHERE ticker = $1 AND benchmark = $2 AND total_days = $3
+        "#,
+        ticker,
+        benchmark,
+        days as i32
     )
+    .fetch_optional(pool)
     .await?;
 
-    info!(
-        "Successfully computed rolling beta for {} in {:?}",
-        ticker,
-        start.elapsed()
-    );
+    match result {
+        Some(row) => {
+            use crate::models::risk::{RollingBetaAnalysis, BetaPoint};
 
-    Ok(Json(analysis))
+            // Deserialize JSONB arrays
+            let beta_30d: Vec<BetaPoint> = serde_json::from_value(row.beta_30d)
+                .map_err(|e| AppError::External(format!("Failed to parse beta_30d: {}", e)))?;
+            let beta_60d: Vec<BetaPoint> = serde_json::from_value(row.beta_60d)
+                .map_err(|e| AppError::External(format!("Failed to parse beta_60d: {}", e)))?;
+            let beta_90d: Vec<BetaPoint> = serde_json::from_value(row.beta_90d)
+                .map_err(|e| AppError::External(format!("Failed to parse beta_90d: {}", e)))?;
+
+            let analysis = RollingBetaAnalysis {
+                ticker: ticker.to_string(),
+                benchmark: benchmark.to_string(),
+                beta_30d,
+                beta_60d,
+                beta_90d,
+                current_beta: row.current_beta,
+                beta_volatility: row.beta_volatility,
+            };
+
+            // Convert NaiveDateTime to DateTime<Utc>
+            let calculated_at_utc = chrono::DateTime::<Utc>::from_naive_utc_and_offset(row.calculated_at, Utc);
+            let expires_at_utc = chrono::DateTime::<Utc>::from_naive_utc_and_offset(row.expires_at, Utc);
+
+            Ok(Some((analysis, calculated_at_utc, expires_at_utc)))
+        }
+        None => Ok(None),
+    }
 }
 
 /// Query parameters for beta forecast
@@ -379,51 +480,214 @@ pub async fn get_beta_forecast(
     Ok(Json(forecast))
 }
 
+/// Query parameters for volatility forecast
+#[derive(Debug, Deserialize)]
+pub struct VolatilityForecastParams {
+    /// Number of days to forecast (default: 30, max: 90)
+    #[serde(default = "default_forecast_days")]
+    pub days: i32,
+
+    /// Confidence level for intervals (default: 0.95, options: 0.80 or 0.95)
+    #[serde(default = "default_confidence_level")]
+    pub confidence_level: f64,
+}
+
+fn default_confidence_level() -> f64 {
+    0.95
+}
+
+/// GET /api/risk/positions/:ticker/volatility-forecast
+///
+/// Generate volatility forecast for a position using GARCH(1,1) model.
+///
+/// Query parameters:
+/// - `days`: Forecast horizon in days (default: 30, max: 90)
+/// - `confidence_level`: Confidence level for intervals (0.80 or 0.95, default: 0.95)
+///
+/// Returns:
+/// - Current realized volatility
+/// - Daily forecasted volatility with confidence intervals
+/// - GARCH(1,1) model parameters (omega, alpha, beta)
+/// - Model warnings and interpretations
+///
+/// Example: GET /api/risk/positions/AAPL/volatility-forecast?days=30&confidence_level=0.95
+pub async fn get_volatility_forecast(
+    Path(ticker): Path<String>,
+    Query(params): Query<VolatilityForecastParams>,
+    State(state): State<AppState>,
+) -> Result<Json<crate::models::forecast::VolatilityForecast>, AppError> {
+    use std::time::Instant;
+
+    let days = params.days.clamp(1, 90); // Max 90 days forecast
+    let confidence_level = if params.confidence_level >= 0.90 {
+        0.95
+    } else {
+        0.80
+    };
+
+    let start = Instant::now();
+    info!(
+        "GET /api/risk/positions/{}/volatility-forecast - Generating GARCH forecast (days={}, confidence={})",
+        ticker, days, confidence_level
+    );
+
+    // Generate GARCH volatility forecast
+    let forecast = crate::services::volatility_forecasting_service::generate_volatility_forecast(
+        &state.pool,
+        &ticker,
+        days,
+        confidence_level,
+        state.price_provider.as_ref(),
+        &state.failure_cache,
+    )
+    .await?;
+
+    info!(
+        "Successfully generated volatility forecast for {} in {:?}",
+        ticker,
+        start.elapsed()
+    );
+
+    Ok(Json(forecast))
+}
+
 /// GET /api/risk/portfolios/:portfolio_id/downside
 ///
-/// Calculate downside risk metrics (Sortino ratio, downside deviation) for a portfolio.
+/// Get downside risk metrics from cache with graceful fallback.
 ///
 /// Query parameters:
 /// - `days`: Rolling window in days (default: 90)
-/// - `benchmark`: Benchmark ticker for beta (default: SPY) - used for MAR calculation
+/// - `benchmark`: Benchmark ticker for beta (default: SPY)
+/// - `force`: Force recalculation bypassing cache (default: false)
 ///
-/// Returns downside deviation, Sortino ratio, MAR, and comparison to Sharpe ratio
-/// with interpretation guidance.
+/// Returns downside deviation, Sortino ratio, CVaR, and tail risk metrics.
+/// Cache is updated every 6 hours by background job.
 ///
 /// Example: GET /api/risk/portfolios/{uuid}/downside?days=90&benchmark=SPY
 pub async fn get_portfolio_downside_risk(
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<RiskQueryParams>,
     State(state): State<AppState>,
-) -> Result<Json<crate::models::risk::PortfolioDownsideRisk>, AppError> {
-    use std::time::Instant;
-
-    let start = Instant::now();
+) -> Result<Json<serde_json::Value>, AppError> {
     info!(
-        "GET /api/risk/portfolios/{}/downside - Computing downside risk metrics (days={}, benchmark={})",
-        portfolio_id, params.days, params.benchmark
+        "🌐 [ENDPOINT] GET /api/risk/portfolios/{}/downside - days={}, benchmark={}, force={}",
+        portfolio_id, params.days, params.benchmark, params.force
     );
 
-    // Compute downside risk metrics using risk service
-    let downside_risk = risk_service::compute_portfolio_downside_risk(
-        &state.pool,
+    // If force refresh requested, compute directly
+    if params.force {
+        info!("🔄 [ENDPOINT] Force refresh requested for portfolio {}", portfolio_id);
+        match risk_service::compute_portfolio_downside_risk(
+            &state.pool,
+            portfolio_id,
+            params.days,
+            &params.benchmark,
+            state.price_provider.as_ref(),
+            &state.failure_cache,
+            &state.rate_limiter,
+            state.risk_free_rate,
+        )
+        .await
+        {
+            Ok(risk) => {
+                info!("✅ [ENDPOINT] Force computation succeeded for portfolio {}", portfolio_id);
+                return Ok(Json(serde_json::json!({
+                    "data": risk,
+                    "cache_status": {
+                        "source": "computed_on_demand",
+                        "last_updated": chrono::Utc::now(),
+                        "is_stale": false,
+                    }
+                })));
+            }
+            Err(e) => {
+                warn!("❌ [ENDPOINT] Force computation failed: {}, trying cache", e);
+                // Fall through to cache check
+            }
+        }
+    }
+
+    // Try to get from cache
+    info!("🔍 [ENDPOINT] Looking for cached downside risk for portfolio {}", portfolio_id);
+    let cached = get_cached_downside_risk(&state.pool, portfolio_id, params.days, &params.benchmark).await?;
+
+    match cached {
+        Some((risk_data, calculated_at_utc, expires_at_utc)) => {
+            let age = Utc::now() - calculated_at_utc;
+            let age_hours = age.num_hours();
+            let is_stale = expires_at_utc < Utc::now();
+
+            info!(
+                "✅ [ENDPOINT] Serving downside risk for portfolio {} from cache (age: {} hours, stale: {})",
+                portfolio_id, age_hours, is_stale
+            );
+
+            let actions = if is_stale {
+                Some(vec![serde_json::json!({
+                    "label": "Refresh Data",
+                    "endpoint": format!("/api/risk/portfolios/{}/downside?force=true", portfolio_id),
+                    "method": "GET"
+                })])
+            } else {
+                None
+            };
+
+            Ok(Json(serde_json::json!({
+                "data": risk_data,
+                "cache_status": {
+                    "source": "cache",
+                    "last_updated": calculated_at_utc,
+                    "age_hours": age_hours,
+                    "is_stale": is_stale,
+                },
+                "actions": actions
+            })))
+        }
+        None => {
+            warn!("⚠️ [ENDPOINT] No cached downside risk found for portfolio {}", portfolio_id);
+            warn!("💡 [ENDPOINT] User should trigger populate_downside_risk_cache job in Admin panel");
+            Err(AppError::NotFound(format!(
+                "Downside risk data not available for this portfolio. The background job will calculate it within 6 hours, or you can request immediate calculation using force=true. Note: Forced calculation may take 30-60 seconds."
+            )))
+        }
+    }
+}
+
+/// Get cached downside risk from database
+async fn get_cached_downside_risk(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    days: i64,
+    benchmark: &str,
+) -> Result<Option<(crate::models::risk::PortfolioDownsideRisk, chrono::DateTime<Utc>, chrono::DateTime<Utc>)>, AppError> {
+    let result = sqlx::query!(
+        r#"
+        SELECT
+            risk_data, calculated_at, expires_at
+        FROM downside_risk_cache
+        WHERE portfolio_id = $1 AND days = $2 AND benchmark = $3
+        "#,
         portfolio_id,
-        params.days,
-        &params.benchmark,
-        state.price_provider.as_ref(),
-        &state.failure_cache,
-        &state.rate_limiter,
-        state.risk_free_rate,
+        days as i32,
+        benchmark
     )
+    .fetch_optional(pool)
     .await?;
 
-    info!(
-        "Successfully computed downside risk for portfolio {} in {:?}",
-        portfolio_id,
-        start.elapsed()
-    );
+    match result {
+        Some(row) => {
+            // Deserialize JSONB
+            let risk_data: crate::models::risk::PortfolioDownsideRisk = serde_json::from_value(row.risk_data)
+                .map_err(|e| AppError::External(format!("Failed to parse cached risk data: {}", e)))?;
 
-    Ok(Json(downside_risk))
+            // Convert NaiveDateTime to DateTime<Utc>
+            let calculated_at_utc = chrono::DateTime::<Utc>::from_naive_utc_and_offset(row.calculated_at, Utc);
+            let expires_at_utc = chrono::DateTime::<Utc>::from_naive_utc_and_offset(row.expires_at, Utc);
+
+            Ok(Some((risk_data, calculated_at_utc, expires_at_utc)))
+        }
+        None => Ok(None),
+    }
 }
 
 /// Represents the state of cached portfolio risk data

@@ -8,11 +8,11 @@ import {
   Chip,
   Alert,
   CircularProgress,
-  Tooltip,
   Divider,
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  IconButton,
 } from '@mui/material';
 import {
   TrendingDown,
@@ -22,10 +22,12 @@ import {
   Warning as WarningIcon,
   ExpandMore,
   InfoOutlined,
+  HelpOutline,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { getPositionRisk } from '../lib/endpoints';
 import type { RiskLevel } from '../types';
+import { MetricHelpDialog } from './MetricHelpDialog';
 
 interface RiskMetricsPanelProps {
   ticker: string;
@@ -41,46 +43,71 @@ interface MetricCardProps {
   value: string;
   subValue?: string;
   color?: string;
-  tooltip?: string;
+  helpKey?: string;
 }
 
-function MetricCard({ icon, label, value, subValue, color = '#1976d2', tooltip }: MetricCardProps) {
-  const content = (
-    <Paper
-      elevation={1}
-      sx={{
-        p: 2,
-        height: '100%',
-        borderLeft: `4px solid ${color}`,
-        transition: 'box-shadow 0.2s',
-        '&:hover': {
-          boxShadow: 3,
-        },
-      }}
-    >
-      <Box display="flex" alignItems="center" gap={1} mb={1}>
-        <Box sx={{ color }}>{icon}</Box>
-        <Typography variant="caption" color="text.secondary" fontWeight={600}>
-          {label}
-        </Typography>
-      </Box>
-      <Typography variant="h5" fontWeight="bold" gutterBottom>
-        {value}
-      </Typography>
-      {subValue && (
-        <Typography variant="caption" color="text.secondary">
-          {subValue}
-        </Typography>
-      )}
-    </Paper>
-  );
+function MetricCard({ icon, label, value, subValue, color = '#1976d2', helpKey }: MetricCardProps) {
+  const [helpOpen, setHelpOpen] = useState(false);
 
-  return tooltip ? (
-    <Tooltip title={tooltip} placement="top">
-      {content}
-    </Tooltip>
-  ) : (
-    content
+  return (
+    <>
+      <Paper
+        elevation={1}
+        sx={{
+          p: 2,
+          height: '100%',
+          borderLeft: `4px solid ${color}`,
+          transition: 'box-shadow 0.2s',
+          position: 'relative',
+          '&:hover': {
+            boxShadow: 3,
+          },
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={1} mb={1}>
+          <Box sx={{ color }}>{icon}</Box>
+          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+            {label}
+          </Typography>
+          {helpKey && (
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                setHelpOpen(true);
+              }}
+              sx={{
+                ml: 'auto',
+                p: 0.5,
+                color: 'text.secondary',
+                '&:hover': {
+                  color: 'primary.main',
+                  backgroundColor: 'primary.50',
+                },
+              }}
+            >
+              <HelpOutline fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+        <Typography variant="h5" fontWeight="bold" gutterBottom>
+          {value}
+        </Typography>
+        {subValue && (
+          <Typography variant="caption" color="text.secondary">
+            {subValue}
+          </Typography>
+        )}
+      </Paper>
+
+      {helpKey && (
+        <MetricHelpDialog
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          metricKey={helpKey}
+        />
+      )}
+    </>
   );
 }
 
@@ -417,7 +444,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
             value={`${risk.metrics.volatility.toFixed(2)}%`}
             subValue="Standard deviation of returns"
             color="#2196f3"
-            tooltip="Higher volatility means larger price swings. Typical stocks range from 15-40%."
+            helpKey="volatility"
           />
         </Grid>
 
@@ -428,7 +455,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
             value={`${risk.metrics.max_drawdown.toFixed(2)}%`}
             subValue="Worst peak-to-trough decline"
             color={risk.metrics.max_drawdown < -15 ? '#f44336' : '#ff9800'}
-            tooltip="The largest percentage drop from a peak. Lower (more negative) is riskier."
+            helpKey="max_drawdown"
           />
         </Grid>
 
@@ -440,7 +467,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={risk.metrics.beta.toFixed(2)}
               subValue={`vs ${benchmark}`}
               color={Math.abs(risk.metrics.beta) > 1.2 ? '#ff9800' : '#4caf50'}
-              tooltip={`Beta measures volatility vs market. ${risk.metrics.beta > 1 ? 'More' : 'Less'} volatile than ${benchmark}.`}
+              helpKey="beta"
             />
           </Grid>
         )}
@@ -453,7 +480,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={risk.metrics.beta_spy.toFixed(2)}
               subValue="vs SPY"
               color={Math.abs(risk.metrics.beta_spy) > 1.2 ? '#ff9800' : '#4caf50'}
-              tooltip={`Beta vs S&P 500 (SPY). ${risk.metrics.beta_spy > 1 ? 'More' : 'Less'} volatile than the broad market.`}
+              helpKey="beta"
             />
           </Grid>
         )}
@@ -466,7 +493,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={risk.metrics.beta_qqq.toFixed(2)}
               subValue="vs QQQ"
               color={Math.abs(risk.metrics.beta_qqq) > 1.2 ? '#ff9800' : '#4caf50'}
-              tooltip={`Beta vs Nasdaq 100 (QQQ). ${risk.metrics.beta_qqq > 1 ? 'More' : 'Less'} volatile than tech-heavy index.`}
+              helpKey="beta"
             />
           </Grid>
         )}
@@ -479,7 +506,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={risk.metrics.beta_iwm.toFixed(2)}
               subValue="vs IWM"
               color={Math.abs(risk.metrics.beta_iwm) > 1.2 ? '#ff9800' : '#4caf50'}
-              tooltip={`Beta vs Russell 2000 (IWM). ${risk.metrics.beta_iwm > 1 ? 'More' : 'Less'} volatile than small-cap index.`}
+              helpKey="beta"
             />
           </Grid>
         )}
@@ -493,7 +520,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
                 value={`${risk.metrics.risk_decomposition.systematic_risk.toFixed(2)}%`}
                 subValue={`${(risk.metrics.risk_decomposition.r_squared * 100).toFixed(1)}% market-driven`}
                 color="#2196f3"
-                tooltip="Portion of risk from market movements (cannot be diversified away)."
+                helpKey="systematic_risk"
               />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
@@ -503,7 +530,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
                 value={`${risk.metrics.risk_decomposition.idiosyncratic_risk.toFixed(2)}%`}
                 subValue={`${((1 - risk.metrics.risk_decomposition.r_squared) * 100).toFixed(1)}% stock-specific`}
                 color="#9c27b0"
-                tooltip="Stock-specific risk that can be reduced through diversification."
+                helpKey="idiosyncratic_risk"
               />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
@@ -513,7 +540,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
                 value={`${(risk.metrics.risk_decomposition.r_squared * 100).toFixed(1)}%`}
                 subValue="Variance explained by market"
                 color="#00897b"
-                tooltip="R-squared shows how much of the stock's movement is explained by the market. Higher R² means more market-driven."
+                helpKey="r_squared"
               />
             </Grid>
           </>
@@ -527,7 +554,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={risk.metrics.sharpe.toFixed(2)}
               subValue="Risk-adjusted return"
               color={risk.metrics.sharpe > 1 ? '#4caf50' : risk.metrics.sharpe > 0 ? '#ff9800' : '#f44336'}
-              tooltip="Measures return per unit of risk. Higher is better. >1 is good, >2 is excellent."
+              helpKey="sharpe_ratio"
             />
           </Grid>
         )}
@@ -540,7 +567,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={risk.metrics.sortino.toFixed(2)}
               subValue="Downside risk-adjusted return"
               color={risk.metrics.sortino > 1 ? '#4caf50' : risk.metrics.sortino > 0 ? '#ff9800' : '#f44336'}
-              tooltip="Like Sharpe but focuses only on downside risk. Higher is better. >1 is good, >2 is excellent."
+              helpKey="sortino_ratio"
             />
           </Grid>
         )}
@@ -553,7 +580,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={`${risk.metrics.annualized_return.toFixed(2)}%`}
               subValue="Expected yearly return"
               color={risk.metrics.annualized_return > 10 ? '#4caf50' : risk.metrics.annualized_return > 0 ? '#ff9800' : '#f44336'}
-              tooltip="Expected yearly return based on historical data. Calculated from average daily returns."
+              helpKey="annualized_return"
             />
           </Grid>
         )}
@@ -566,7 +593,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={`${risk.metrics.var_95.toFixed(2)}%`}
               subValue="1-in-20 days worst case"
               color="#ff9800"
-              tooltip="95% confidence VaR: 5% chance of losing more than this in a single day."
+              helpKey="var_95"
             />
           </Grid>
         )}
@@ -579,7 +606,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={`${risk.metrics.var_99.toFixed(2)}%`}
               subValue="1-in-100 days worst case"
               color="#f44336"
-              tooltip="99% confidence VaR: 1% chance of losing more than this in a single day."
+              helpKey="var_99"
             />
           </Grid>
         )}
@@ -592,7 +619,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={`${risk.metrics.expected_shortfall_95.toFixed(2)}%`}
               subValue="Average loss beyond VaR"
               color="#d32f2f"
-              tooltip="Average loss when the 95% VaR threshold is exceeded. More conservative than VaR."
+              helpKey="expected_shortfall_95"
             />
           </Grid>
         )}
@@ -605,7 +632,7 @@ export function RiskMetricsPanel({ ticker, holdingName, days = 90, benchmark = '
               value={`${risk.metrics.expected_shortfall_99.toFixed(2)}%`}
               subValue="Extreme loss scenario"
               color="#b71c1c"
-              tooltip="Average loss when the 99% VaR threshold is exceeded. Captures tail risk."
+              helpKey="expected_shortfall_99"
             />
           </Grid>
         )}

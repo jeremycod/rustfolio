@@ -6,8 +6,9 @@ use uuid::Uuid;
 use crate::db::holding_snapshot_queries;
 use crate::errors::AppError;
 use crate::external::price_provider::PriceProvider;
-use crate::models::{ForecastMethod, ForecastPoint, HistoricalDataPoint, LatestAccountHolding, PortfolioForecast};
+use crate::models::{ForecastMethod, ForecastPoint, HistoricalDataPoint, LatestAccountHolding, PortfolioForecast, RiskPreferences};
 use crate::services::failure_cache::FailureCache;
+use crate::services::user_preference_service;
 use sqlx::PgPool;
 
 /// Generate a portfolio value forecast
@@ -1072,4 +1073,96 @@ fn generate_synthetic_portfolio_history(
     synthetic_history.reverse();
 
     Ok(synthetic_history)
+}
+
+// ============================================================================
+// USER PREFERENCE INTEGRATION
+// ============================================================================
+
+/// Apply user risk preferences to a forecast
+#[allow(dead_code)]
+pub fn apply_user_preferences_to_forecast(
+    mut forecast: PortfolioForecast,
+    preferences: &RiskPreferences,
+) -> PortfolioForecast {
+    // Adjust confidence intervals based on risk appetite
+    for point in &mut forecast.forecast_points {
+        let (adjusted_lower, adjusted_upper) = user_preference_service::adjust_confidence_intervals(
+            point.lower_bound,
+            point.upper_bound,
+            point.predicted_value,
+            preferences.risk_appetite,
+        );
+        point.lower_bound = adjusted_lower;
+        point.upper_bound = adjusted_upper;
+    }
+
+    // Add risk profile information to warnings
+    let risk_profile_desc = user_preference_service::get_risk_profile_description(preferences);
+    forecast.warnings.insert(0, risk_profile_desc);
+
+    // Add preference-specific warnings
+    if preferences.emphasize_downside_risk() {
+        forecast.warnings.push(
+            "Conservative risk profile: Emphasizing downside protection. Consider wider safety margins.".to_string()
+        );
+    } else if preferences.emphasize_growth_potential() {
+        forecast.warnings.push(
+            "Aggressive risk profile: Emphasizing growth potential. Higher volatility expected.".to_string()
+        );
+    }
+
+    forecast
+}
+
+/// Generate a portfolio forecast with user preferences applied
+#[allow(dead_code)]
+pub async fn generate_portfolio_forecast_with_preferences(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    user_id: Option<Uuid>,
+    days_ahead: i32,
+    method: Option<ForecastMethod>,
+) -> Result<PortfolioForecast, AppError> {
+    // Generate base forecast
+    let mut forecast = generate_portfolio_forecast(pool, portfolio_id, days_ahead, method).await?;
+
+    // If user_id provided, apply their preferences
+    if let Some(uid) = user_id {
+        let preferences = user_preference_service::get_user_preferences(pool, uid).await?;
+        forecast = apply_user_preferences_to_forecast(forecast, &preferences);
+    }
+
+    Ok(forecast)
+}
+
+/// Generate a benchmark-based forecast with user preferences applied
+#[allow(dead_code)]
+pub async fn generate_benchmark_forecast_with_preferences(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    user_id: Option<Uuid>,
+    days_ahead: i32,
+    method: Option<ForecastMethod>,
+    price_provider: &dyn PriceProvider,
+    failure_cache: &FailureCache,
+) -> Result<PortfolioForecast, AppError> {
+    // Generate base forecast
+    let mut forecast = generate_benchmark_based_forecast(
+        pool,
+        portfolio_id,
+        days_ahead,
+        method,
+        price_provider,
+        failure_cache,
+    )
+    .await?;
+
+    // If user_id provided, apply their preferences
+    if let Some(uid) = user_id {
+        let preferences = user_preference_service::get_user_preferences(pool, uid).await?;
+        forecast = apply_user_preferences_to_forecast(forecast, &preferences);
+    }
+
+    Ok(forecast)
 }

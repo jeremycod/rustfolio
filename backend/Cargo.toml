@@ -44,6 +44,7 @@ lettre = { version = "0.11", default-features = false, features = ["tokio1", "to
 ndarray = "0.15"
 linfa = "0.7"
 linfa-clustering = "0.7"
+karma = { version = "1.0.0", features = ["serde"] }
 
 [features]
 default = ["loki"]

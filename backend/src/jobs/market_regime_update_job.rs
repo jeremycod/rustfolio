@@ -115,8 +115,6 @@ pub async fn update_market_regime(ctx: JobContext) -> Result<JobResult, AppError
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_job_compiles() {
         // This test ensures the job function compiles correctly

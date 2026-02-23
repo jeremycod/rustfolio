@@ -1,6 +1,6 @@
 use crate::errors::AppError;
 use crate::external::price_provider::PriceProvider;
-use crate::jobs::{portfolio_risk_job, portfolio_correlations_job, daily_risk_snapshots_job, market_regime_update_job};
+use crate::jobs::{portfolio_risk_job, portfolio_correlations_job, daily_risk_snapshots_job, market_regime_update_job, hmm_training_job, regime_forecast_job, populate_optimization_cache_job, rolling_beta_cache_job, downside_risk_cache_job};
 use crate::services::failure_cache::FailureCache;
 use crate::services::rate_limiter::RateLimiter;
 use sqlx::PgPool;
@@ -141,6 +141,49 @@ impl JobSchedulerService {
             market_regime_update_job::update_market_regime
         ).await?;
 
+        // HMM training job - monthly
+        self.schedule_job(
+            "0 0 0 1 * *",
+            "train_hmm_model",
+            "Monthly on 1st at midnight",
+            train_hmm_wrapper
+        ).await?;
+
+        // Regime forecast generation - daily after market close
+        self.schedule_job(
+            "0 30 17 * * *",
+            "generate_regime_forecasts",
+            "Daily at 5:30 PM ET",
+            regime_forecast_job::generate_all_regime_forecasts
+        ).await?;
+
+        // Portfolio optimization cache - every 6 hours
+        self.schedule_job(
+            "0 0 */6 * * *",
+            "populate_optimization_cache",
+            "Every 6 hours",
+            populate_optimization_cache_job::populate_all_optimization_caches
+        ).await?;
+
+        // Rolling beta cache - every 6 hours
+        self.schedule_job(
+            "0 30 */6 * * *",
+            "populate_rolling_beta_cache",
+            "Every 6 hours at :30",
+            rolling_beta_cache_job::populate_rolling_beta_caches
+        ).await?;
+
+        // Downside risk cache - every 6 hours
+        self.schedule_job(
+            "0 45 */6 * * *",
+            "populate_downside_risk_cache",
+            "Every 6 hours at :45",
+            downside_risk_cache_job::populate_downside_risk_caches
+        ).await?;
+
+        // TODO: Re-enable sentiment cache job after refactoring
+        // Sentiment cache is currently populated on-demand via manual endpoint
+
         // Weekly jobs (SUN = Sunday)
         let cleanup_schedule = if test_mode { "0 */3 * * * *" } else { "0 0 3 * * SUN" };
         let cleanup_desc = if test_mode { "Every 3 minutes (TEST MODE)" } else { "Every Sunday at 3:00 AM" };
@@ -164,7 +207,7 @@ impl JobSchedulerService {
             .await
             .map_err(|e| AppError::External(format!("Failed to start scheduler: {}", e)))?;
 
-        info!("✅ Job scheduler started successfully with 12 jobs");
+        info!("✅ Job scheduler started successfully with 17 jobs");
         Ok(())
     }
 
@@ -525,6 +568,18 @@ pub async fn archive_old_snapshots(ctx: JobContext) -> Result<JobResult, AppErro
 
     Ok(JobResult {
         items_processed: result.rows_affected() as i32,
+        items_failed: 0,
+    })
+}
+
+pub async fn train_hmm_wrapper(ctx: JobContext) -> Result<JobResult, AppError> {
+    info!("🧠 Training HMM model...");
+
+    // Run the HMM training job
+    hmm_training_job::run_hmm_training_job(ctx.pool.as_ref()).await?;
+
+    Ok(JobResult {
+        items_processed: 1,
         items_failed: 0,
     })
 }

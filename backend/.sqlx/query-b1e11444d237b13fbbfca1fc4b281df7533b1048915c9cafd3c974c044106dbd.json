@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            risk_data, calculated_at, expires_at\n        FROM downside_risk_cache\n        WHERE portfolio_id = $1 AND days = $2 AND benchmark = $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "risk_data",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "calculated_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 2,
+        "name": "expires_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b1e11444d237b13fbbfca1fc4b281df7533b1048915c9cafd3c974c044106dbd"
+}

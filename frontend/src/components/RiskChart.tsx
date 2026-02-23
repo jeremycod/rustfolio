@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -8,10 +8,12 @@ import {
   CircularProgress,
   Card,
   CardContent,
+  IconButton,
 } from '@mui/material';
-import { TrendingDown, ShowChart } from '@mui/icons-material';
+import { TrendingDown, ShowChart, HelpOutline } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { getPriceHistory } from '../lib/endpoints';
+import { MetricHelpDialog } from './MetricHelpDialog';
 import {
   LineChart,
   Line,
@@ -34,6 +36,70 @@ interface RollingMetric {
   date: string;
   volatility: number;
   drawdown: number;
+}
+
+interface StatCardProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  subValue?: string;
+  color?: string;
+  helpKey?: string;
+}
+
+function StatCard({ icon, label, value, subValue, color = 'text.secondary', helpKey }: StatCardProps) {
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  return (
+    <>
+      <Card>
+        <CardContent>
+          <Box display="flex" alignItems="center" gap={1} mb={1}>
+            {icon}
+            <Typography variant="caption" color="text.secondary" fontWeight={600}>
+              {label}
+            </Typography>
+            {helpKey && (
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHelpOpen(true);
+                }}
+                sx={{
+                  ml: 'auto',
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
+          <Typography variant="h5" fontWeight="bold" color={color}>
+            {value}
+          </Typography>
+          {subValue && (
+            <Typography variant="caption" color="text.secondary">
+              {subValue}
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+
+      {helpKey && (
+        <MetricHelpDialog
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          metricKey={helpKey}
+        />
+      )}
+    </>
+  );
 }
 
 export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
@@ -172,73 +238,43 @@ export function RiskChart({ ticker, days = 90 }: RiskChartProps) {
       {stats && (
         <Grid container spacing={2} sx={{ mb: 4 }}>
           <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <ShowChart sx={{ fontSize: 20, color: 'primary.main' }} />
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Current Volatility
-                  </Typography>
-                </Box>
-                <Typography variant="h5" fontWeight="bold">
-                  {stats.currentVolatility}%
-                </Typography>
-              </CardContent>
-            </Card>
+            <StatCard
+              icon={<ShowChart sx={{ fontSize: 20, color: 'primary.main' }} />}
+              label="Current Volatility"
+              value={`${stats.currentVolatility}%`}
+              helpKey="volatility"
+            />
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <ShowChart sx={{ fontSize: 20, color: 'info.main' }} />
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Avg Volatility
-                  </Typography>
-                </Box>
-                <Typography variant="h5" fontWeight="bold">
-                  {stats.avgVolatility}%
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Range: {stats.minVolatility}% - {stats.maxVolatility}%
-                </Typography>
-              </CardContent>
-            </Card>
+            <StatCard
+              icon={<ShowChart sx={{ fontSize: 20, color: 'info.main' }} />}
+              label="Avg Volatility"
+              value={`${stats.avgVolatility}%`}
+              subValue={`Range: ${stats.minVolatility}% - ${stats.maxVolatility}%`}
+              helpKey="volatility"
+            />
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <TrendingDown sx={{ fontSize: 20, color: 'error.main' }} />
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Current Drawdown
-                  </Typography>
-                </Box>
-                <Typography variant="h5" fontWeight="bold" color={parseFloat(stats.currentDrawdown) < 0 ? 'error.main' : 'success.main'}>
-                  {stats.currentDrawdown}%
-                </Typography>
-              </CardContent>
-            </Card>
+            <StatCard
+              icon={<TrendingDown sx={{ fontSize: 20, color: 'error.main' }} />}
+              label="Current Drawdown"
+              value={`${stats.currentDrawdown}%`}
+              color={parseFloat(stats.currentDrawdown) < 0 ? 'error.main' : 'success.main'}
+              helpKey="max_drawdown"
+            />
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <TrendingDown sx={{ fontSize: 20, color: 'warning.main' }} />
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Max Drawdown
-                  </Typography>
-                </Box>
-                <Typography variant="h5" fontWeight="bold" color="error.main">
-                  {stats.maxDrawdown}%
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Worst decline from peak
-                </Typography>
-              </CardContent>
-            </Card>
+            <StatCard
+              icon={<TrendingDown sx={{ fontSize: 20, color: 'warning.main' }} />}
+              label="Max Drawdown"
+              value={`${stats.maxDrawdown}%`}
+              subValue="Worst decline from peak"
+              color="error.main"
+              helpKey="max_drawdown"
+            />
           </Grid>
         </Grid>
       )}

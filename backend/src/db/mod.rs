@@ -10,5 +10,7 @@ pub mod risk_threshold_queries;
 pub mod ticker_fetch_failure_queries;
 pub mod llm_queries;
 pub mod user_preferences_queries;
+pub mod risk_preferences_queries;
 pub mod alert_queries;
 pub mod market_regime_queries;
+pub mod hmm_queries;

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT 1 as \"exists!\"\n        FROM portfolio_optimization_cache\n        WHERE portfolio_id = $1\n          AND expires_at > NOW()\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3c45b290d22bb0dc84ae1311194df3c01ecd5167339481996dedcbfaecaf5765"
+}

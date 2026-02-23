@@ -1107,6 +1107,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "karma"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7127c4ff847345271dd80cdeb7b7d38cfe6dd9efcf2bc9ef2645e97f38854404"
+dependencies = [
+ "rand 0.8.5",
+ "serde",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "kdtree"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2058,6 +2069,7 @@ dependencies = [
  "dotenvy",
  "health",
  "http",
+ "karma",
  "lettre",
  "linfa",
  "linfa-clustering",

@@ -17,6 +17,9 @@ pub mod sentiment;
 pub mod sec_filing;
 pub mod alert;
 pub mod market_regime;
+pub mod hmm_regime;
+pub mod user_preferences;
+pub mod signal;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -43,7 +46,10 @@ pub use llm::{
 pub use narrative::{PortfolioNarrative, GenerateNarrativeRequest};
 pub use news::{NewsArticle, Sentiment, NewsTheme, PortfolioNewsAnalysis, NewsQueryParams};
 pub use qa::{PortfolioQuestion, PortfolioAnswer, Confidence};
-pub use forecast::{PortfolioForecast, ForecastPoint, ForecastMethod, HistoricalDataPoint};
+pub use forecast::{
+    PortfolioForecast, ForecastPoint, ForecastMethod, HistoricalDataPoint,
+    SentimentFactors, SentimentAwareForecast,
+};
 pub use sentiment::{
     SentimentTrend, MomentumTrend, DivergenceType, SentimentDataPoint,
     SentimentSignal, PortfolioSentimentAnalysis,
@@ -56,6 +62,19 @@ pub use sec_filing::{
 pub use market_regime::{
     MarketRegime, CreateMarketRegime, RegimeType, RegimeDetectionParams,
     RegimeHistoryParams, CurrentRegimeWithThresholds, AdjustedThresholds,
+};
+pub use hmm_regime::{
+    HmmState, ObservationSymbol, StateProbabilities,
+    RegimeForecast,
+};
+pub use user_preferences::{
+    RiskPreferences, UpdateRiskPreferences, RiskPreferencesResponse,
+    RiskAppetite, SignalSensitivity,
+};
+pub use signal::{
+    TradingSignal, SignalType, SignalDirection, SignalFactors, SignalFactor,
+    ConfidenceLevel as SignalConfidenceLevel, SignalResponse,
+    SignalGenerationParams,
 };
 // Alert module models are used internally by routes/services
 // Re-export only when needed by other modules

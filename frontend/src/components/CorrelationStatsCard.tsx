@@ -1,17 +1,20 @@
+import { useState } from 'react';
 import {
   Box,
   Paper,
   Typography,
   Grid,
-  Tooltip,
   Alert,
+  IconButton,
 } from '@mui/material';
 import {
   ShowChart,
   TrendingUp,
   Link as LinkIcon,
   CheckCircle,
+  HelpOutline,
 } from '@mui/icons-material';
+import { MetricHelpDialog } from './MetricHelpDialog';
 import type { CorrelationStatistics } from '../types';
 
 interface CorrelationStatsCardProps {
@@ -24,46 +27,70 @@ interface MetricCardProps {
   value: string;
   subValue?: string;
   color?: string;
-  tooltip?: string;
+  helpKey?: string;
 }
 
-function MetricCard({ icon, label, value, subValue, color = '#1976d2', tooltip }: MetricCardProps) {
-  const content = (
-    <Paper
-      elevation={1}
-      sx={{
-        p: 2,
-        height: '100%',
-        borderLeft: `4px solid ${color}`,
-        transition: 'box-shadow 0.2s',
-        '&:hover': {
-          boxShadow: 3,
-        },
-      }}
-    >
-      <Box display="flex" alignItems="center" gap={1} mb={1}>
-        <Box sx={{ color }}>{icon}</Box>
-        <Typography variant="caption" color="text.secondary" fontWeight={600}>
-          {label}
-        </Typography>
-      </Box>
-      <Typography variant="h5" fontWeight="bold" gutterBottom>
-        {value}
-      </Typography>
-      {subValue && (
-        <Typography variant="caption" color="text.secondary">
-          {subValue}
-        </Typography>
-      )}
-    </Paper>
-  );
+function MetricCard({ icon, label, value, subValue, color = '#1976d2', helpKey }: MetricCardProps) {
+  const [helpOpen, setHelpOpen] = useState(false);
 
-  return tooltip ? (
-    <Tooltip title={tooltip} placement="top">
-      {content}
-    </Tooltip>
-  ) : (
-    content
+  return (
+    <>
+      <Paper
+        elevation={1}
+        sx={{
+          p: 2,
+          height: '100%',
+          borderLeft: `4px solid ${color}`,
+          transition: 'box-shadow 0.2s',
+          '&:hover': {
+            boxShadow: 3,
+          },
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={1} mb={1}>
+          <Box sx={{ color }}>{icon}</Box>
+          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+            {label}
+          </Typography>
+          {helpKey && (
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                setHelpOpen(true);
+              }}
+              sx={{
+                ml: 'auto',
+                p: 0.5,
+                color: 'text.secondary',
+                '&:hover': {
+                  color: 'primary.main',
+                  backgroundColor: 'primary.50',
+                },
+              }}
+            >
+              <HelpOutline fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+        <Typography variant="h5" fontWeight="bold" gutterBottom>
+          {value}
+        </Typography>
+        {subValue && (
+          <Typography variant="caption" color="text.secondary">
+            {subValue}
+          </Typography>
+        )}
+      </Paper>
+
+      {helpKey && (
+        <MetricHelpDialog
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          metricKey={helpKey}
+        />
+      )}
+    </>
   );
 }
 
@@ -100,7 +127,7 @@ export default function CorrelationStatsCard({ statistics }: CorrelationStatsCar
             label="Average Correlation"
             value={`${avgCorrPercent}%`}
             color={getCorrelationColor(statistics.average_correlation)}
-            tooltip="Average correlation across all position pairs. Lower values indicate better diversification."
+            helpKey="average_correlation"
           />
         </Grid>
 
@@ -111,7 +138,7 @@ export default function CorrelationStatsCard({ statistics }: CorrelationStatsCar
             value={`${maxCorrPercent}%`}
             subValue={`Min: ${(statistics.min_correlation * 100).toFixed(1)}%`}
             color="#1976d2"
-            tooltip="Highest correlation between any two positions in the portfolio."
+            helpKey="average_correlation"
           />
         </Grid>
 
@@ -122,7 +149,7 @@ export default function CorrelationStatsCard({ statistics }: CorrelationStatsCar
             value={statistics.high_correlation_pairs.toString()}
             subValue="Pairs > 70%"
             color={statistics.high_correlation_pairs > 3 ? '#ff9800' : '#4caf50'}
-            tooltip="Number of position pairs with correlation above 70%. High values suggest concentration risk."
+            helpKey="high_correlation_pairs"
           />
         </Grid>
 
@@ -133,7 +160,7 @@ export default function CorrelationStatsCard({ statistics }: CorrelationStatsCar
             value={`${diversificationScore}/10`}
             subValue="Correlation-adjusted"
             color={getDiversificationColor(statistics.adjusted_diversification_score)}
-            tooltip="Combines position count and correlation to measure true diversification. Higher is better."
+            helpKey="diversification_score"
           />
         </Grid>
       </Grid>

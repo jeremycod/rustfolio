@@ -1068,21 +1068,29 @@ pub async fn compute_portfolio_downside_risk(
     use crate::db::holding_snapshot_queries;
     use std::collections::HashMap;
 
+    info!("🔍 [DOWNSIDE_RISK] Starting downside risk computation for portfolio {}", portfolio_id);
+    info!("📋 [DOWNSIDE_RISK] Parameters: days={}, benchmark={}, risk_free_rate={}", days, benchmark, risk_free_rate);
+
     // 1. Fetch all latest holdings for the portfolio
+    info!("📊 [DOWNSIDE_RISK] Fetching portfolio holdings...");
     let holdings = holding_snapshot_queries::fetch_portfolio_latest_holdings(pool, portfolio_id)
         .await
         .map_err(|e| {
-            tracing::error!("Failed to fetch portfolio holdings: {}", e);
+            tracing::error!("❌ [DOWNSIDE_RISK] Failed to fetch portfolio holdings: {}", e);
             AppError::Db(e)
         })?;
 
     if holdings.is_empty() {
+        warn!("⚠️ [DOWNSIDE_RISK] Portfolio {} has no holdings", portfolio_id);
         return Err(AppError::External(
             "Portfolio has no holdings".to_string()
         ));
     }
 
+    info!("✅ [DOWNSIDE_RISK] Found {} holdings in portfolio {}", holdings.len(), portfolio_id);
+
     // 2. Aggregate holdings by ticker
+    info!("🔢 [DOWNSIDE_RISK] Aggregating holdings by ticker...");
     let mut ticker_aggregates: HashMap<String, (f64, f64)> = HashMap::new(); // (quantity, market_value)
 
     for holding in &holdings {
@@ -1098,15 +1106,20 @@ pub async fn compute_portfolio_downside_risk(
             .or_insert((quantity, market_value));
     }
 
+    info!("✅ [DOWNSIDE_RISK] Aggregated into {} unique tickers", ticker_aggregates.len());
+
     let total_value: f64 = ticker_aggregates.values().map(|(_, mv)| mv).sum();
+    info!("💰 [DOWNSIDE_RISK] Total portfolio value: ${:.2}", total_value);
 
     if total_value == 0.0 {
+        warn!("⚠️ [DOWNSIDE_RISK] Portfolio {} has no holdings with market value", portfolio_id);
         return Err(AppError::External(
             "Portfolio has no holdings with market value".to_string()
         ));
     }
 
     // 3. Compute downside metrics for each ticker
+    info!("📈 [DOWNSIDE_RISK] Computing downside metrics for each ticker...");
     let mut position_downside_risks = Vec::new();
     let mut weighted_downside_deviation = 0.0;
     let mut weighted_sortino = 0.0;
@@ -1114,15 +1127,27 @@ pub async fn compute_portfolio_downside_risk(
     let mut weighted_sharpe = 0.0;
     let mut sharpe_count = 0;
 
+    let total_tickers = ticker_aggregates.len();
+    let mut ticker_count = 0;
     for (ticker, (_quantity, market_value)) in ticker_aggregates {
+        ticker_count += 1;
         let weight = market_value / total_value;
+
+        info!("🎯 [DOWNSIDE_RISK] Processing ticker {}/{}: {} (weight: {:.2}%, value: ${:.2})",
+              ticker_count, total_tickers, ticker, weight * 100.0, market_value);
+
         if weight < 0.001 {
+            info!("⏭️ [DOWNSIDE_RISK] Skipping {} - negligible weight (<0.1%)", ticker);
             continue; // Skip negligible positions
         }
 
         // Fetch price data for this ticker
+        info!("📊 [DOWNSIDE_RISK] Fetching {}-day price history for {}...", days, ticker);
+        let fetch_start = std::time::Instant::now();
         match price_queries::fetch_window(pool, &ticker, days).await {
             Ok(series) if series.len() >= 2 => {
+                let fetch_elapsed = fetch_start.elapsed();
+                info!("✅ [DOWNSIDE_RISK] Fetched {} price points for {} in {:.2}s", series.len(), ticker, fetch_elapsed.as_secs_f64());
                 let downside_deviation = compute_downside_deviation(&series, risk_free_rate);
                 let sortino = compute_sortino(&series, risk_free_rate);
                 let sharpe = compute_sharpe(&series, risk_free_rate);
@@ -1156,21 +1181,25 @@ pub async fn compute_portfolio_downside_risk(
                 }
             }
             Ok(_) => {
-                tracing::warn!("Insufficient price data for {} (< 2 points)", ticker);
+                warn!("⚠️ [DOWNSIDE_RISK] Insufficient price data for {} (< 2 points)", ticker);
             }
             Err(e) => {
-                tracing::warn!("Failed to fetch price data for {}: {}", ticker, e);
+                warn!("❌ [DOWNSIDE_RISK] Failed to fetch price data for {}: {}", ticker, e);
             }
         }
     }
 
+    info!("📊 [DOWNSIDE_RISK] Processed all tickers. Positions with downside data: {}", position_downside_risks.len());
+
     if position_downside_risks.is_empty() {
+        warn!("⚠️ [DOWNSIDE_RISK] No positions in portfolio have available downside risk data");
         return Err(AppError::External(
             "No positions in portfolio have available downside risk data".to_string()
         ));
     }
 
     // 4. Create portfolio-level aggregated metrics
+    info!("🔢 [DOWNSIDE_RISK] Computing portfolio-level aggregated metrics...");
     let portfolio_sortino = if sortino_count > 0 {
         Some(weighted_sortino)
     } else {
@@ -1198,12 +1227,17 @@ pub async fn compute_portfolio_downside_risk(
     };
 
     // 5. Sort positions by downside deviation (highest risk first)
+    info!("🔄 [DOWNSIDE_RISK] Sorting positions by downside deviation...");
     position_downside_risks.sort_by(|a, b| {
         b.downside_metrics
             .downside_deviation
             .partial_cmp(&a.downside_metrics.downside_deviation)
             .unwrap()
     });
+
+    info!("✅ [DOWNSIDE_RISK] Downside risk computation COMPLETED for portfolio {}", portfolio_id);
+    info!("📈 [DOWNSIDE_RISK] Portfolio metrics - Downside Dev: {:.4}, Sortino: {:?}, Sharpe: {:?}",
+          weighted_downside_deviation, portfolio_sortino, portfolio_sharpe);
 
     Ok(crate::models::risk::PortfolioDownsideRisk {
         portfolio_id: portfolio_id.to_string(),

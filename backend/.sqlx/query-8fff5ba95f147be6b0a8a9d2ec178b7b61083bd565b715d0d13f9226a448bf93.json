@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO portfolio_optimization_cache (\n            portfolio_id,\n            calculated_at,\n            expires_at,\n            recommendations,\n            risk_free_rate,\n            positions_analyzed,\n            calculation_duration_ms\n        )\n        VALUES ($1, NOW(), $2, $3, $4, $5, $6)\n        ON CONFLICT (portfolio_id) DO UPDATE SET\n            calculated_at = NOW(),\n            expires_at = $2,\n            recommendations = $3,\n            risk_free_rate = $4,\n            positions_analyzed = $5,\n            calculation_duration_ms = $6\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamp",
+        "Jsonb",
+        "Float8",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8fff5ba95f147be6b0a8a9d2ec178b7b61083bd565b715d0d13f9226a448bf93"
+}

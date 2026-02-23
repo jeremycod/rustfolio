@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT calculated_at, expires_at\n            FROM sentiment_signal_cache\n            WHERE ticker = $1\n            ORDER BY calculated_at DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "calculated_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 1,
+        "name": "expires_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1ac90be02638f6160deb2d50a4863a69ef9528ba263c83ba2ef520b4175af655"
+}

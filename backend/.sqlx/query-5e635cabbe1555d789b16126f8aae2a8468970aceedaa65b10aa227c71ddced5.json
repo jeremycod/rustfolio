@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(SUM(hs.quantity * pp.close_price), 0) as \"total_value!\"\n            FROM holdings_snapshots hs\n            JOIN accounts a ON hs.account_id = a.id\n            LEFT JOIN price_points pp ON pp.ticker = hs.ticker\n                AND pp.date = (\n                    SELECT MAX(date) FROM price_points WHERE ticker = hs.ticker\n                )\n            WHERE a.portfolio_id = $1\n              AND hs.quantity > 0\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_value!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5e635cabbe1555d789b16126f8aae2a8468970aceedaa65b10aa227c71ddced5"
+}

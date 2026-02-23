@@ -8,7 +8,7 @@ use crate::errors::AppError;
 use crate::external::price_provider::PriceProvider;
 use crate::models::{
     AdjustedThresholds, CreateMarketRegime, CurrentRegimeWithThresholds, MarketRegime,
-    RegimeDetectionParams, RegimeType,
+    RegimeDetectionParams, RegimeType, RiskPreferences,
 };
 use crate::models::risk::RiskThresholdSettings;
 
@@ -67,6 +67,7 @@ pub async fn detect_current_regime(
 }
 
 /// Simple price point for calculations
+#[allow(dead_code)]
 struct PricePoint {
     date: NaiveDate,
     close: f64,
@@ -225,6 +226,7 @@ pub async fn update_regime_for_date(
 }
 
 /// Get the current market regime with adjusted thresholds
+#[allow(dead_code)]
 pub async fn get_current_regime_with_thresholds(
     pool: &PgPool,
 ) -> Result<CurrentRegimeWithThresholds, AppError> {
@@ -294,6 +296,76 @@ pub async fn calculate_adaptive_thresholds(
     adjusted.var_critical_threshold *= multiplier;
 
     Ok(adjusted)
+}
+
+/// Calculate adaptive thresholds with user preferences applied
+///
+/// This combines market regime adjustments with user risk appetite to create
+/// personalized, context-aware risk thresholds.
+///
+/// # Arguments
+///
+/// * `pool` - Database connection pool
+/// * `base_thresholds` - The unadjusted risk thresholds
+/// * `preferences` - User risk preferences
+///
+/// # Returns
+///
+/// Returns adjusted thresholds based on both market regime and user preferences
+#[allow(dead_code)]
+pub async fn calculate_adaptive_thresholds_with_preferences(
+    pool: &PgPool,
+    base_thresholds: &RiskThresholdSettings,
+    preferences: &RiskPreferences,
+) -> Result<RiskThresholdSettings, AppError> {
+    // First, apply market regime adjustments
+    let regime_adjusted = calculate_adaptive_thresholds(pool, base_thresholds).await?;
+
+    // Then, apply user risk appetite multiplier
+    let user_multiplier = preferences.risk_threshold_multiplier();
+
+    let mut final_adjusted = regime_adjusted;
+    final_adjusted.volatility_warning_threshold *= user_multiplier;
+    final_adjusted.volatility_critical_threshold *= user_multiplier;
+    final_adjusted.drawdown_warning_threshold *= user_multiplier;
+    final_adjusted.drawdown_critical_threshold *= user_multiplier;
+    final_adjusted.beta_warning_threshold *= user_multiplier;
+    final_adjusted.beta_critical_threshold *= user_multiplier;
+    final_adjusted.risk_score_warning_threshold *= user_multiplier;
+    final_adjusted.risk_score_critical_threshold *= user_multiplier;
+    final_adjusted.var_warning_threshold *= user_multiplier;
+    final_adjusted.var_critical_threshold *= user_multiplier;
+
+    Ok(final_adjusted)
+}
+
+/// Get current regime with thresholds adjusted for user preferences
+#[allow(dead_code)]
+pub async fn get_regime_with_user_thresholds(
+    pool: &PgPool,
+    preferences: &RiskPreferences,
+) -> Result<CurrentRegimeWithThresholds, AppError> {
+    let regime = market_regime_queries::get_current_regime(pool)
+        .await
+        .map_err(AppError::Db)?;
+
+    let regime_type = RegimeType::from_string(&regime.regime_type);
+    let mut adjusted_thresholds = AdjustedThresholds::from_regime_type(&regime_type);
+
+    // Apply user risk appetite multiplier to the overall multiplier
+    let user_multiplier = preferences.risk_threshold_multiplier();
+    let combined_multiplier = adjusted_thresholds.multiplier * user_multiplier;
+
+    adjusted_thresholds.multiplier = combined_multiplier;
+    adjusted_thresholds.example_volatility_warning *= user_multiplier;
+    adjusted_thresholds.example_volatility_critical *= user_multiplier;
+    adjusted_thresholds.example_drawdown_warning *= user_multiplier;
+    adjusted_thresholds.example_drawdown_critical *= user_multiplier;
+
+    Ok(CurrentRegimeWithThresholds {
+        regime,
+        adjusted_thresholds,
+    })
 }
 
 #[cfg(test)]

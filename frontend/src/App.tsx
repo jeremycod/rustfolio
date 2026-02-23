@@ -19,6 +19,13 @@ import { usePreferences } from "./contexts/PreferencesContext";
 import NotificationsPage from "./components/NotificationsPage";
 import AlertRulesPage from "./components/AlertRulesPage";
 import AlertHistoryPage from "./components/AlertHistoryPage";
+// Phase 1 & 2 components
+import { CVaRAnalysis } from "./components/CVaRAnalysis";
+import { DownsideRiskAnalysis } from "./components/DownsideRiskAnalysis";
+import { MarketRegimePage } from "./components/MarketRegimePage";
+import { VolatilityForecasting } from "./components/VolatilityForecasting";
+import { TradingSignalsPage } from "./components/TradingSignalsPage";
+import { SentimentForecasting } from "./components/SentimentForecasting";
 
 export default function App() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
@@ -128,6 +135,21 @@ export default function App() {
                 return <AlertRulesPage />;
             case 'alert-history':
                 return <AlertHistoryPage />;
+            // Phase 1 features
+            case 'cvar':
+                return <CVaRAnalysis selectedPortfolioId={selectedPortfolioId} />;
+            case 'downside-risk':
+                return selectedPortfolioId ?
+                    <DownsideRiskAnalysis portfolioId={selectedPortfolioId} /> : null;
+            case 'market-regime':
+                return <MarketRegimePage />;
+            // Phase 2 features
+            case 'volatility-forecast':
+                return <VolatilityForecasting />;
+            case 'trading-signals':
+                return <TradingSignalsPage />;
+            case 'sentiment-forecast':
+                return <SentimentForecasting />;
             default:
                 return (
                     <Dashboard

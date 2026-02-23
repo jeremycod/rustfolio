@@ -62,7 +62,7 @@ use uuid::Uuid;
 const DEFAULT_DAYS: i64 = 90;
 const DEFAULT_BENCHMARK: &str = "SPY";
 const CACHE_EXPIRATION_HOURS: i64 = 4;
-const PORTFOLIO_TIMEOUT_SECONDS: u64 = 60;
+const PORTFOLIO_TIMEOUT_SECONDS: u64 = 300; // Increased from 60 to 300 seconds (5 minutes)
 const INTER_PORTFOLIO_DELAY_MS: u64 = 1000;
 
 /// Main entry point for the portfolio risk calculation job.
@@ -848,7 +848,7 @@ mod tests {
         assert_eq!(DEFAULT_DAYS, 90);
         assert_eq!(DEFAULT_BENCHMARK, "SPY");
         assert_eq!(CACHE_EXPIRATION_HOURS, 4);
-        assert_eq!(PORTFOLIO_TIMEOUT_SECONDS, 60);
+        assert_eq!(PORTFOLIO_TIMEOUT_SECONDS, 300);
         assert_eq!(INTER_PORTFOLIO_DELAY_MS, 1000);
     }
 }

@@ -24,8 +24,9 @@ import {
   Snackbar,
   Tabs,
   Tab,
+  IconButton,
 } from '@mui/material';
-import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera, Settings, Download, Warning, ErrorOutline, Psychology, Timeline, AutoAwesome, TipsAndUpdates, Refresh, Newspaper, QuestionAnswer } from '@mui/icons-material';
+import { TrendingUp, TrendingDown, ShowChart, Assessment, Camera, Settings, Download, Warning, ErrorOutline, Psychology, Timeline, AutoAwesome, TipsAndUpdates, Refresh, Newspaper, QuestionAnswer, HelpOutline } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPortfolioRisk, listPortfolios, createRiskSnapshot, exportPortfolioRiskCSV } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
@@ -37,6 +38,7 @@ import { OptimizationRecommendations } from './OptimizationRecommendations';
 import PortfolioNarrative from './PortfolioNarrative';
 import PortfolioNews from './PortfolioNews';
 import PortfolioQA from './PortfolioQA';
+import { MetricHelpDialog } from './MetricHelpDialog';
 
 interface PortfolioRiskOverviewProps {
   selectedPortfolioId: string | null;
@@ -55,6 +57,67 @@ function TabPanel({ children, value, index }: TabPanelProps) {
     <div role="tabpanel" hidden={value !== index}>
       {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
     </div>
+  );
+}
+
+interface StatCardProps {
+  label: string;
+  value: string;
+  subValue?: string;
+  color?: string;
+  helpKey?: string;
+}
+
+function StatCard({ label, value, subValue, color = 'inherit', helpKey }: StatCardProps) {
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  return (
+    <>
+      <Card>
+        <CardContent>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+            <Typography color="textSecondary" variant="body2">
+              {label}
+            </Typography>
+            {helpKey && (
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHelpOpen(true);
+                }}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
+          <Typography variant="h5" fontWeight="bold" color={color}>
+            {value}
+          </Typography>
+          {subValue && (
+            <Typography variant="caption" color="textSecondary">
+              {subValue}
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+
+      {helpKey && (
+        <MetricHelpDialog
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          metricKey={helpKey}
+        />
+      )}
+    </>
   );
 }
 
@@ -392,67 +455,40 @@ export function PortfolioRiskOverview({
           {/* Portfolio-Wide Metrics */}
           <Grid container spacing={3} sx={{ mb: 3 }}>
             <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" variant="body2" gutterBottom>
-                    Portfolio Volatility
-                  </Typography>
-                  <Typography variant="h5" fontWeight="bold">
-                    {riskData.portfolio_volatility.toFixed(2)}%
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    Annualized standard deviation
-                  </Typography>
-                </CardContent>
-              </Card>
+              <StatCard
+                label="Portfolio Volatility"
+                value={`${riskData.portfolio_volatility.toFixed(2)}%`}
+                subValue="Annualized standard deviation"
+                helpKey="volatility"
+              />
             </Grid>
 
             <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" variant="body2" gutterBottom>
-                    Maximum Drawdown
-                  </Typography>
-                  <Typography variant="h5" fontWeight="bold" color="error">
-                    {riskData.portfolio_max_drawdown.toFixed(2)}%
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    Worst peak-to-trough decline
-                  </Typography>
-                </CardContent>
-              </Card>
+              <StatCard
+                label="Maximum Drawdown"
+                value={`${riskData.portfolio_max_drawdown.toFixed(2)}%`}
+                subValue="Worst peak-to-trough decline"
+                color="error"
+                helpKey="max_drawdown"
+              />
             </Grid>
 
             <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" variant="body2" gutterBottom>
-                    Portfolio Beta
-                  </Typography>
-                  <Typography variant="h5" fontWeight="bold">
-                    {riskData.portfolio_beta?.toFixed(2) ?? 'N/A'}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    vs SPY benchmark
-                  </Typography>
-                </CardContent>
-              </Card>
+              <StatCard
+                label="Portfolio Beta"
+                value={riskData.portfolio_beta?.toFixed(2) ?? 'N/A'}
+                subValue="vs SPY benchmark"
+                helpKey="beta"
+              />
             </Grid>
 
             <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" variant="body2" gutterBottom>
-                    Sharpe Ratio
-                  </Typography>
-                  <Typography variant="h5" fontWeight="bold">
-                    {riskData.portfolio_sharpe?.toFixed(2) ?? 'N/A'}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    Risk-adjusted return
-                  </Typography>
-                </CardContent>
-              </Card>
+              <StatCard
+                label="Sharpe Ratio"
+                value={riskData.portfolio_sharpe?.toFixed(2) ?? 'N/A'}
+                subValue="Risk-adjusted return"
+                helpKey="sharpe_ratio"
+              />
             </Grid>
           </Grid>
 

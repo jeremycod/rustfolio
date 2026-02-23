@@ -11,7 +11,7 @@ import {
     Stack,
     Grid,
     Paper,
-    Tooltip,
+    IconButton,
 } from '@mui/material';
 import {
     TrendingUp,
@@ -21,7 +21,9 @@ import {
     CheckCircle,
     Error,
     Info,
+    HelpOutline,
 } from '@mui/icons-material';
+import { MetricHelpDialog } from './MetricHelpDialog';
 import {
     LineChart,
     Line,
@@ -39,6 +41,56 @@ import type { SentimentSignal, SentimentTrend, MomentumTrend, DivergenceType } f
 
 interface SentimentDashboardProps {
     ticker: string;
+}
+
+interface SentimentMetricCardProps {
+    label: string;
+    value: React.ReactNode;
+    helpKey?: string;
+}
+
+function SentimentMetricCard({ label, value, helpKey }: SentimentMetricCardProps) {
+    const [helpOpen, setHelpOpen] = useState(false);
+
+    return (
+        <>
+            <Paper elevation={1} sx={{ p: 2, textAlign: 'center', position: 'relative' }}>
+                <Box display="flex" alignItems="center" justifyContent="center" gap={0.5}>
+                    <Typography variant="caption" color="text.secondary">
+                        {label}
+                    </Typography>
+                    {helpKey && (
+                        <IconButton
+                            size="small"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setHelpOpen(true);
+                            }}
+                            sx={{
+                                p: 0.5,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                    color: 'primary.main',
+                                    backgroundColor: 'primary.50',
+                                },
+                            }}
+                        >
+                            <HelpOutline sx={{ fontSize: 14 }} />
+                        </IconButton>
+                    )}
+                </Box>
+                {value}
+            </Paper>
+
+            {helpKey && (
+                <MetricHelpDialog
+                    open={helpOpen}
+                    onClose={() => setHelpOpen(false)}
+                    metricKey={helpKey}
+                />
+            )}
+        </>
+    );
 }
 
 export function SentimentDashboard({ ticker }: SentimentDashboardProps) {
@@ -125,62 +177,68 @@ export function SentimentDashboard({ ticker }: SentimentDashboardProps) {
                 <Grid container spacing={2} mb={3}>
                     {/* Sentiment Score */}
                     <Grid item xs={12} md={3}>
-                        <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-                            <Typography variant="caption" color="text.secondary">
-                                Current Sentiment
-                            </Typography>
-                            <Typography variant="h4" color={getSentimentColor(signal.current_sentiment)}>
-                                {signal.current_sentiment.toFixed(2)}
-                            </Typography>
-                            <Typography variant="caption">
-                                {getSentimentLabel(signal.current_sentiment)}
-                            </Typography>
-                        </Paper>
+                        <SentimentMetricCard
+                            label="Current Sentiment"
+                            value={
+                                <>
+                                    <Typography variant="h4" color={getSentimentColor(signal.current_sentiment)}>
+                                        {signal.current_sentiment.toFixed(2)}
+                                    </Typography>
+                                    <Typography variant="caption">
+                                        {getSentimentLabel(signal.current_sentiment)}
+                                    </Typography>
+                                </>
+                            }
+                            helpKey="sentiment_score"
+                        />
                     </Grid>
 
                     {/* Sentiment Trend */}
                     <Grid item xs={12} md={3}>
-                        <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-                            <Typography variant="caption" color="text.secondary">
-                                Sentiment Trend
-                            </Typography>
-                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', my: 1 }}>
-                                {getTrendIcon(signal.sentiment_trend)}
-                                <Typography variant="h6" sx={{ ml: 1 }}>
-                                    {signal.sentiment_trend}
-                                </Typography>
-                            </Box>
-                        </Paper>
+                        <SentimentMetricCard
+                            label="Sentiment Trend"
+                            value={
+                                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', my: 1 }}>
+                                    {getTrendIcon(signal.sentiment_trend)}
+                                    <Typography variant="h6" sx={{ ml: 1 }}>
+                                        {signal.sentiment_trend}
+                                    </Typography>
+                                </Box>
+                            }
+                            helpKey="sentiment_trend"
+                        />
                     </Grid>
 
                     {/* Momentum Trend */}
                     <Grid item xs={12} md={3}>
-                        <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-                            <Typography variant="caption" color="text.secondary">
-                                Price Momentum
-                            </Typography>
-                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', my: 1 }}>
-                                {getMomentumIcon(signal.momentum_trend)}
-                                <Typography variant="h6" sx={{ ml: 1 }}>
-                                    {signal.momentum_trend}
-                                </Typography>
-                            </Box>
-                        </Paper>
+                        <SentimentMetricCard
+                            label="Price Momentum"
+                            value={
+                                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', my: 1 }}>
+                                    {getMomentumIcon(signal.momentum_trend)}
+                                    <Typography variant="h6" sx={{ ml: 1 }}>
+                                        {signal.momentum_trend}
+                                    </Typography>
+                                </Box>
+                            }
+                            helpKey="price_momentum"
+                        />
                     </Grid>
 
                     {/* Divergence */}
                     <Grid item xs={12} md={3}>
-                        <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-                            <Typography variant="caption" color="text.secondary">
-                                Divergence Signal
-                            </Typography>
-                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', my: 1 }}>
-                                {getDivergenceIcon(signal.divergence)}
-                                <Typography variant="h6" sx={{ ml: 1 }}>
-                                    {signal.divergence}
-                                </Typography>
-                            </Box>
-                        </Paper>
+                        <SentimentMetricCard
+                            label="Divergence Signal"
+                            value={
+                                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', my: 1 }}>
+                                    {getDivergenceIcon(signal.divergence)}
+                                    <Typography variant="h6" sx={{ ml: 1 }}>
+                                        {signal.divergence}
+                                    </Typography>
+                                </Box>
+                            }
+                            helpKey="divergence_signal"
+                        />
                     </Grid>
                 </Grid>
 

@@ -1,3 +1,5 @@
+// Enhanced market regime routes with HMM support
+
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -5,9 +7,13 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use bigdecimal::ToPrimitive;
+use serde::Serialize;
+use tracing::warn;
 
-use crate::models::RegimeHistoryParams;
-use crate::services::market_regime_service;
+use crate::db::{hmm_queries, market_regime_queries};
+use crate::models::hmm_regime::{RegimeForecastParams, StateProbabilities};
+use crate::models::{RegimeHistoryParams, RegimeType};
 use crate::state::AppState;
 
 // ==============================================================================
@@ -16,8 +22,24 @@ use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/market/regime", get(get_current_regime))
+        .route("/market/regime", get(get_current_regime_enhanced))
         .route("/market/regime/history", get(get_regime_history))
+        .route("/market/regime/forecast", get(get_regime_forecast))
+}
+
+// ==============================================================================
+// Response Types
+// ==============================================================================
+
+#[derive(Debug, Serialize)]
+struct CurrentRegimeResponse {
+    regime_type: String,
+    confidence: f64,
+    volatility_level: f64,
+    market_return: Option<f64>,
+    benchmark_ticker: String,
+    threshold_multiplier: f64,
+    date: String,
 }
 
 // ==============================================================================
@@ -26,100 +48,149 @@ pub fn router() -> Router<AppState> {
 
 /// GET /api/market/regime
 ///
-/// Get the current market regime with adjusted risk thresholds.
-///
-/// This endpoint returns the most recent regime classification along with
-/// the threshold multipliers that should be applied to risk alerts.
-///
-/// # Response
-///
-/// Returns a `CurrentRegimeWithThresholds` object containing:
-/// - Current regime details (type, volatility, confidence)
-/// - Adjusted threshold information with examples
-///
-/// # Example
-///
-/// ```json
-/// {
-///   "regime": {
-///     "id": "...",
-///     "date": "2026-02-22",
-///     "regime_type": "bull",
-///     "volatility_level": 15.5,
-///     "market_return": 5.2,
-///     "confidence": 85.0,
-///     "benchmark_ticker": "SPY",
-///     "threshold_multiplier": 0.8
-///   },
-///   "adjusted_thresholds": {
-///     "multiplier": 0.8,
-///     "description": "Stricter thresholds to catch early risk signals",
-///     "example_volatility_warning": 24.0,
-///     "example_volatility_critical": 40.0
-///   }
-/// }
-/// ```
-async fn get_current_regime(State(state): State<AppState>) -> impl IntoResponse {
-    match market_regime_service::get_current_regime_with_thresholds(&state.pool).await {
-        Ok(regime) => (StatusCode::OK, Json(regime)).into_response(),
+/// Get current market regime
+async fn get_current_regime_enhanced(State(state): State<AppState>) -> impl IntoResponse {
+    // Get current regime from database
+    let regime = match market_regime_queries::get_current_regime(&state.pool).await {
+        Ok(r) => r,
         Err(e) => {
             tracing::error!("Failed to get current regime: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to retrieve market regime"
+                })),
+            )
+                .into_response();
         }
-    }
+    };
+
+    // Build response
+    let regime_type = RegimeType::from_string(&regime.regime_type);
+    let threshold_multiplier = regime_type.threshold_multiplier();
+
+    let response = CurrentRegimeResponse {
+        date: regime.date.to_string(),
+        regime_type: regime.regime_type.clone(),
+        confidence: regime.confidence.to_f64().unwrap_or(0.0),
+        volatility_level: regime.volatility_level.to_f64().unwrap_or(0.0),
+        market_return: regime.market_return.and_then(|r| r.to_f64()),
+        benchmark_ticker: regime.benchmark_ticker.clone(),
+        threshold_multiplier,
+    };
+
+    (StatusCode::OK, Json(response)).into_response()
 }
 
 /// GET /api/market/regime/history?days=90
 ///
-/// Get historical market regime classifications.
-///
-/// This endpoint returns a time series of market regimes over a specified
-/// period, useful for analyzing regime changes and their impact on portfolios.
-///
-/// # Query Parameters
-///
-/// - `days` (optional): Number of days to look back (default: 90)
-///
-/// # Response
-///
-/// Returns an array of `MarketRegime` objects, ordered by date (most recent first).
-///
-/// # Example
-///
-/// ```json
-/// [
-///   {
-///     "id": "...",
-///     "date": "2026-02-22",
-///     "regime_type": "bull",
-///     "volatility_level": 15.5,
-///     "market_return": 5.2,
-///     "confidence": 85.0,
-///     "benchmark_ticker": "SPY",
-///     "threshold_multiplier": 0.8
-///   },
-///   {
-///     "id": "...",
-///     "date": "2026-02-21",
-///     "regime_type": "normal",
-///     "volatility_level": 18.0,
-///     "market_return": 2.1,
-///     "confidence": 70.0,
-///     "benchmark_ticker": "SPY",
-///     "threshold_multiplier": 1.0
-///   }
-/// ]
-/// ```
+/// Historical regime data
 async fn get_regime_history(
     State(state): State<AppState>,
     Query(params): Query<RegimeHistoryParams>,
 ) -> impl IntoResponse {
-    match market_regime_service::get_regime_history(&state.pool, params.days).await {
+    match crate::services::market_regime_service::get_regime_history(&state.pool, params.days).await
+    {
         Ok(history) => (StatusCode::OK, Json(history)).into_response(),
         Err(e) => {
             tracing::error!("Failed to get regime history: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
         }
+    }
+}
+
+/// GET /api/market/regime/forecast?days=10
+///
+/// Forecast regime N days ahead using HMM
+async fn get_regime_forecast(
+    State(state): State<AppState>,
+    Query(params): Query<RegimeForecastParams>,
+) -> impl IntoResponse {
+    let validated_params = params.validated();
+    let max_days = validated_params.days;
+
+    // Collect forecasts for each day from 1 to max_days
+    let mut forecasts = Vec::new();
+
+    for day in 1..=max_days {
+        match hmm_queries::get_latest_regime_forecast(&state.pool, day).await {
+            Ok(forecast_record) => {
+                // Parse probabilities from JSONB
+                let regime_probs = parse_regime_probabilities(&forecast_record.regime_probabilities.0);
+
+                // Convert confidence string to number
+                let confidence_num = match forecast_record.confidence_level.as_str() {
+                    "high" => 0.8,
+                    "medium" => 0.6,
+                    "low" => 0.4,
+                    _ => 0.5,
+                };
+
+                let forecast = serde_json::json!({
+                    "days_ahead": forecast_record.horizon_days,
+                    "predicted_regime": forecast_record.predicted_regime,
+                    "confidence": confidence_num,
+                    "state_probabilities": regime_probs,
+                    "transition_probability": forecast_record.transition_probability.to_f64().unwrap_or(0.0)
+                });
+
+                forecasts.push(forecast);
+            }
+            Err(_) => {
+                // Skip missing forecasts but continue with others
+                continue;
+            }
+        }
+    }
+
+    if forecasts.is_empty() {
+        // No cached forecast available for any horizon
+        warn!(
+            "No cached forecast available for up to {} days horizon",
+            max_days
+        );
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "No forecast available for this horizon",
+                "message": "Forecasts are generated daily. Please try again later or use a different horizon (5, 10, or 30 days)."
+            })),
+        )
+            .into_response();
+    }
+
+    // Return response with forecasts array
+    let response = serde_json::json!({
+        "forecasts": forecasts
+    });
+
+    (StatusCode::OK, Json(response)).into_response()
+}
+
+// ==============================================================================
+// Helper Functions
+// ==============================================================================
+
+/// Parse regime probabilities from JSONB value
+fn parse_regime_probabilities(json: &serde_json::Value) -> StateProbabilities {
+    let map = json.as_object().unwrap();
+    StateProbabilities {
+        bull: map
+            .get("bull")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.25),
+        bear: map
+            .get("bear")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.25),
+        high_volatility: map
+            .get("high_volatility")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.25),
+        normal: map
+            .get("normal")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.25),
     }
 }
 
