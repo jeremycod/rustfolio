@@ -12,6 +12,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_jobs))
         .route("/runs/recent", get(recent_job_runs))
+        .route("/trigger-all", post(trigger_all_jobs))
         .route("/:job_name/history", get(job_history))
         .route("/:job_name/stats", get(job_stats))
         .route("/:job_name/trigger", post(trigger_job))
@@ -495,4 +496,190 @@ async fn trigger_job(
             }))
         }
     }
+}
+
+#[derive(Serialize)]
+struct TriggerAllJobsResponse {
+    total_jobs: usize,
+    successful: usize,
+    failed: usize,
+    job_results: Vec<TriggerJobResponse>,
+    total_duration_ms: i64,
+}
+
+/// POST /api/admin/jobs/trigger-all - Trigger all critical cache population jobs
+async fn trigger_all_jobs(
+    State(state): State<AppState>,
+) -> Result<Json<TriggerAllJobsResponse>, AppError> {
+    info!("🚀 Manual trigger requested for ALL jobs");
+    let overall_start = chrono::Utc::now();
+
+    // Define critical jobs to run in sequence (order matters for dependencies)
+    let jobs_to_run = vec![
+        "refresh_prices",                    // Get latest prices first
+        "calculate_portfolio_risks",         // Calculate risk metrics
+        "populate_downside_risk_cache",      // Downside risk analysis
+        "calculate_portfolio_correlations",  // Correlation analysis
+        "populate_rolling_beta_cache",       // Beta calculations
+        "update_market_regime",              // Market regime detection
+        "generate_regime_forecasts",         // Regime forecasts (requires trained HMM)
+        "populate_optimization_cache",       // Portfolio optimization
+        "create_daily_risk_snapshots",       // Risk snapshots
+    ];
+
+    info!("📋 Will execute {} jobs in sequence", jobs_to_run.len());
+
+    // Create job context from AppState
+    let job_context = crate::services::job_scheduler_service::JobContext {
+        pool: Arc::new(state.pool.clone()),
+        price_provider: state.price_provider.clone(),
+        failure_cache: Arc::new(state.failure_cache.clone()),
+        rate_limiter: state.rate_limiter.clone(),
+    };
+
+    let mut job_results = Vec::new();
+    let mut successful = 0;
+    let mut failed = 0;
+
+    // Execute each job in sequence
+    for job_name in jobs_to_run.iter() {
+        info!("⏳ Executing job: {}", job_name);
+        let job_start = chrono::Utc::now();
+
+        // Record job start
+        let job_id = sqlx::query!(
+            r#"
+            INSERT INTO job_runs (job_name, status)
+            VALUES ($1, 'running'::job_status)
+            RETURNING id
+            "#,
+            job_name
+        )
+        .fetch_one(&state.pool)
+        .await?
+        .id;
+
+        // Execute the job
+        let result = match *job_name {
+            "refresh_prices" => {
+                crate::services::job_scheduler_service::refresh_all_prices(job_context.clone()).await
+            }
+            "calculate_portfolio_risks" => {
+                crate::jobs::portfolio_risk_job::calculate_all_portfolio_risks(job_context.clone()).await
+            }
+            "populate_downside_risk_cache" => {
+                crate::jobs::downside_risk_cache_job::populate_downside_risk_caches(job_context.clone()).await
+            }
+            "calculate_portfolio_correlations" => {
+                crate::jobs::portfolio_correlations_job::calculate_all_portfolio_correlations(job_context.clone()).await
+            }
+            "populate_rolling_beta_cache" => {
+                crate::jobs::rolling_beta_cache_job::populate_rolling_beta_caches(job_context.clone()).await
+            }
+            "update_market_regime" => {
+                crate::jobs::market_regime_update_job::update_market_regime(job_context.clone()).await
+            }
+            "generate_regime_forecasts" => {
+                crate::jobs::regime_forecast_job::generate_all_regime_forecasts(job_context.clone()).await
+            }
+            "populate_optimization_cache" => {
+                crate::jobs::populate_optimization_cache_job::populate_all_optimization_caches(job_context.clone()).await
+            }
+            "create_daily_risk_snapshots" => {
+                crate::jobs::daily_risk_snapshots_job::create_all_daily_risk_snapshots(job_context.clone()).await
+            }
+            _ => {
+                error!("Unknown job: {}", job_name);
+                Err(AppError::External(format!("Unknown job: {}", job_name)))
+            }
+        };
+
+        let duration_ms = (chrono::Utc::now() - job_start).num_milliseconds();
+
+        // Process result and update database
+        let job_response = match result {
+            Ok(job_result) => {
+                successful += 1;
+                info!("✅ {} completed successfully ({}ms)", job_name, duration_ms);
+
+                sqlx::query!(
+                    r#"
+                    UPDATE job_runs
+                    SET completed_at = NOW(),
+                        status = 'success'::job_status,
+                        items_processed = $2,
+                        items_failed = $3,
+                        duration_ms = $4
+                    WHERE id = $1
+                    "#,
+                    job_id,
+                    job_result.items_processed,
+                    job_result.items_failed,
+                    duration_ms
+                )
+                .execute(&state.pool)
+                .await?;
+
+                TriggerJobResponse {
+                    job_name: job_name.to_string(),
+                    status: "success".to_string(),
+                    message: format!("Processed {} items", job_result.items_processed),
+                    job_id: Some(job_id),
+                    items_processed: Some(job_result.items_processed),
+                    items_failed: Some(job_result.items_failed),
+                    duration_ms: Some(duration_ms),
+                    error_message: None,
+                }
+            }
+            Err(e) => {
+                failed += 1;
+                let error_msg = e.to_string();
+                error!("❌ {} failed: {} ({}ms)", job_name, error_msg, duration_ms);
+
+                sqlx::query!(
+                    r#"
+                    UPDATE job_runs
+                    SET completed_at = NOW(),
+                        status = 'failed'::job_status,
+                        error_message = $2,
+                        duration_ms = $3
+                    WHERE id = $1
+                    "#,
+                    job_id,
+                    error_msg,
+                    duration_ms
+                )
+                .execute(&state.pool)
+                .await?;
+
+                TriggerJobResponse {
+                    job_name: job_name.to_string(),
+                    status: "failed".to_string(),
+                    message: "Job execution failed".to_string(),
+                    job_id: Some(job_id),
+                    items_processed: None,
+                    items_failed: None,
+                    duration_ms: Some(duration_ms),
+                    error_message: Some(error_msg),
+                }
+            }
+        };
+
+        job_results.push(job_response);
+    }
+
+    let total_duration_ms = (chrono::Utc::now() - overall_start).num_milliseconds();
+
+    info!(
+        "🏁 All jobs completed: {} successful, {} failed, total duration: {}s",
+        successful, failed, total_duration_ms / 1000
+    );
+
+    Ok(Json(TriggerAllJobsResponse {
+        total_jobs: jobs_to_run.len(),
+        successful,
+        failed,
+        job_results,
+        total_duration_ms,
+    }))
 }

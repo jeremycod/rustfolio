@@ -38,6 +38,7 @@ import {
   listJobs,
   getRecentJobRuns,
   triggerJob,
+  triggerAllJobs,
   getCacheHealth,
 } from '../lib/endpoints';
 import type { JobStatus, CacheHealthLevel } from '../types';
@@ -185,6 +186,56 @@ export function AdminDashboard() {
     triggerJobMutation.mutate(jobName);
   };
 
+  // Mutation for triggering all jobs
+  const triggerAllJobsMutation = useMutation({
+    mutationFn: triggerAllJobs,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-recent-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-cache-health'] });
+
+      const { successful, failed, total_jobs, total_duration_ms } = response;
+      const durationSec = (total_duration_ms / 1000).toFixed(1);
+
+      if (failed === 0) {
+        setSnackbarMessage(`✅ All ${total_jobs} jobs completed successfully in ${durationSec}s`);
+        setSnackbarSeverity('success');
+      } else if (successful > 0) {
+        setSnackbarMessage(`⚠️ ${successful} jobs succeeded, ${failed} failed in ${durationSec}s`);
+        setSnackbarSeverity('warning');
+      } else {
+        setSnackbarMessage(`❌ All jobs failed in ${durationSec}s`);
+        setSnackbarSeverity('error');
+      }
+      setSnackbarOpen(true);
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
+      setSnackbarMessage(`❌ Failed to trigger jobs: ${errorMsg}`);
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    },
+  });
+
+  const handleTriggerAllJobs = () => {
+    if (window.confirm(
+      'This will run all cache population jobs sequentially.\n\n' +
+      'Jobs included:\n' +
+      '• Refresh Prices\n' +
+      '• Calculate Portfolio Risks\n' +
+      '• Downside Risk Cache\n' +
+      '• Portfolio Correlations\n' +
+      '• Rolling Beta Cache\n' +
+      '• Market Regime Update\n' +
+      '• Regime Forecasts\n' +
+      '• Optimization Cache\n' +
+      '• Daily Risk Snapshots\n\n' +
+      'This may take several minutes. Continue?'
+    )) {
+      triggerAllJobsMutation.mutate();
+    }
+  };
+
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['admin-jobs'] });
     queryClient.invalidateQueries({ queryKey: ['admin-recent-runs'] });
@@ -195,11 +246,22 @@ export function AdminDashboard() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Admin Dashboard</Typography>
-        <Tooltip title="Refresh all data">
-          <IconButton onClick={handleRefresh} color="primary">
-            <Refresh />
-          </IconButton>
-        </Tooltip>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={triggerAllJobsMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <PlayArrow />}
+            onClick={handleTriggerAllJobs}
+            disabled={triggerAllJobsMutation.isPending}
+          >
+            {triggerAllJobsMutation.isPending ? 'Running All Jobs...' : 'Run All Jobs Now'}
+          </Button>
+          <Tooltip title="Refresh all data">
+            <IconButton onClick={handleRefresh} color="primary">
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
 
       <Paper sx={{ width: '100%' }}>

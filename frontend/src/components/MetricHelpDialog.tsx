@@ -616,6 +616,249 @@ const METRIC_HELP: Record<string, MetricHelp> = {
     example: 'If MAR is set to 2% (risk-free rate), any daily return below 2% annualized contributes to downside deviation. If you set MAR to 0%, only negative returns count as downside.',
     additionalNotes: 'Lower MAR makes the Sortino Ratio and downside deviation more strict (higher downside risk). Higher MAR is more lenient. Most investors use 0% or the current risk-free rate as MAR.',
   },
+  market_regime: {
+    title: 'Market Regime',
+    description: 'Market regimes classify the current market environment into distinct states based on volatility patterns and price behavior. The system uses Hidden Markov Models (HMM) to detect four regimes: Bull (rising prices, moderate volatility), Bear (falling prices, elevated stress), Normal (stable, low volatility), and High Volatility (turbulent, unpredictable).',
+    interpretation: 'Understanding the current regime helps you adjust your risk management strategy. Bull markets allow for more aggressive positioning, while Bear and High Volatility regimes warrant defensive measures. The regime detection combines statistical analysis with machine learning to identify regime shifts before they become obvious.',
+    goodValues: [
+      { label: 'Bull', description: 'Rising prices, positive momentum, moderate vol', color: '#4caf50' },
+      { label: 'Normal', description: 'Stable conditions, low volatility, calm markets', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Bear', description: 'Falling prices, negative sentiment, stress', color: '#ff9800' },
+      { label: 'High Volatility', description: 'Turbulent, large swings, uncertainty', color: '#f44336' },
+    ],
+    example: 'During the 2021 bull market, the regime stayed "Bull" for months with 85%+ confidence. During the COVID crash in March 2020, the system quickly shifted to "High Volatility" regime, signaling extreme risk.',
+    additionalNotes: 'Regimes persist for weeks or months—they don\'t change daily. When regime confidence is low (below 70%), the market may be transitioning between states. Risk thresholds automatically adjust based on the detected regime.',
+  },
+  regime_confidence: {
+    title: 'Regime Detection Confidence',
+    description: 'The confidence level (0-100%) that the detected market regime is correct. This is calculated by the Hidden Markov Model based on how well current market behavior matches the expected patterns for each regime type. High confidence means the current data strongly supports the identified regime.',
+    interpretation: 'Confidence tells you how certain the model is about the regime classification. Above 80% is very confident—the market clearly exhibits the regime\'s characteristics. Between 60-80% is moderate confidence—the regime is likely but not definitive. Below 60% suggests regime uncertainty or potential transition.',
+    goodValues: [
+      { label: '> 80%', description: 'Very confident (clear regime signals)', color: '#4caf50' },
+      { label: '70-80%', description: 'Confident (solid regime identification)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '60-70%', description: 'Moderate (regime may be transitioning)', color: '#ff9800' },
+      { label: '< 60%', description: 'Low confidence (uncertain regime)', color: '#f44336' },
+    ],
+    example: 'Bull regime with 92% confidence means market behavior strongly matches historical bull patterns. Bear regime with 55% confidence suggests the market might be transitioning between regimes—exercise caution.',
+    additionalNotes: 'Low confidence often occurs at regime transition points—when markets shift from Bull to Bear or vice versa. During these periods, use additional indicators and be more conservative with risk.',
+  },
+  volatility_level: {
+    title: 'Volatility Level (Market)',
+    description: 'The current annualized volatility of the overall market, measured using a rolling window of recent returns. This represents how much the market index (e.g., S&P 500) is fluctuating. It\'s a key input for regime detection—stable volatility suggests Normal regimes, while spikes indicate High Volatility or Bear regimes.',
+    interpretation: 'Market volatility sets the context for your portfolio risk. When market volatility is high (>25%), even conservative portfolios experience larger swings. When it\'s low (<15%), markets are calm and predictable. Your portfolio risk should be interpreted relative to market conditions.',
+    goodValues: [
+      { label: '< 12%', description: 'Very calm market (low risk environment)', color: '#4caf50' },
+      { label: '12-18%', description: 'Normal market (typical conditions)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '18-30%', description: 'Elevated market stress (caution)', color: '#ff9800' },
+      { label: '> 30%', description: 'Very high market turbulence (crisis)', color: '#f44336' },
+    ],
+    example: 'During calm periods like 2017, market volatility stayed around 10-12%. During the 2020 COVID crash, it spiked to 60-80%. The long-term average is about 15-18%.',
+    additionalNotes: 'Market volatility tends to mean-revert—extremely high volatility rarely persists. Use this metric to gauge whether current market conditions are normal or exceptional. Portfolio risk metrics are more meaningful when viewed in context of market volatility.',
+  },
+  threshold_multiplier: {
+    title: 'Risk Threshold Multiplier',
+    description: 'A dynamic adjustment factor applied to risk thresholds based on the current market regime. In Bull/Normal regimes, the multiplier may tighten thresholds (< 1.0) to detect elevated risk earlier. In Bear/High Volatility regimes, it relaxes thresholds (> 1.0) to avoid false alarms, since higher volatility is expected.',
+    interpretation: 'This multiplier helps provide regime-aware risk assessment. A 0.8x multiplier in a Bull market means the system is more sensitive—flagging risk earlier because volatility should be low. A 1.5x multiplier in a Bear market means higher tolerance—accepting that volatility is naturally elevated during stress.',
+    goodValues: [
+      { label: '0.7-0.9x', description: 'Tightened thresholds (sensitive detection)', color: '#4caf50' },
+      { label: '0.9-1.1x', description: 'Standard thresholds (normal sensitivity)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '1.1-1.5x', description: 'Relaxed thresholds (crisis mode)', color: '#ff9800' },
+      { label: '> 1.5x', description: 'Very relaxed (extreme market stress)', color: '#f44336' },
+    ],
+    example: 'In a Bull market with 0.85x multiplier, a base volatility threshold of 30% becomes 25.5% (30% × 0.85). In a Bear market with 1.4x multiplier, the same threshold becomes 42% (30% × 1.4), recognizing elevated volatility is normal.',
+    formula: 'Adjusted_Threshold = Base_Threshold × Multiplier',
+    additionalNotes: 'The multiplier prevents "crying wolf" during known volatile regimes while maintaining sensitivity during calm periods. It makes risk assessments context-aware and more actionable.',
+  },
+  hmm_probabilities: {
+    title: 'HMM State Probabilities',
+    description: 'Hidden Markov Model (HMM) probabilities represent the likelihood that the market is currently in each of the four possible regimes: Bull, Normal, Bear, and High Volatility. The probabilities sum to 100%. The regime with the highest probability is selected as the current regime.',
+    interpretation: 'These probabilities reveal the model\'s confidence distribution across all regimes. If one regime has 85% and others have low probabilities, the model is very certain. If probabilities are split (e.g., 45% Bull, 40% Normal), the market is in a transitional or ambiguous state.',
+    goodValues: [
+      { label: 'One clear winner', description: 'One regime >70%, others low (decisive)', color: '#4caf50' },
+      { label: 'Dominant regime', description: 'One regime 60-70%, others moderate', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Split decision', description: 'Two regimes 40-50% each (ambiguous)', color: '#ff9800' },
+      { label: 'Uniform spread', description: 'All regimes 20-30% (very uncertain)', color: '#f44336' },
+    ],
+    example: 'Bull: 82%, Normal: 12%, Bear: 4%, High Vol: 2% indicates a strong bull market. Bull: 48%, Normal: 45%, Bear: 5%, High Vol: 2% suggests the market is between Bull and Normal—unclear regime.',
+    additionalNotes: 'Watch for probability shifts over time—a rising Bear probability might signal an upcoming regime change. The HMM uses historical market patterns and volatility to calculate these probabilities.',
+  },
+  predicted_regime: {
+    title: 'Predicted Market Regime',
+    description: 'The forecasted market regime for a future time horizon (5, 10, or 30 days ahead). The prediction is made by the Hidden Markov Model using transition probabilities—the likelihood of moving from the current regime to another regime over time.',
+    interpretation: 'Regime forecasts help you anticipate market conditions ahead. If a Bull regime is predicted to shift to High Volatility in 30 days, you might begin defensive positioning. Forecasts become less reliable at longer horizons due to increased uncertainty.',
+    goodValues: [
+      { label: 'Bull', description: 'Forecast expects favorable conditions', color: '#4caf50' },
+      { label: 'Normal', description: 'Forecast expects stable conditions', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Bear', description: 'Forecast expects declining markets', color: '#ff9800' },
+      { label: 'High Volatility', description: 'Forecast expects turbulent conditions', color: '#f44336' },
+    ],
+    example: 'Current regime is Bull, but 30-day forecast shows Bear with 65% confidence. This signals potential deterioration ahead—consider reducing risk exposure or adding hedges.',
+    additionalNotes: 'Regime forecasts are probabilistic, not deterministic. Low forecast confidence (<60%) means the model is uncertain. Forecasts work best for 5-10 day horizons; 30-day forecasts have higher uncertainty.',
+  },
+  forecast_confidence: {
+    title: 'Forecast Confidence',
+    description: 'The confidence level (0-100%) in the regime forecast. This reflects how certain the model is about the predicted regime for the specified time horizon. Confidence naturally decreases as the forecast horizon extends further into the future.',
+    interpretation: 'High forecast confidence (>70%) suggests the prediction is reliable based on current regime stability and transition patterns. Low confidence (<60%) means the forecast is uncertain—market conditions could evolve in multiple ways.',
+    goodValues: [
+      { label: '> 70%', description: 'High confidence (reliable forecast)', color: '#4caf50' },
+      { label: '60-70%', description: 'Moderate confidence (reasonable forecast)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '50-60%', description: 'Low confidence (uncertain forecast)', color: '#ff9800' },
+      { label: '< 50%', description: 'Very low confidence (unreliable)', color: '#f44336' },
+    ],
+    example: '5-day forecast with 85% confidence is highly reliable. 30-day forecast with 52% confidence should be viewed as one possible scenario among several.',
+    additionalNotes: 'Confidence decreases with time horizon—30-day forecasts are inherently less reliable than 5-day forecasts. Use low-confidence forecasts as possibilities to monitor, not definitive predictions to trade on.',
+  },
+  transition_probability: {
+    title: 'Regime Transition Probability',
+    description: 'The probability (0-100%) that the market will transition from the current regime to a different regime by the forecast horizon. A high transition probability means regime change is likely; a low probability suggests the current regime will persist.',
+    interpretation: 'This metric tells you whether to expect regime stability or change. High transition probability (>50%) signals potential regime shift ahead—be prepared for changing market conditions. Low transition probability (<20%) suggests the current regime is likely to continue.',
+    goodValues: [
+      { label: '< 20%', description: 'Very stable regime (low change risk)', color: '#4caf50' },
+      { label: '20-40%', description: 'Stable regime (likely to persist)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '40-60%', description: 'Moderate transition risk (monitor)', color: '#ff9800' },
+      { label: '> 60%', description: 'High transition risk (change likely)', color: '#f44336' },
+    ],
+    example: 'Bull regime with 15% transition probability in 30 days suggests the bull market will likely continue. Bull regime with 72% transition probability warns of likely regime shift—potentially to Bear or High Volatility.',
+    additionalNotes: 'Transition probabilities are higher during regime uncertainty or market inflection points. Combine with forecast confidence—high transition probability with low confidence means unclear direction.',
+  },
+  sentiment_factors: {
+    title: 'Sentiment Factors',
+    description: 'A multi-source sentiment analysis framework that combines three independent data sources—news articles (40% weight), SEC regulatory filings (30% weight), and insider trading activity (30% weight)—into a comprehensive sentiment profile. Each source provides unique insights: news reflects public perception, SEC filings contain verified corporate events, and insider trades reveal informed insider confidence.',
+    interpretation: 'Sentiment factors give you a 360-degree view of market sentiment around a security. By weighting multiple sources, the system reduces noise and identifies more reliable signals. When all sources align (all positive or all negative), confidence is high. When sources diverge, it signals conflicting information that warrants deeper investigation.',
+    goodValues: [
+      { label: 'All aligned positive', description: 'News, filings, and insiders all bullish (strong signal)', color: '#4caf50' },
+      { label: 'Mostly positive', description: '2 of 3 sources positive (moderately bullish)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Mixed signals', description: 'Sources disagree (investigate further)', color: '#ff9800' },
+      { label: 'All aligned negative', description: 'News, filings, and insiders all bearish (strong warning)', color: '#f44336' },
+    ],
+    example: 'AAPL shows +0.65 news sentiment (positive coverage of product launch), +0.45 SEC sentiment (strong earnings report), and +0.55 insider sentiment (CEO buying shares). Combined score: +0.57 with high confidence—all sources agree the outlook is positive.',
+    additionalNotes: 'The 40/30/30 weighting gives news slightly more importance as it updates most frequently. SEC filings and insider trades are weighted equally as both provide high-quality, verified information from insiders.',
+  },
+  sentiment_momentum: {
+    title: 'Sentiment Momentum',
+    description: 'Measures how sentiment is changing over time by tracking the rate and direction of sentiment shifts across 7-day and 30-day windows. Sentiment momentum includes change metrics (how much sentiment has moved) and acceleration (whether the rate of change is increasing or decreasing).',
+    interpretation: 'Momentum reveals whether sentiment is improving, deteriorating, or stable. Positive momentum (increasing sentiment) suggests growing optimism and may precede price gains. Negative momentum (declining sentiment) warns of deteriorating outlook. Acceleration tells you if the trend is speeding up or slowing down.',
+    goodValues: [
+      { label: 'Positive & accelerating', description: 'Sentiment improving and gaining strength', color: '#4caf50' },
+      { label: 'Positive momentum', description: 'Sentiment steadily improving', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Negative momentum', description: 'Sentiment deteriorating', color: '#ff9800' },
+      { label: 'Negative & accelerating', description: 'Sentiment rapidly worsening', color: '#f44336' },
+    ],
+    example: 'A stock with +0.15 sentiment 7 days ago and +0.35 today shows +0.20 positive momentum. If 30-day momentum is +0.10, acceleration is positive—sentiment is improving faster recently than over the longer term.',
+    additionalNotes: 'Momentum is a leading indicator—it often changes before price does. Watch for momentum reversals: positive momentum turning negative can signal the end of a rally, while negative momentum turning positive may signal a bottom.',
+  },
+  sentiment_momentum_7d: {
+    title: 'Sentiment Momentum (7-Day Change)',
+    description: 'The change in combined sentiment score over the past 7 days. Calculated as: (Current Sentiment) - (Sentiment 7 days ago). Positive values indicate sentiment has improved over the past week; negative values indicate deterioration.',
+    interpretation: 'This metric captures recent short-term shifts in market sentiment. A large positive 7-day change suggests rapidly improving sentiment—potentially driven by recent positive news, earnings, or events. A large negative change warns of quickly souring sentiment.',
+    goodValues: [
+      { label: '> +0.2', description: 'Strong recent improvement (very bullish)', color: '#4caf50' },
+      { label: '+0.05 to +0.2', description: 'Moderate improvement (bullish)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '-0.05 to -0.2', description: 'Moderate deterioration (bearish)', color: '#ff9800' },
+      { label: '< -0.2', description: 'Rapid deterioration (very bearish)', color: '#f44336' },
+    ],
+    example: 'Sentiment was -0.10 last week and is now +0.15. The 7-day change is +0.25, indicating a significant positive shift—possibly due to earnings beat or positive product news released in the past week.',
+    additionalNotes: '7-day momentum is sensitive to short-term events and news cycles. Compare with 30-day momentum to distinguish short-term spikes from sustained trends. Large 7-day moves often revert if not supported by fundamentals.',
+  },
+  sentiment_momentum_30d: {
+    title: 'Sentiment Momentum (30-Day Change)',
+    description: 'The change in combined sentiment score over the past 30 days. Calculated as: (Current Sentiment) - (Sentiment 30 days ago). This represents the longer-term trend in sentiment, smoothing out short-term noise and capturing sustained shifts.',
+    interpretation: 'This metric reveals whether sentiment is in a sustained trend or just experiencing temporary fluctuations. Large 30-day momentum indicates a persistent sentiment shift that may have more lasting impact on price. Use this to distinguish genuine trend changes from short-term noise.',
+    goodValues: [
+      { label: '> +0.15', description: 'Strong sustained improvement (persistent bullish trend)', color: '#4caf50' },
+      { label: '+0.05 to +0.15', description: 'Moderate sustained improvement', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '-0.05 to -0.15', description: 'Sustained deterioration (persistent bearish trend)', color: '#ff9800' },
+      { label: '< -0.15', description: 'Severe sustained decline (structural bearish shift)', color: '#f44336' },
+    ],
+    example: 'Sentiment has gradually improved from -0.20 a month ago to +0.05 now. The 30-day change is +0.25, showing a sustained positive trend—not just a one-day spike. This suggests improving fundamentals or a genuine narrative shift.',
+    additionalNotes: '30-day momentum is more reliable than 7-day for identifying lasting trends. When 7-day and 30-day momentum point in the same direction, the trend is likely to continue. Divergence between them (e.g., positive 7-day but negative 30-day) signals potential trend reversal.',
+  },
+  sentiment_acceleration: {
+    title: 'Sentiment Acceleration',
+    description: 'Measures whether sentiment momentum is increasing or decreasing—essentially, the "momentum of momentum." Calculated as: (7-day momentum) - (30-day momentum) / 23. Positive acceleration means sentiment is improving faster recently; negative acceleration means the rate of improvement is slowing or deterioration is accelerating.',
+    interpretation: 'Acceleration helps identify turning points and trend strength. Positive acceleration during an uptrend confirms strengthening bullish sentiment. Negative acceleration during an uptrend warns the rally may be losing steam. This metric catches inflection points earlier than simple momentum.',
+    goodValues: [
+      { label: '> +0.02', description: 'Accelerating positive (strengthening uptrend)', color: '#4caf50' },
+      { label: '0 to +0.02', description: 'Stable positive (steady improvement)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '-0.02 to 0', description: 'Decelerating (weakening trend)', color: '#ff9800' },
+      { label: '< -0.02', description: 'Negative acceleration (rapid deterioration)', color: '#f44336' },
+    ],
+    example: 'Stock has +0.30 7-day momentum and +0.10 30-day momentum. Acceleration = (+0.30 - +0.10) / 23 ≈ +0.009. Positive acceleration shows sentiment improving faster recently—bullish signal suggesting the positive trend is strengthening.',
+    formula: 'Acceleration = (Change_7d - Change_30d) / 23',
+    additionalNotes: 'Watch for acceleration reversals: negative acceleration during a rally can signal exhaustion before momentum turns negative. Positive acceleration during a decline can signal a bottom is forming. Acceleration is most useful when combined with momentum direction.',
+  },
+  divergence_score: {
+    title: 'Divergence Score',
+    description: 'A quantitative measure (-1.0 to +1.0) of how much sentiment and price are moving in opposite directions. Positive divergence occurs when price falls but sentiment improves (potential bottom). Negative divergence occurs when price rises but sentiment deteriorates (potential top). The magnitude indicates divergence strength.',
+    interpretation: 'Divergence scores identify situations where market price and underlying sentiment are misaligned. High absolute scores (> 0.5) indicate strong divergence—a signal that price may be about to reverse to align with sentiment. Scores near zero mean price and sentiment are moving together (no divergence).',
+    goodValues: [
+      { label: '+0.5 to +1.0', description: 'Strong positive divergence (potential bottom)', color: '#4caf50' },
+      { label: '+0.2 to +0.5', description: 'Moderate positive divergence (watch for bounce)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '-0.2 to -0.5', description: 'Moderate negative divergence (potential reversal)', color: '#ff9800' },
+      { label: '-0.5 to -1.0', description: 'Strong negative divergence (warning of correction)', color: '#f44336' },
+    ],
+    example: 'Stock drops 10% over 2 weeks (negative price momentum), but sentiment improves from -0.30 to +0.15 (positive sentiment momentum). Divergence score: +0.65. This strong positive divergence suggests price may have overreacted and is due for a bounce as sentiment improves.',
+    additionalNotes: 'Not all divergences lead to reversals—confirm with other indicators like volume, technical patterns, or fundamental changes. Divergences work best at extremes: strong negative divergence near all-time highs, or strong positive divergence near major support levels.',
+  },
+  reversal_probability: {
+    title: 'Reversal Probability',
+    description: 'The estimated probability (0-100%) that a price reversal will occur based on the detected divergence between sentiment and price. Calculated using machine learning models trained on historical divergence patterns and subsequent price movements. Higher probability means reversal is more likely.',
+    interpretation: 'Use this probability to assess how actionable a divergence signal is. Probabilities above 60% indicate the divergence is statistically significant and historically has led to reversals. Below 40% means the divergence may not be strong enough to trigger a reversal—price and sentiment may simply re-align without major price movement.',
+    goodValues: [
+      { label: '> 70%', description: 'Very high reversal likelihood (strong signal)', color: '#4caf50' },
+      { label: '60-70%', description: 'High reversal likelihood (reliable signal)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '40-60%', description: 'Moderate probability (uncertain)', color: '#ff9800' },
+      { label: '< 40%', description: 'Low probability (weak signal)', color: '#f44336' },
+    ],
+    example: 'Positive divergence detected with 75% reversal probability. Historically, similar divergence patterns led to price reversals 75% of the time within 10-20 trading days. This is a statistically reliable signal worth acting on.',
+    additionalNotes: 'Reversal probability is based on historical patterns—past performance doesn\'t guarantee future results. Higher magnitude divergences generally have higher reversal probabilities. Combine with stop-losses when trading on divergence signals in case the 25-30% non-reversal scenario occurs.',
+  },
+  sentiment_adjusted_forecast: {
+    title: 'Sentiment-Adjusted Price Forecast',
+    description: 'A price forecast that combines traditional technical forecasting (moving averages, momentum, trend analysis) with sentiment analysis from news, SEC filings, and insider activity. The base forecast is adjusted up or down based on sentiment factors, with the adjustment magnitude determined by sentiment strength and reliability.',
+    interpretation: 'The sentiment-adjusted forecast provides a more complete picture than technical analysis alone. When sentiment is positive, the adjusted forecast will be higher than the base forecast—reflecting optimism that may drive price up. When sentiment is negative, the adjusted forecast is lower—incorporating pessimism that may pressure prices.',
+    goodValues: [
+      { label: 'Adjusted > Base', description: 'Positive sentiment adjustment (bullish outlook)', color: '#4caf50' },
+      { label: 'Slight adjustment', description: 'Sentiment slightly positive or neutral', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Adjusted < Base', description: 'Negative sentiment adjustment (bearish outlook)', color: '#ff9800' },
+      { label: 'Large downward adj', description: 'Strongly negative sentiment (warning)', color: '#f44336' },
+    ],
+    example: 'Base technical forecast predicts $150 in 30 days. Combined sentiment is +0.45 (positive). Sentiment-adjusted forecast: $158 (+5.3% adjustment). The positive sentiment suggests price may outperform technical expectations.',
+    formula: 'Adjusted_Forecast = Base_Forecast × (1 + (Sentiment_Score × Adjustment_Factor))',
+    additionalNotes: 'The forecast includes confidence intervals showing uncertainty. Wide intervals mean high uncertainty—use caution. Compare base vs adjusted forecasts: large divergence means sentiment is a strong factor. The model accounts for sentiment reliability—low-confidence sentiment has less impact on the adjustment.',
+  },
 };
 
 export function MetricHelpDialog({ open, onClose, metricKey }: MetricHelpDialogProps) {

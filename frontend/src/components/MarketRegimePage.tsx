@@ -21,6 +21,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  IconButton,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -29,13 +30,17 @@ import {
   CalendarToday,
   Info as InfoIcon,
   Warning as WarningIcon,
+  HelpOutline,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { getMarketRegime, getRegimeForecast } from '../lib/endpoints';
 import type { RegimeType } from '../types';
+import { MetricHelpDialog } from './MetricHelpDialog';
 
 export function MarketRegimePage() {
   const [forecastDays, setForecastDays] = useState(30);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState<string>('');
 
   // Fetch current regime
   const regimeQ = useQuery({
@@ -104,9 +109,29 @@ export function MarketRegimePage() {
 
     return (
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Current Market Regime
-        </Typography>
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+          <Typography variant="h6">
+            Current Market Regime
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedMetric('market_regime');
+              setHelpOpen(true);
+            }}
+            sx={{
+              p: 0.5,
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'primary.main',
+                backgroundColor: 'primary.50',
+              },
+            }}
+          >
+            <HelpOutline fontSize="small" />
+          </IconButton>
+        </Box>
 
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
@@ -123,11 +148,31 @@ export function MarketRegimePage() {
                     </Typography>
                   </Box>
                 </Box>
-                <Chip
-                  label={`${regime.confidence.toFixed(0)}% Confidence`}
-                  color={regime.confidence > 80 ? 'success' : regime.confidence > 60 ? 'info' : 'warning'}
-                  size="small"
-                />
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Chip
+                    label={`${regime.confidence.toFixed(0)}% Confidence`}
+                    color={regime.confidence > 80 ? 'success' : regime.confidence > 60 ? 'info' : 'warning'}
+                    size="small"
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMetric('regime_confidence');
+                      setHelpOpen(true);
+                    }}
+                    sx={{
+                      p: 0.5,
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                        backgroundColor: 'primary.50',
+                      },
+                    }}
+                  >
+                    <HelpOutline fontSize="small" />
+                  </IconButton>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
@@ -135,9 +180,29 @@ export function MarketRegimePage() {
           <Grid item xs={12} md={4}>
             <Card variant="outlined" sx={{ height: '100%' }}>
               <CardContent>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Volatility Level
-                </Typography>
+                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Volatility Level
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMetric('volatility_level');
+                      setHelpOpen(true);
+                    }}
+                    sx={{
+                      p: 0.5,
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                        backgroundColor: 'primary.50',
+                      },
+                    }}
+                  >
+                    <HelpOutline fontSize="small" />
+                  </IconButton>
+                </Box>
                 <Typography variant="h4" color="primary">
                   {formatPercent(regime.volatility_level)}
                 </Typography>
@@ -151,9 +216,29 @@ export function MarketRegimePage() {
           <Grid item xs={12} md={4}>
             <Card variant="outlined" sx={{ height: '100%' }}>
               <CardContent>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Risk Threshold Multiplier
-                </Typography>
+                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Risk Threshold Multiplier
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMetric('threshold_multiplier');
+                      setHelpOpen(true);
+                    }}
+                    sx={{
+                      p: 0.5,
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                        backgroundColor: 'primary.50',
+                      },
+                    }}
+                  >
+                    <HelpOutline fontSize="small" />
+                  </IconButton>
+                </Box>
                 <Typography variant="h4" color="primary">
                   {formatMultiplier(regime.threshold_multiplier)}
                 </Typography>
@@ -169,9 +254,29 @@ export function MarketRegimePage() {
 
         {regime.hmm_probabilities && (
           <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              HMM State Probabilities
-            </Typography>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <Typography variant="subtitle1">
+                HMM State Probabilities
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedMetric('hmm_probabilities');
+                  setHelpOpen(true);
+                }}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline fontSize="small" />
+              </IconButton>
+            </Box>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={3}>
                 <Box>
@@ -316,13 +421,79 @@ export function MarketRegimePage() {
             <TableHead>
               <TableRow>
                 <TableCell>Horizon</TableCell>
-                <TableCell>Predicted Regime</TableCell>
-                <TableCell align="right">Confidence</TableCell>
+                <TableCell>
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    Predicted Regime
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMetric('predicted_regime');
+                        setHelpOpen(true);
+                      }}
+                      sx={{
+                        p: 0.3,
+                        color: 'text.secondary',
+                        '&:hover': {
+                          color: 'primary.main',
+                          backgroundColor: 'primary.50',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Box>
+                </TableCell>
+                <TableCell align="right">
+                  <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
+                    Confidence
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMetric('forecast_confidence');
+                        setHelpOpen(true);
+                      }}
+                      sx={{
+                        p: 0.3,
+                        color: 'text.secondary',
+                        '&:hover': {
+                          color: 'primary.main',
+                          backgroundColor: 'primary.50',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Box>
+                </TableCell>
                 <TableCell align="right">Bull Prob</TableCell>
                 <TableCell align="right">Normal Prob</TableCell>
                 <TableCell align="right">Bear Prob</TableCell>
                 <TableCell align="right">High Vol Prob</TableCell>
-                <TableCell align="right">Transition Prob</TableCell>
+                <TableCell align="right">
+                  <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
+                    Transition Prob
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMetric('transition_probability');
+                        setHelpOpen(true);
+                      }}
+                      sx={{
+                        p: 0.3,
+                        color: 'text.secondary',
+                        '&:hover': {
+                          color: 'primary.main',
+                          backgroundColor: 'primary.50',
+                        },
+                      }}
+                    >
+                      <HelpOutline sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Box>
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -420,6 +591,12 @@ export function MarketRegimePage() {
       )}
 
       {forecastQ.data && renderForecast()}
+
+      <MetricHelpDialog
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        metricKey={selectedMetric}
+      />
     </Box>
   );
 }

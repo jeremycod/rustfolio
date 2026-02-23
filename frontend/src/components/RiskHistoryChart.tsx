@@ -15,7 +15,6 @@ import {
   CircularProgress,
   Chip,
   Stack,
-  IconButton,
   Tooltip,
 } from '@mui/material';
 import {
@@ -244,101 +243,105 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
                 <ToggleButton value="risk_score" aria-label="risk score">
                   <Box display="flex" alignItems="center" gap={0.5}>
                     Risk Score
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHelpDialogOpen(METRIC_HELP_KEYS['risk_score']);
-                      }}
-                      sx={{
-                        width: 18,
-                        height: 18,
-                        p: 0,
-                        color: 'inherit',
-                        opacity: 0.6,
-                        '&:hover': {
-                          opacity: 1,
-                          backgroundColor: 'transparent',
-                        },
-                      }}
-                    >
-                      <HelpOutline sx={{ fontSize: 14 }} />
-                    </IconButton>
+                    <Tooltip title="Click for help">
+                      <Box
+                        component="span"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHelpDialogOpen(METRIC_HELP_KEYS['risk_score']);
+                        }}
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                          opacity: 0.6,
+                          '&:hover': {
+                            opacity: 1,
+                          },
+                        }}
+                      >
+                        <HelpOutline sx={{ fontSize: 14 }} />
+                      </Box>
+                    </Tooltip>
                   </Box>
                 </ToggleButton>
                 <ToggleButton value="volatility" aria-label="volatility">
                   <Box display="flex" alignItems="center" gap={0.5}>
                     Volatility
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHelpDialogOpen(METRIC_HELP_KEYS['volatility']);
-                      }}
-                      sx={{
-                        width: 18,
-                        height: 18,
-                        p: 0,
-                        color: 'inherit',
-                        opacity: 0.6,
-                        '&:hover': {
-                          opacity: 1,
-                          backgroundColor: 'transparent',
-                        },
-                      }}
-                    >
-                      <HelpOutline sx={{ fontSize: 14 }} />
-                    </IconButton>
+                    <Tooltip title="Click for help">
+                      <Box
+                        component="span"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHelpDialogOpen(METRIC_HELP_KEYS['volatility']);
+                        }}
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                          opacity: 0.6,
+                          '&:hover': {
+                            opacity: 1,
+                          },
+                        }}
+                      >
+                        <HelpOutline sx={{ fontSize: 14 }} />
+                      </Box>
+                    </Tooltip>
                   </Box>
                 </ToggleButton>
                 <ToggleButton value="max_drawdown" aria-label="max drawdown">
                   <Box display="flex" alignItems="center" gap={0.5}>
                     Max Drawdown
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHelpDialogOpen(METRIC_HELP_KEYS['max_drawdown']);
-                      }}
-                      sx={{
-                        width: 18,
-                        height: 18,
-                        p: 0,
-                        color: 'inherit',
-                        opacity: 0.6,
-                        '&:hover': {
-                          opacity: 1,
-                          backgroundColor: 'transparent',
-                        },
-                      }}
-                    >
-                      <HelpOutline sx={{ fontSize: 14 }} />
-                    </IconButton>
+                    <Tooltip title="Click for help">
+                      <Box
+                        component="span"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHelpDialogOpen(METRIC_HELP_KEYS['max_drawdown']);
+                        }}
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                          opacity: 0.6,
+                          '&:hover': {
+                            opacity: 1,
+                          },
+                        }}
+                      >
+                        <HelpOutline sx={{ fontSize: 14 }} />
+                      </Box>
+                    </Tooltip>
                   </Box>
                 </ToggleButton>
                 <ToggleButton value="beta" aria-label="beta">
                   <Box display="flex" alignItems="center" gap={0.5}>
                     Beta
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHelpDialogOpen(METRIC_HELP_KEYS['beta']);
-                      }}
-                      sx={{
-                        width: 18,
-                        height: 18,
-                        p: 0,
-                        color: 'inherit',
-                        opacity: 0.6,
-                        '&:hover': {
-                          opacity: 1,
-                          backgroundColor: 'transparent',
-                        },
-                      }}
-                    >
-                      <HelpOutline sx={{ fontSize: 14 }} />
-                    </IconButton>
+                    <Tooltip title="Click for help">
+                      <Box
+                        component="span"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHelpDialogOpen(METRIC_HELP_KEYS['beta']);
+                        }}
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                          opacity: 0.6,
+                          '&:hover': {
+                            opacity: 1,
+                          },
+                        }}
+                      >
+                        <HelpOutline sx={{ fontSize: 14 }} />
+                      </Box>
+                    </Tooltip>
                   </Box>
                 </ToggleButton>
               </ToggleButtonGroup>
@@ -355,76 +358,79 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
                 <ToggleButton value="sharpe" aria-label="sharpe ratio">
                   <Box display="flex" alignItems="center" gap={0.5}>
                     Sharpe Ratio
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHelpDialogOpen(METRIC_HELP_KEYS['sharpe']);
-                      }}
-                      sx={{
-                        width: 18,
-                        height: 18,
-                        p: 0,
-                        color: 'inherit',
-                        opacity: 0.6,
-                        '&:hover': {
-                          opacity: 1,
-                          backgroundColor: 'transparent',
-                        },
-                      }}
-                    >
-                      <HelpOutline sx={{ fontSize: 14 }} />
-                    </IconButton>
+                    <Tooltip title="Click for help">
+                      <Box
+                        component="span"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHelpDialogOpen(METRIC_HELP_KEYS['sharpe']);
+                        }}
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                          opacity: 0.6,
+                          '&:hover': {
+                            opacity: 1,
+                          },
+                        }}
+                      >
+                        <HelpOutline sx={{ fontSize: 14 }} />
+                      </Box>
+                    </Tooltip>
                   </Box>
                 </ToggleButton>
                 <ToggleButton value="sortino" aria-label="sortino ratio">
                   <Box display="flex" alignItems="center" gap={0.5}>
                     Sortino Ratio
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHelpDialogOpen(METRIC_HELP_KEYS['sortino']);
-                      }}
-                      sx={{
-                        width: 18,
-                        height: 18,
-                        p: 0,
-                        color: 'inherit',
-                        opacity: 0.6,
-                        '&:hover': {
-                          opacity: 1,
-                          backgroundColor: 'transparent',
-                        },
-                      }}
-                    >
-                      <HelpOutline sx={{ fontSize: 14 }} />
-                    </IconButton>
+                    <Tooltip title="Click for help">
+                      <Box
+                        component="span"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHelpDialogOpen(METRIC_HELP_KEYS['sortino']);
+                        }}
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                          opacity: 0.6,
+                          '&:hover': {
+                            opacity: 1,
+                          },
+                        }}
+                      >
+                        <HelpOutline sx={{ fontSize: 14 }} />
+                      </Box>
+                    </Tooltip>
                   </Box>
                 </ToggleButton>
                 <ToggleButton value="annualized_return" aria-label="annualized return">
                   <Box display="flex" alignItems="center" gap={0.5}>
                     Ann. Return
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHelpDialogOpen(METRIC_HELP_KEYS['annualized_return']);
-                      }}
-                      sx={{
-                        width: 18,
-                        height: 18,
-                        p: 0,
-                        color: 'inherit',
-                        opacity: 0.6,
-                        '&:hover': {
-                          opacity: 1,
-                          backgroundColor: 'transparent',
-                        },
-                      }}
-                    >
-                      <HelpOutline sx={{ fontSize: 14 }} />
-                    </IconButton>
+                    <Tooltip title="Click for help">
+                      <Box
+                        component="span"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHelpDialogOpen(METRIC_HELP_KEYS['annualized_return']);
+                        }}
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                          opacity: 0.6,
+                          '&:hover': {
+                            opacity: 1,
+                          },
+                        }}
+                      >
+                        <HelpOutline sx={{ fontSize: 14 }} />
+                      </Box>
+                    </Tooltip>
                   </Box>
                 </ToggleButton>
               </ToggleButtonGroup>
@@ -481,7 +487,7 @@ export function RiskHistoryChart({ portfolioId, ticker, thresholds }: RiskHistor
               {(selectedMetrics.includes('sharpe') || selectedMetrics.includes('sortino') || selectedMetrics.includes('annualized_return') || selectedMetrics.includes('beta')) && (
                 <YAxis yAxisId="right" orientation="right" />
               )}
-              <Tooltip
+              <RechartsTooltip
                 labelFormatter={(date) => new Date(date).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',

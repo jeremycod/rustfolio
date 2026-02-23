@@ -601,6 +601,24 @@ export async function triggerJob(jobName: string): Promise<{ success: boolean; m
     return res.data;
 }
 
+export async function triggerAllJobs(): Promise<{
+    total_jobs: number;
+    successful: number;
+    failed: number;
+    job_results: Array<{
+        job_name: string;
+        status: string;
+        message: string;
+        duration_ms?: number;
+        error_message?: string;
+    }>;
+    total_duration_ms: number;
+}> {
+    // Longer timeout for running all jobs (10 minutes)
+    const res = await api.post('/api/admin/jobs/trigger-all', {}, { timeout: 600000 });
+    return res.data;
+}
+
 export async function getCacheHealth(): Promise<CacheHealthStatus> {
     const res = await api.get('/api/admin/cache-health');
     return res.data;

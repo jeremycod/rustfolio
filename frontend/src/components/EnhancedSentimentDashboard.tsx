@@ -348,6 +348,8 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                                         }}
                                     >
                                         <ListItemText
+                                            primaryTypographyProps={{ component: 'div' }}
+                                            secondaryTypographyProps={{ component: 'div' }}
                                             primary={
                                                 <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                                                     <Article color="primary" fontSize="small" />
@@ -426,6 +428,8 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                                         }}
                                     >
                                         <ListItemText
+                                            primaryTypographyProps={{ component: 'div' }}
+                                            secondaryTypographyProps={{ component: 'div' }}
                                             primary={
                                                 <Stack direction="row" spacing={1} alignItems="center">
                                                     <Chip
@@ -509,6 +513,8 @@ export function EnhancedSentimentDashboard({ ticker }: EnhancedSentimentDashboar
                                         }}
                                     >
                                         <ListItemText
+                                            primaryTypographyProps={{ component: 'div' }}
+                                            secondaryTypographyProps={{ component: 'div' }}
                                             primary={
                                                 <Stack direction="row" spacing={1} alignItems="center">
                                                     <Chip
