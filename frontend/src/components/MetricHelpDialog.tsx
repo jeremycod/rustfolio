@@ -539,22 +539,6 @@ const METRIC_HELP: Record<string, MetricHelp> = {
     formula: 'σ_downside = √(∑(min(return - MAR, 0)²) / N)',
     additionalNotes: 'Downside deviation is used in the Sortino Ratio calculation. It\'s particularly useful for risk-averse investors focused on capital preservation. The MAR (Minimum Acceptable Return) is typically set to the risk-free rate or 0%.',
   },
-  sortino_ratio: {
-    title: 'Sortino Ratio',
-    description: 'Similar to Sharpe Ratio, but only penalizes downside volatility (negative returns). The Sortino Ratio recognizes that upside volatility is good—you only care about the risk of losses, not gains.',
-    interpretation: 'The Sortino Ratio gives a more accurate picture of risk for investors who care about downside protection. It\'s better than Sharpe for asymmetric return distributions.',
-    goodValues: [
-      { label: '> 2.0', description: 'Excellent downside-adjusted returns', color: '#4caf50' },
-      { label: '1.0-2.0', description: 'Good downside protection', color: '#8bc34a' },
-    ],
-    badValues: [
-      { label: '0-1.0', description: 'Moderate downside risk', color: '#ff9800' },
-      { label: '< 0', description: 'Negative returns', color: '#f44336' },
-    ],
-    example: 'An investment that gains 5% most days but occasionally drops 3% will have a higher Sortino than Sharpe, because the upside volatility isn\'t penalized.',
-    formula: 'Sortino = (Return - Risk_Free_Rate) / Downside_Deviation',
-    additionalNotes: 'Sortino is generally higher than Sharpe for the same investment. It\'s preferred by investors focused on capital preservation and downside risk management.',
-  },
   portfolio_cvar_95: {
     title: 'Portfolio CVaR (95%)',
     description: 'Conditional Value at Risk (CVaR), also called Expected Shortfall, measures the average loss in the worst 5% of scenarios for your entire portfolio. While VaR tells you the threshold, CVaR tells you the average loss when that threshold is breached.',
@@ -858,6 +842,341 @@ const METRIC_HELP: Record<string, MetricHelp> = {
     example: 'Base technical forecast predicts $150 in 30 days. Combined sentiment is +0.45 (positive). Sentiment-adjusted forecast: $158 (+5.3% adjustment). The positive sentiment suggests price may outperform technical expectations.',
     formula: 'Adjusted_Forecast = Base_Forecast × (1 + (Sentiment_Score × Adjustment_Factor))',
     additionalNotes: 'The forecast includes confidence intervals showing uncertainty. Wide intervals mean high uncertainty—use caution. Compare base vs adjusted forecasts: large divergence means sentiment is a strong factor. The model accounts for sentiment reliability—low-confidence sentiment has less impact on the adjustment.',
+  },
+  trading_signal_overall: {
+    title: 'Overall Trading Recommendation',
+    description: 'A comprehensive buy/sell/hold recommendation that synthesizes all individual trading signals (momentum, mean reversion, trend) into a single actionable decision. The recommendation includes an action (Buy/Sell/Hold), strength (Strong/Moderate/Weak), probability, and rationale explaining the decision.',
+    interpretation: 'This is your "bottom line" signal—the aggregated recommendation across all technical factors. A "Strong Buy" with 75% probability means most technical indicators align bullish and historically similar setups produced positive returns 75% of the time. Use this as your primary decision signal, but review individual signals to understand what\'s driving it.',
+    goodValues: [
+      { label: 'Strong Buy', description: 'All signals align bullish (high probability)', color: '#4caf50' },
+      { label: 'Moderate Buy', description: 'Most signals bullish (good probability)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Moderate Sell', description: 'Most signals bearish (caution)', color: '#ff9800' },
+      { label: 'Strong Sell', description: 'All signals align bearish (high risk)', color: '#f44336' },
+    ],
+    example: 'Strong Buy with 78% probability: Momentum positive (RSI oversold recovery), Mean Reversion positive (price bouncing from lower Bollinger Band), and Trend positive (50-day MA crossing above 200-day MA). Three confirmations make this a high-confidence signal.',
+    additionalNotes: 'The recommendation is only as good as current market conditions—it doesn\'t account for unexpected news or black swan events. Always combine with fundamental analysis, risk management, and your personal investment strategy. Past probability doesn\'t guarantee future results.',
+  },
+  trading_signal_momentum: {
+    title: 'Momentum Signal',
+    description: 'A signal based on momentum indicators (RSI, MACD, volume trends) that identifies whether price momentum is building in a bullish or bearish direction. Momentum signals work best when markets are trending strongly in one direction.',
+    interpretation: 'Momentum is like a train gaining speed—once it starts moving, it tends to continue. A bullish momentum signal suggests buyers are in control and pushing prices higher. A bearish signal suggests sellers dominate. Momentum works best in trending markets but can give false signals in choppy, sideways markets.',
+    goodValues: [
+      { label: 'Bullish + High Conf', description: 'Strong upward momentum (trending up)', color: '#4caf50' },
+      { label: 'Bullish + Med Conf', description: 'Moderate upward momentum', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Bearish + Med Conf', description: 'Moderate downward momentum', color: '#ff9800' },
+      { label: 'Bearish + High Conf', description: 'Strong downward momentum (trending down)', color: '#f44336' },
+    ],
+    example: 'Bullish momentum signal with 72% probability: RSI crossed above 50 (gaining strength), MACD histogram turned positive (momentum shift), and volume increased on up days (confirming buying interest). This suggests upward price continuation is likely.',
+    additionalNotes: 'Momentum signals can lag—by the time momentum is clear, much of the move may be done. They perform poorly in sideways/choppy markets where momentum constantly reverses. Best used in conjunction with trend confirmation. High RSI (>70) can signal overbought conditions where momentum may reverse.',
+  },
+  trading_signal_mean_reversion: {
+    title: 'Mean Reversion Signal',
+    description: 'A signal that identifies when price has deviated significantly from its average and is likely to "snap back" toward the mean. Based on Bollinger Bands, price deviations, and statistical measures. Mean reversion works best in range-bound, non-trending markets.',
+    interpretation: 'Mean reversion is based on the idea that prices tend to return to their average over time. When a stock is extremely oversold (price near lower Bollinger Band), a bullish mean reversion signal suggests it may bounce back up. When extremely overbought, a bearish signal suggests it may pull back down.',
+    goodValues: [
+      { label: 'Bullish + High Conf', description: 'Oversold, likely to bounce up', color: '#4caf50' },
+      { label: 'Bullish + Med Conf', description: 'Below average, recovery likely', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Bearish + Med Conf', description: 'Overbought, pullback likely', color: '#ff9800' },
+      { label: 'Bearish + High Conf', description: 'Extremely overbought, correction likely', color: '#f44336' },
+    ],
+    example: 'Bullish mean reversion signal with 68% probability: Price touched the lower Bollinger Band (2 standard deviations below mean) and is starting to move back up. Historically, when this stock reached this level, it rebounded 68% of the time within 10 trading days.',
+    additionalNotes: 'Mean reversion fails in strong trending markets—if a stock is trending down due to fundamental problems, it may keep going lower instead of reverting. Works best with stocks that have stable fundamentals and trade in a range. Can result in "catching a falling knife" if used carelessly during crashes.',
+  },
+  trading_signal_trend: {
+    title: 'Trend Signal',
+    description: 'A signal based on trend-following indicators (moving averages, trend strength, directional movement) that identifies the prevailing price direction and its strength. Trend signals aim to "ride the wave" of established trends.',
+    interpretation: 'The trend is your friend—this signal tells you which direction the market is moving and whether the trend is strong or weakening. A bullish trend signal means the stock is in an uptrend and likely to continue higher. A bearish signal means it\'s in a downtrend. Trend signals help you avoid fighting the market.',
+    goodValues: [
+      { label: 'Bullish + High Conf', description: 'Strong uptrend (ride the wave)', color: '#4caf50' },
+      { label: 'Bullish + Med Conf', description: 'Moderate uptrend (cautiously bullish)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Bearish + Med Conf', description: 'Moderate downtrend (caution)', color: '#ff9800' },
+      { label: 'Bearish + High Conf', description: 'Strong downtrend (stay away)', color: '#f44336' },
+    ],
+    example: 'Bullish trend signal with 81% probability: 50-day moving average crossed above 200-day MA ("golden cross"), price consistently making higher highs and higher lows, and ADX shows strong trend strength. This is a classic strong uptrend setup.',
+    additionalNotes: 'Trends don\'t last forever—even strong trends eventually reverse. Trend signals can be slow to react at trend reversals, causing you to hold too long. Best combined with momentum and mean reversion signals. "The trend is your friend until it ends"—be ready to exit when the trend weakens.',
+  },
+  trading_signal_combined: {
+    title: 'Combined Signal',
+    description: 'A meta-signal that combines all signal types (momentum, mean reversion, trend) with intelligent weighting based on current market conditions. When all signals align, confidence is high. When signals conflict, the combined signal reflects the uncertainty.',
+    interpretation: 'The combined signal is your highest-level view—it tells you when all technical factors agree versus when they conflict. When momentum, mean reversion, and trend all point the same direction, you have strong confirmation. When they disagree, tread carefully—the market may be transitional or choppy.',
+    goodValues: [
+      { label: 'All Bullish', description: 'All signals agree bullish (strongest setup)', color: '#4caf50' },
+      { label: 'Mostly Bullish', description: '2 of 3 signals bullish (good setup)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Mostly Bearish', description: '2 of 3 signals bearish (avoid)', color: '#ff9800' },
+      { label: 'All Bearish', description: 'All signals agree bearish (high risk)', color: '#f44336' },
+    ],
+    example: 'Combined signal: Strong Bullish (85% probability). Momentum is bullish (RSI rising), Mean Reversion is neutral (price near average), Trend is bullish (uptrend confirmed). Two out of three signals bullish with no contradictions creates high confidence.',
+    additionalNotes: 'The combined signal uses adaptive weighting—in trending markets, trend and momentum get more weight. In range-bound markets, mean reversion gets more weight. This makes it more robust than any single signal. However, it\'s still a technical signal and doesn\'t account for fundamentals, news, or macroeconomic factors.',
+  },
+  trading_signal_probability: {
+    title: 'Signal Probability',
+    description: 'The statistical likelihood that the signal will be correct based on historical backtesting. If a signal has 75% probability, it means in the past when this exact pattern occurred, the predicted outcome happened 75% of the time.',
+    interpretation: 'Probability tells you how reliable the signal is based on history. Higher probability means the pattern has worked more consistently in the past. However, probability is not certainty—a 75% signal still fails 25% of the time, so risk management is essential.',
+    goodValues: [
+      { label: '> 70%', description: 'High probability (reliable pattern)', color: '#4caf50' },
+      { label: '60-70%', description: 'Good probability (solid pattern)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '50-60%', description: 'Moderate probability (weak edge)', color: '#ff9800' },
+      { label: '< 50%', description: 'Low probability (unreliable)', color: '#f44336' },
+    ],
+    example: 'Bullish signal with 68% probability means historically, when this exact combination of indicators appeared, the stock moved higher 68% of the time over the signal horizon. That\'s a meaningful edge, but not a guarantee.',
+    additionalNotes: 'Probability is based on historical data—market conditions change, and past patterns may not repeat. Higher probability signals deserve more confidence but should still be combined with stop-losses and position sizing. Probabilities below 55% offer minimal edge and should generally be avoided.',
+  },
+  trading_signal_confidence: {
+    title: 'Signal Confidence',
+    description: 'A qualitative assessment (High/Medium/Low) of how strongly the indicators support the signal. Confidence considers the strength of individual indicators, agreement between indicators, and statistical significance.',
+    interpretation: 'Confidence tells you how "convinced" the model is about the signal. High confidence means indicators strongly agree and show clear patterns. Low confidence means signals are weak or contradictory. Only act on high-confidence signals in uncertain markets.',
+    goodValues: [
+      { label: 'High', description: 'Strong indicator agreement (reliable)', color: '#4caf50' },
+      { label: 'Medium', description: 'Moderate indicator agreement', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Low', description: 'Weak or conflicting indicators', color: '#f44336' },
+    ],
+    example: 'High Confidence Bullish Signal: RSI strongly oversold (25), MACD showing strong bullish divergence, price firmly bouncing off lower Bollinger Band, and volume confirming. All factors align clearly—high confidence. Medium Confidence: Some indicators bullish, some neutral, no clear pattern—medium confidence.',
+    additionalNotes: 'Confidence is subjective and complements probability. You can have a high-probability signal with low confidence if the current market conditions differ from historical patterns. Prefer high-confidence signals, especially in volatile markets. Low-confidence signals should be avoided or traded with reduced position size.',
+  },
+  trading_signal_bullish_score: {
+    title: 'Bullish Score',
+    description: 'A numerical score representing the cumulative strength of all bullish factors detected. Each bullish indicator (RSI oversold recovery, bullish MACD crossover, golden cross, etc.) contributes to the score. Higher scores indicate more bullish factors are present.',
+    interpretation: 'The bullish score quantifies how many positive signals are present. A high bullish score means multiple indicators are flashing buy signals simultaneously—stronger confirmation. Think of it as counting votes—the more bullish votes, the more confident you can be in a bullish outlook.',
+    goodValues: [
+      { label: '> 7', description: 'Many bullish factors (strong setup)', color: '#4caf50' },
+      { label: '5-7', description: 'Several bullish factors (good setup)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '2-4', description: 'Few bullish factors (weak setup)', color: '#ff9800' },
+      { label: '< 2', description: 'Very few bullish factors (avoid)', color: '#f44336' },
+    ],
+    example: 'Bullish Score: 8. Factors: RSI oversold recovery (+2), MACD bullish crossover (+2), price above 50-day MA (+1), volume increasing on up days (+1), golden cross forming (+2). Eight bullish factors create strong confirmation.',
+    additionalNotes: 'A high bullish score is most meaningful when the bearish score is low—if both are high, the market is giving mixed signals. Compare bullish vs bearish scores to understand the signal clarity. More factors doesn\'t always mean better—quality matters more than quantity.',
+  },
+  trading_signal_bearish_score: {
+    title: 'Bearish Score',
+    description: 'A numerical score representing the cumulative strength of all bearish factors detected. Each bearish indicator (RSI overbought, bearish MACD crossover, death cross, etc.) contributes to the score. Higher scores indicate more bearish factors are present.',
+    interpretation: 'The bearish score quantifies how many negative signals are present. A high bearish score means multiple indicators are flashing sell signals—stronger downside confirmation. Compare this to the bullish score to see which side has more weight.',
+    goodValues: [
+      { label: '< 2', description: 'Few bearish factors (bullish favorable)', color: '#4caf50' },
+      { label: '2-4', description: 'Some bearish factors (neutral)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '5-7', description: 'Several bearish factors (caution)', color: '#ff9800' },
+      { label: '> 7', description: 'Many bearish factors (high risk)', color: '#f44336' },
+    ],
+    example: 'Bearish Score: 9. Factors: RSI extremely overbought (+2), bearish MACD crossover (+2), death cross forming (+2), declining volume on up days (+1), price hitting resistance (+2). Nine bearish factors suggest strong downside risk.',
+    additionalNotes: 'Even a high bearish score doesn\'t guarantee a decline—it just means risk is elevated. Use bearish scores to manage risk, reduce position sizes, or set tighter stop-losses. When both bullish and bearish scores are high, the market is indecisive—wait for clarity.',
+  },
+  rsi_14: {
+    title: 'RSI (Relative Strength Index)',
+    description: 'RSI is a momentum oscillator that measures the speed and magnitude of recent price changes on a scale of 0-100. It identifies whether a stock is overbought (RSI > 70), oversold (RSI < 30), or neutral (30-70). RSI helps spot potential reversals when price reaches extreme levels.',
+    interpretation: 'Think of RSI as a "momentum battery" that charges up and depletes. When RSI is below 30 (oversold), the selling pressure is exhausted and a bounce is likely. When RSI is above 70 (overbought), buying pressure is exhausted and a pullback may occur. RSI between 40-60 suggests balanced momentum.',
+    goodValues: [
+      { label: '< 30', description: 'Oversold (bullish reversal likely)', color: '#4caf50' },
+      { label: '30-40', description: 'Slightly oversold (bullish bias)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '60-70', description: 'Slightly overbought (bearish bias)', color: '#ff9800' },
+      { label: '> 70', description: 'Overbought (bearish reversal likely)', color: '#f44336' },
+    ],
+    example: 'RSI at 28: Stock has been selling off heavily and is extremely oversold. Historically, when this stock\'s RSI drops below 30, it bounces back within 5-10 trading days 73% of the time. This is a bullish mean reversion opportunity.',
+    formula: 'RSI = 100 - (100 / (1 + RS)), where RS = Average Gain / Average Loss over 14 periods',
+    additionalNotes: 'RSI can remain overbought/oversold for extended periods during strong trends—don\'t fight a trend just because RSI is extreme. RSI divergence (price makes new high but RSI doesn\'t) is a powerful reversal signal. Works best in range-bound markets.',
+  },
+  macd: {
+    title: 'MACD (Moving Average Convergence Divergence)',
+    description: 'MACD tracks the relationship between two moving averages (typically 12-day and 26-day EMAs) and includes a signal line (9-day EMA). When the MACD line crosses above the signal line, it generates a bullish signal. When it crosses below, it\'s bearish. The histogram shows the distance between MACD and signal lines.',
+    interpretation: 'MACD identifies momentum shifts and trend changes. A bullish crossover (MACD crosses above signal line) suggests upward momentum is building. A bearish crossover suggests downward momentum. The histogram getting taller means momentum is strengthening; getting shorter means momentum is weakening.',
+    goodValues: [
+      { label: 'Bullish Cross', description: 'MACD crosses above signal (buy signal)', color: '#4caf50' },
+      { label: 'Positive Histogram', description: 'Above signal line (bullish momentum)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Negative Histogram', description: 'Below signal line (bearish momentum)', color: '#ff9800' },
+      { label: 'Bearish Cross', description: 'MACD crosses below signal (sell signal)', color: '#f44336' },
+    ],
+    example: 'MACD crossed above signal line with histogram turning positive. This indicates momentum is shifting from bearish to bullish. The last 8 times this crossover occurred, the stock rose an average of 7.5% over the next 3 months.',
+    formula: 'MACD = 12-day EMA - 26-day EMA; Signal Line = 9-day EMA of MACD; Histogram = MACD - Signal',
+    additionalNotes: 'MACD is a lagging indicator—crossovers happen after the move has started. Works best when combined with other indicators. False signals are common in choppy markets. MACD divergence (price makes new low but MACD doesn\'t) is a strong reversal indicator.',
+  },
+  momentum_20d: {
+    title: 'Momentum (20-Day)',
+    description: 'Momentum measures the rate of price change over a 20-day period by comparing today\'s price to the price 20 days ago. Positive momentum means the stock is higher than 20 days ago; negative means it\'s lower. The magnitude shows how strong the move is.',
+    interpretation: 'Momentum shows if the stock is gaining or losing steam. Rising momentum means the trend is accelerating—like a car speeding up. Falling momentum means the trend is decelerating—like a car slowing down. Zero momentum means the price is unchanged from 20 days ago.',
+    goodValues: [
+      { label: '> +5%', description: 'Strong positive momentum (accelerating up)', color: '#4caf50' },
+      { label: '+1% to +5%', description: 'Moderate upward momentum', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '-1% to -5%', description: 'Moderate downward momentum', color: '#ff9800' },
+      { label: '< -5%', description: 'Strong negative momentum (accelerating down)', color: '#f44336' },
+    ],
+    example: '20-day momentum of +8.5% means the stock is 8.5% higher than it was 20 trading days ago. This strong positive momentum suggests the uptrend has good strength and is likely to continue in the near term.',
+    formula: 'Momentum = ((Current Price / Price 20 days ago) - 1) × 100',
+    additionalNotes: 'Momentum is a leading indicator but can be volatile. Very high positive momentum can signal an overbought condition. Very high negative momentum can signal oversold. Best used with trend-following strategies rather than mean reversion.',
+  },
+  bollinger_bands: {
+    title: 'Bollinger Bands',
+    description: 'Bollinger Bands consist of a middle band (20-day moving average) and upper/lower bands set at 2 standard deviations above and below the middle. When price touches the lower band, it\'s oversold; upper band, it\'s overbought. Bands widen during high volatility and narrow during low volatility.',
+    interpretation: 'Bollinger Bands create a "price envelope" that contains normal price action. When price reaches the lower band, it\'s stretched too far below average and likely to bounce back (mean reversion). When price reaches the upper band, it may pull back. Band squeezes (narrow bands) often precede big moves.',
+    goodValues: [
+      { label: 'At Lower Band', description: 'Oversold, mean reversion likely (bullish)', color: '#4caf50' },
+      { label: 'Below Middle', description: 'Below average, potential support', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Above Middle', description: 'Above average, potential resistance', color: '#ff9800' },
+      { label: 'At Upper Band', description: 'Overbought, pullback likely (bearish)', color: '#f44336' },
+    ],
+    example: 'Price touched the lower Bollinger Band at $145 when the middle band is at $152. The stock is 2 standard deviations below its 20-day average—statistically, it should revert back toward $152. This creates a mean reversion buy opportunity.',
+    formula: 'Upper Band = SMA(20) + 2σ; Middle Band = SMA(20); Lower Band = SMA(20) - 2σ',
+    additionalNotes: 'In strong trends, price can "walk the band"—staying near the upper band in uptrends or lower band in downtrends. Bollinger Band squeezes (bands very narrow) signal low volatility and often precede breakouts. Works best in range-bound markets for mean reversion.',
+  },
+  rsi_meanreversion: {
+    title: 'RSI Mean Reversion',
+    description: 'A specialized RSI signal focused on mean reversion opportunities. When RSI reaches extreme levels (< 30 oversold or > 70 overbought) and starts reversing back toward the middle (50), it signals that price is likely to revert toward its average.',
+    interpretation: 'This indicator specifically looks for RSI extremes followed by reversals. When RSI is below 30 and starts rising, it signals oversold conditions ending—a bullish mean reversion. When RSI is above 70 and starts falling, it signals overbought conditions ending—a bearish mean reversion.',
+    goodValues: [
+      { label: 'RSI < 30 Rising', description: 'Oversold reversal (strong buy)', color: '#4caf50' },
+      { label: 'RSI 30-40 Rising', description: 'Recovery from oversold (bullish)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'RSI 60-70 Falling', description: 'Pullback from overbought (bearish)', color: '#ff9800' },
+      { label: 'RSI > 70 Falling', description: 'Overbought reversal (strong sell)', color: '#f44336' },
+    ],
+    example: 'RSI dropped to 25 (extremely oversold) and is now at 33 and rising. The reversal from oversold suggests selling pressure is exhausted and buyers are stepping in. This mean reversion signal has 71% success rate historically.',
+    additionalNotes: 'Mean reversion works best when fundamentals are stable—if a stock is crashing due to bad news, RSI oversold may not lead to a bounce. Best for stocks that trade in ranges rather than strong trends. Combine with support levels for higher probability.',
+  },
+  price_deviation_sma50: {
+    title: 'Price Deviation from 50-Day SMA',
+    description: 'Measures how far the current price is from its 50-day simple moving average, expressed as a percentage. Large deviations (> ±10%) suggest the price has stretched too far from its average and may revert back. The 50-day SMA represents the medium-term average price.',
+    interpretation: 'When price is significantly below the 50-day SMA (e.g., -8%), it\'s oversold relative to the medium-term trend and likely to bounce back up. When price is significantly above the 50-day SMA (e.g., +8%), it\'s overbought and may pull back. Small deviations (< ±5%) suggest normal price action.',
+    goodValues: [
+      { label: '< -8%', description: 'Significantly oversold (strong mean reversion)', color: '#4caf50' },
+      { label: '-5% to -8%', description: 'Moderately oversold (mean reversion likely)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '+5% to +8%', description: 'Moderately overbought (pullback likely)', color: '#ff9800' },
+      { label: '> +8%', description: 'Significantly overbought (strong pullback risk)', color: '#f44336' },
+    ],
+    example: 'Price is $142, 50-day SMA is $155. Deviation: -8.4%. Price has fallen significantly below its 50-day average and is stretched. Historically, when this stock deviates more than 8% below its 50-day SMA, it recovers back toward the average 68% of the time within 15 trading days.',
+    formula: 'Deviation = ((Current Price / 50-day SMA) - 1) × 100',
+    additionalNotes: 'During strong trends, deviations can persist longer than expected—don\'t fight a trend. Best for mean reversion in range-bound markets. Combine with RSI or Bollinger Bands for confirmation. The 50-day SMA is often watched by institutions as a key support/resistance level.',
+  },
+  moving_average_cross: {
+    title: 'Moving Average Crossover',
+    description: 'A signal generated when a shorter-term moving average (like 50-day) crosses above or below a longer-term moving average (like 200-day). The "golden cross" (50-day crosses above 200-day) is bullish; the "death cross" (50-day crosses below 200-day) is bearish.',
+    interpretation: 'Moving average crossovers identify major trend changes. A golden cross signals the short-term trend is becoming stronger than the long-term trend—bullish momentum building. A death cross signals the opposite—bearish momentum taking over. These are among the most-watched technical signals.',
+    goodValues: [
+      { label: 'Golden Cross', description: '50-day crosses above 200-day (major buy)', color: '#4caf50' },
+      { label: '50 > 200', description: 'Short-term above long-term (bullish)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '50 < 200', description: 'Short-term below long-term (bearish)', color: '#ff9800' },
+      { label: 'Death Cross', description: '50-day crosses below 200-day (major sell)', color: '#f44336' },
+    ],
+    example: 'Golden Cross formed: 50-day MA crossed above 200-day MA last week. Historically, golden crosses on this stock led to an average gain of 12% over the next 6 months in 78% of cases. This is a strong bullish signal for the medium term.',
+    additionalNotes: 'Moving average crosses are lagging signals—they confirm trends after they\'ve started, not predict them. Can result in whipsaws in choppy markets. Best used on longer timeframes (daily charts, not intraday). Golden crosses work better in bull markets; death crosses work better in bear markets.',
+  },
+  volume_trend: {
+    title: 'Volume Trend',
+    description: 'Analyzes whether trading volume is increasing or decreasing relative to recent averages. Rising volume on up days confirms buying interest; rising volume on down days confirms selling pressure. Volume validates price moves—strong moves on high volume are more reliable than moves on low volume.',
+    interpretation: 'Volume is like the "fuel" behind price moves. If price rises on high volume, it shows strong buying conviction. If price rises on low volume, it\'s weak and may reverse. Rising volume in the direction of the trend confirms the trend; declining volume suggests the trend is losing momentum.',
+    goodValues: [
+      { label: 'High Vol + Up', description: 'Strong buying conviction (bullish)', color: '#4caf50' },
+      { label: 'Rising Vol + Up', description: 'Increasing buying interest (bullish)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Rising Vol + Down', description: 'Increasing selling pressure (bearish)', color: '#ff9800' },
+      { label: 'High Vol + Down', description: 'Strong selling conviction (bearish)', color: '#f44336' },
+    ],
+    example: 'Stock rose 3% today on volume 2.5x the 20-day average. The high volume confirms strong buying interest and validates the upward move. When volume confirms direction, the move is more likely to continue.',
+    additionalNotes: 'Always consider volume with price. Price up + volume down = weak rally (likely to fail). Price down + volume down = weak selloff (may bounce). Volume spikes can signal institutional buying/selling. Earnings announcements and news often cause volume spikes.',
+  },
+  ema_alignment: {
+    title: 'EMA Alignment (Exponential Moving Averages)',
+    description: 'Analyzes the alignment of multiple exponential moving averages (typically 12-day, 26-day, and 50-day EMAs) to determine trend strength and direction. EMAs give more weight to recent prices than simple moving averages. When shorter EMAs are above longer EMAs, it signals an uptrend; when shorter EMAs are below longer EMAs, it signals a downtrend.',
+    interpretation: 'EMA alignment shows the "trend stack". In a strong uptrend, you want to see 12-day EMA > 26-day EMA > 50-day EMA—all stacked properly with price on top. This shows consistent bullish momentum across short, medium, and longer timeframes. When the alignment is reversed (50 > 26 > 12), it signals a downtrend.',
+    goodValues: [
+      { label: 'Bullish Alignment', description: '12 > 26 > 50 (strong uptrend)', color: '#4caf50' },
+      { label: 'Improving', description: 'EMAs converging bullishly', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Mixed', description: 'EMAs crossing/tangled (no clear trend)', color: '#ff9800' },
+      { label: 'Bearish Alignment', description: '12 < 26 < 50 (strong downtrend)', color: '#f44336' },
+    ],
+    example: 'EMA Alignment: 12-day = $223.24, 26-day = $224.43, 50-day = $226.75. This shows bearish alignment (12 < 26 < 50) indicating the stock is in a downtrend across multiple timeframes. For a bullish setup, we\'d want to see 12 > 26 > 50.',
+    additionalNotes: 'EMA alignment is powerful because it shows trend consensus across multiple timeframes. When all EMAs align in one direction, the trend is strong and reliable. When EMAs are tangled or crossing, the market is indecisive—wait for clear alignment before trading. EMA crossovers (12 crossing 26) can signal trend changes early.',
+  },
+  momentum_signal: {
+    title: 'Momentum Signal (Meta-Signal)',
+    description: 'A composite meta-signal that synthesizes multiple momentum indicators (RSI, MACD, price momentum) into a single momentum assessment. This aggregated signal shows whether overall momentum is bullish, bearish, or neutral by weighing all momentum factors together.',
+    interpretation: 'The momentum meta-signal tells you the "momentum verdict" across all momentum indicators combined. When it shows bullish (probability > 55%), it means the majority of momentum indicators (RSI, MACD, price changes) are pointing up. This is used as one input to the Combined Signal along with mean reversion and trend signals.',
+    goodValues: [
+      { label: 'Bullish (>60%)', description: 'Strong aggregate momentum (multiple indicators align)', color: '#4caf50' },
+      { label: 'Bullish (55-60%)', description: 'Moderate momentum (most indicators align)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Bearish (55-60%)', description: 'Moderate negative momentum', color: '#ff9800' },
+      { label: 'Bearish (>60%)', description: 'Strong negative momentum', color: '#f44336' },
+    ],
+    example: 'Momentum Signal: bullish at 58% probability (medium confidence). This means when you look at RSI, MACD, and 20-day price momentum together, they collectively show bullish momentum with 58% historical success rate.',
+    additionalNotes: 'The momentum meta-signal is not a standalone recommendation—it\'s one of three inputs to the Combined Signal. Even if momentum is bullish, mean reversion might be bearish, or trend might be neutral. The Combined Signal weighs all three to give you the final verdict.',
+  },
+  meanreversion_signal: {
+    title: 'Mean Reversion Signal (Meta-Signal)',
+    description: 'A composite meta-signal that synthesizes mean reversion indicators (Bollinger Bands, RSI extremes, price deviation from moving averages) into a single mean reversion assessment. Shows whether the stock is oversold/overbought and likely to revert to its average.',
+    interpretation: 'The mean reversion meta-signal tells you if the stock has stretched too far from its average and is likely to "snap back". Bullish mean reversion means the stock is oversold and likely to bounce up. Bearish mean reversion means the stock is overbought and likely to pull back down.',
+    goodValues: [
+      { label: 'Bullish (>60%)', description: 'Oversold—strong bounce likely', color: '#4caf50' },
+      { label: 'Bullish (55-60%)', description: 'Slightly oversold—bounce possible', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Bearish (55-60%)', description: 'Slightly overbought—pullback possible', color: '#ff9800' },
+      { label: 'Bearish (>60%)', description: 'Overbought—pullback likely', color: '#f44336' },
+    ],
+    example: 'Mean Reversion Signal: bearish at 61% probability (medium confidence). Price is 86% up the Bollinger Band (overbought), suggesting a pullback toward the average is likely. Historically, this pattern led to pullbacks 61% of the time.',
+    additionalNotes: 'Mean reversion conflicts with momentum in trending markets—momentum says "keep going", mean reversion says "pull back". The Combined Signal weighs both. Mean reversion works best in range-bound markets; it fails in strong trends.',
+  },
+  trend_signal: {
+    title: 'Trend Signal (Meta-Signal)',
+    description: 'A composite meta-signal that synthesizes trend indicators (moving average crossovers, EMA alignment, volume trends) into a single trend assessment. Shows whether the stock is in an uptrend, downtrend, or no clear trend.',
+    interpretation: 'The trend meta-signal is your "big picture" trend verdict. Bullish trend means moving averages are stacked properly and the stock is trending up. Bearish trend means the opposite. Neutral means no clear trend—the market is choppy or sideways.',
+    goodValues: [
+      { label: 'Bullish (>60%)', description: 'Strong uptrend confirmed', color: '#4caf50' },
+      { label: 'Bullish (55-60%)', description: 'Moderate uptrend', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: 'Bearish (55-60%)', description: 'Moderate downtrend', color: '#ff9800' },
+      { label: 'Bearish (>60%)', description: 'Strong downtrend', color: '#f44336' },
+    ],
+    example: 'Trend Signal: neutral at 53% probability (low confidence). Golden cross present (50-day MA above 200-day) but EMAs are bearishly aligned. Mixed signals result in neutral verdict—no clear trend direction.',
+    additionalNotes: 'The trend signal is the most reliable in trending markets but can give false signals in choppy, sideways markets. When trend confidence is low (<55%), the market is transitional—wait for a clearer trend before taking large positions.',
+  },
+  bollinger_band_percent_b: {
+    title: 'Bollinger Band %B',
+    description: 'Bollinger %B tells you where price is within the Bollinger Bands. 0% means price is at the lower band, 50% means at the middle (20-day average), 100% means at the upper band. Values above 100% or below 0% mean price has broken outside the bands—extreme conditions.',
+    interpretation: '%B is like a "price thermometer" for the Bollinger Bands. When %B is near 0% (at lower band), the stock is oversold and likely to bounce. When %B is near 100% (at upper band), the stock is overbought and likely to pull back. 50% means price is at the average—neutral.',
+    goodValues: [
+      { label: '< 20%', description: 'Near lower band (oversold, bullish reversal)', color: '#4caf50' },
+      { label: '20-40%', description: 'Below middle (potential support)', color: '#8bc34a' },
+    ],
+    badValues: [
+      { label: '60-80%', description: 'Above middle (potential resistance)', color: '#ff9800' },
+      { label: '> 80%', description: 'Near upper band (overbought, bearish reversal)', color: '#f44336' },
+    ],
+    example: 'Bollinger %B: 85.81%. Price is 86% of the way from the lower band to the upper band—very close to the upper band. This is overbought territory, suggesting a mean reversion pullback is likely.',
+    formula: '%B = (Price - Lower Band) / (Upper Band - Lower Band) × 100',
+    additionalNotes: '%B above 100% means price broke above the upper band (very overbought). %B below 0% means price broke below the lower band (very oversold). During strong trends, %B can stay extreme for extended periods—don\'t fight the trend.',
   },
 };
 

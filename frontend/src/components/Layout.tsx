@@ -33,6 +33,10 @@ import {
   ShowChart,
   SignalCellularAlt,
   Psychology,
+  FilterList,
+  Visibility,
+  Savings,
+  Category,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -55,6 +59,11 @@ const menuItems = [
   { text: 'Volatility Forecast', icon: <ShowChart />, path: 'volatility-forecast' },
   { text: 'Trading Signals', icon: <SignalCellularAlt />, path: 'trading-signals' },
   { text: 'Sentiment Forecast', icon: <Psychology />, path: 'sentiment-forecast' },
+  // Phase 3 features
+  { text: 'Stock Screener', icon: <FilterList />, path: 'screening' },
+  { text: 'Watchlists', icon: <Visibility />, path: 'watchlists' },
+  { text: 'Long-Term Guidance', icon: <Savings />, path: 'long-term-guidance' },
+  { text: 'Factor Portfolio', icon: <Category />, path: 'factor-portfolio' },
   // Notifications & Admin
   { text: 'Alert Rules', icon: <NotificationsActive />, path: 'alerts' },
   { text: 'Notifications', icon: <NotificationsIcon />, path: 'notifications' },

@@ -1080,7 +1080,7 @@ export type SentimentAwareForecast = {
 };
 
 // User Risk Preferences Types (Phase 2)
-export type RiskAppetite = 'Conservative' | 'Balanced' | 'Aggressive';
+export type RiskAppetite = 'conservative' | 'moderate' | 'aggressive';
 export type SignalSensitivity = 'Low' | 'Medium' | 'High';
 
 export type RiskPreferences = {
@@ -1104,4 +1104,381 @@ export type RiskProfile = {
     signal_confidence_threshold: number;
     forecast_horizon_days: number;
     characteristics: string[];
+};
+
+// ============================================================================
+// Phase 3: AI-Powered Recommendations, Screening & Watchlists
+// ============================================================================
+
+// Screening Types
+export type ScreeningFactorCategory = 'fundamental' | 'technical' | 'sentiment' | 'momentum';
+
+export type ScreeningFilter = {
+    metric: string;
+    min?: number;
+    max?: number;
+    enabled: boolean;
+};
+
+export type ScreeningRequest = {
+    symbols?: string[];
+    weights?: {
+        fundamental?: number;
+        technical?: number;
+        sentiment?: number;
+        momentum?: number;
+    };
+    filters?: {
+        sectors?: string[];
+        market_cap?: 'small' | 'mid' | 'large' | 'mega';
+        min_avg_volume?: number;
+        min_price?: number;
+        max_price?: number;
+        geographies?: string[];
+    };
+    limit?: number;
+    offset?: number;
+    risk_appetite?: 'conservative' | 'moderate' | 'aggressive';
+    horizon_months?: number;
+    refresh?: boolean;
+};
+
+export type ScoreDetail = {
+    metric: string;
+    raw_value: number | null;
+    score: number;
+    interpretation: string;
+};
+
+export type FundamentalScore = {
+    pe_ratio: number | null;
+    pb_ratio: number | null;
+    debt_to_equity: number | null;
+    roe: number | null;
+    composite: number;
+    details: ScoreDetail[];
+};
+
+export type TechnicalScore = {
+    rsi: number | null;
+    macd_signal: number | null;
+    moving_avg_cross: number | null;
+    trend_strength: number | null;
+    composite: number;
+    details: ScoreDetail[];
+};
+
+export type SentimentScore = {
+    news_sentiment: number | null;
+    social_sentiment: number | null;
+    analyst_rating: number | null;
+    composite: number;
+    details: ScoreDetail[];
+};
+
+export type MomentumScore = {
+    momentum_1m: number | null;
+    momentum_3m: number | null;
+    momentum_6m: number | null;
+    momentum_12m: number | null;
+    volume_momentum: number | null;
+    acceleration: number | null;
+    composite: number;
+    details: ScoreDetail[];
+};
+
+export type ScreeningResult = {
+    symbol: string;
+    composite_score: number;
+    rank: number;
+    fundamental: FundamentalScore;
+    technical: TechnicalScore;
+    sentiment: SentimentScore;
+    momentum: MomentumScore;
+    weights_used: {
+        fundamental: number;
+        technical: number;
+        sentiment: number;
+        momentum: number;
+    };
+    explanation: string;
+};
+
+export type ScreeningResponse = {
+    results: ScreeningResult[];
+    total_screened: number;
+    total_passed_filters: number;
+    weights_used: {
+        fundamental: number;
+        technical: number;
+        sentiment: number;
+        momentum: number;
+    };
+    screened_at: string;
+    cache_hit: boolean;
+    limit: number;
+    offset: number;
+};
+
+// Recommendation Types
+export type RecommendationExplanation = {
+    symbol: string;
+    explanation: string;
+    valuation_narrative: string;
+    risk_narrative: string;
+    factor_highlights: { factor: string; narrative: string }[];
+    disclaimers: string[];
+    generated_at: string;
+};
+
+export type Recommendation = {
+    id: string;
+    symbol: string;
+    company_name: string;
+    score: number;
+    factors: FactorScore[];
+    recommendation_type: 'screen' | 'long-term' | 'factor';
+    risk_level: RiskLevel;
+    generated_at: string;
+    expires_at?: string;
+};
+
+// Watchlist Types
+export type Watchlist = {
+    id: string;
+    user_id: string;
+    name: string;
+    description: string | null;
+    is_default: boolean;
+    item_count?: number;
+    created_at: string;
+    updated_at: string;
+};
+
+export type WatchlistThresholds = {
+    price_target_high?: number;
+    price_target_low?: number;
+    volatility_threshold?: number;
+    volume_anomaly_threshold?: number;
+    rsi_overbought?: number;
+    rsi_oversold?: number;
+    sentiment_threshold?: number;
+};
+
+export type WatchlistItem = {
+    id: string;
+    watchlist_id: string;
+    symbol: string;
+    company_name?: string;
+    added_at: string;
+    custom_thresholds: WatchlistThresholds | null;
+    notes: string | null;
+    current_price?: number;
+    price_change_pct?: number;
+    volume?: number;
+    risk_level?: RiskLevel;
+};
+
+export type WatchlistAlertType = 'price_target' | 'volatility' | 'sentiment' | 'technical' | 'volume';
+
+export type WatchlistAlert = {
+    id: string;
+    watchlist_id: string;
+    symbol: string;
+    alert_type: WatchlistAlertType;
+    threshold_value: number | null;
+    actual_value: number | null;
+    message: string;
+    triggered_at: string;
+    acknowledged: boolean;
+    acknowledged_at: string | null;
+};
+
+export type CreateWatchlistRequest = {
+    name: string;
+    description?: string;
+};
+
+export type UpdateWatchlistRequest = {
+    name?: string;
+    description?: string;
+};
+
+export type AddWatchlistItemRequest = {
+    ticker: string;
+    notes?: string;
+    target_price?: number;
+};
+
+// Long-Term Guidance Types
+export type InvestmentGoal = 'retirement' | 'college' | 'wealth' | 'income';
+
+export type LongTermRequest = {
+    goal: InvestmentGoal;
+    horizon_years: number;
+    risk_tolerance: RiskAppetite;
+    monthly_contribution?: number;
+};
+
+export type QualityScore = {
+    ticker: string;
+    holding_name: string | null;
+    industry: string | null;
+    growth_score: number;
+    dividend_score: number;
+    moat_score: number;
+    management_score: number;
+    composite_score: number;
+    quality_tier: 'premium' | 'high' | 'medium' | 'low';
+    growth_metrics: any;
+    dividend_metrics: any;
+    moat_indicators: any;
+    management_metrics: any;
+};
+
+export type LongTermRecommendation = {
+    ticker: string;
+    holding_name: string | null;
+    industry: string | null;
+    quality_score: QualityScore;
+    risk_class: 'low' | 'medium' | 'high';
+    dividend_aristocrat_candidate: boolean;
+    blue_chip_candidate: boolean;
+    goal_suitability: number;
+    rationale: string;
+    suggested_weight: number; // 0-1 (multiply by 100 for percentage)
+};
+
+export type LongTermGuidance = {
+    portfolio_id: string;
+    goal: string;
+    risk_tolerance: string;
+    horizon_years: number;
+    allocation_strategy: {
+        low_risk_allocation: number;
+        medium_risk_allocation: number;
+        high_risk_allocation: number;
+        description: string;
+    };
+    recommendations: LongTermRecommendation[];
+    summary: {
+        current_allocation: {
+            low_risk_pct: number;
+            medium_risk_pct: number;
+            high_risk_pct: number;
+        };
+        rebalance_needed: boolean;
+        suggestions: string[];
+    };
+    analyzed_at: string;
+};
+
+// Factor Portfolio Types
+export type FactorType = 'value' | 'growth' | 'momentum' | 'quality' | 'low_volatility';
+
+export type FactorPortfolioRequest = {
+    factors: FactorType[];
+    weights?: Record<string, number>;
+    limit?: number;
+};
+
+export type ExposureLevel = 'underweight' | 'neutral' | 'overweight';
+
+export type TickerFactorScores = {
+    ticker: string;
+    holding_name: string | null;
+    weight: number;
+    value_score: number;
+    growth_score: number;
+    momentum_score: number;
+    quality_score: number;
+    low_volatility_score: number;
+    composite_score: number;
+};
+
+export type PortfolioFactorExposure = {
+    factor: FactorType;
+    label: string;
+    description: string;
+    score: number;
+    exposure_level: ExposureLevel;
+    expected_risk_premium: number;
+    recommendation: string;
+};
+
+export type FactorWeights = {
+    value: number;
+    growth: number;
+    momentum: number;
+    quality: number;
+    low_volatility: number;
+};
+
+export type FactorEtfSuggestion = {
+    ticker: string;
+    name: string;
+    factor: FactorType;
+    expense_ratio: number;
+    aum_billions: number;
+    description: string;
+};
+
+export type FactorBacktestResult = {
+    factor: FactorType;
+    annualized_return: number;
+    annualized_volatility: number;
+    sharpe_ratio: number;
+    max_drawdown: number;
+    observation_days: number;
+    cumulative_return: number;
+};
+
+export type FactorAnalysisSummary = {
+    dominant_factor: string;
+    weakest_factor: string;
+    overall_composite_score: number;
+    key_findings: string[];
+};
+
+export type FactorAnalysisResponse = {
+    portfolio_id: string;
+    portfolio_name: string;
+    analysis_date: string;
+    holdings_scores: TickerFactorScores[];
+    factor_exposures: PortfolioFactorExposure[];
+    factor_weights: FactorWeights;
+    etf_suggestions: FactorEtfSuggestion[];
+    backtest_results: FactorBacktestResult[];
+    summary: FactorAnalysisSummary;
+};
+
+// Legacy types for backwards compatibility (deprecated)
+export type FactorStock = {
+    symbol: string;
+    company_name: string;
+    factor_scores: Record<string, number>;
+    composite_score: number;
+    sector: string;
+    market_cap: number;
+    price: number;
+};
+
+export type FactorETF = {
+    symbol: string;
+    name: string;
+    factor_exposure: FactorType;
+    expense_ratio: number;
+    aum: number;
+    ytd_return: number;
+};
+
+export type FactorPortfolio = {
+    factors: FactorType[];
+    weights: Record<string, number>;
+    stocks: FactorStock[];
+    etf_alternatives: FactorETF[];
+    expected_return: number;
+    expected_risk: number;
+    factor_correlations: Record<string, Record<string, number>>;
+    generated_at: string;
 };

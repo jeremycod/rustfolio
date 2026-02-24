@@ -80,22 +80,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("📈 Risk-free rate set to: {:.2}%", risk_free_rate * 100.0);
 
     // Initialize LLM service
+    let llm_provider = std::env::var("LLM_PROVIDER")
+        .unwrap_or_else(|_| "openai".to_string());
+
+    // Select API key based on provider
+    let llm_api_key = match llm_provider.as_str() {
+        "anthropic" | "claude" => std::env::var("ANTHROPIC_API_KEY").ok(),
+        _ => std::env::var("OPENAI_API_KEY").ok(),
+    };
+
     let llm_config = LlmConfig {
         enabled: std::env::var("LLM_ENABLED")
             .ok()
             .and_then(|s| s.parse::<bool>().ok())
             .unwrap_or(false),
-        provider: std::env::var("LLM_PROVIDER")
-            .unwrap_or_else(|_| "openai".to_string()),
-        api_key: std::env::var("OPENAI_API_KEY").ok(),
+        provider: llm_provider,
+        api_key: llm_api_key,
         max_tokens: std::env::var("LLM_MAX_TOKENS")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(500),
+            .unwrap_or(1024),
         temperature: std::env::var("LLM_TEMPERATURE")
             .ok()
             .and_then(|s| s.parse::<f32>().ok())
-            .unwrap_or(0.7),
+            .unwrap_or(0.4),
     };
 
     let llm_service = Arc::new(LlmService::new(llm_config));

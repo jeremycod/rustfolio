@@ -1,6 +1,6 @@
 use crate::errors::AppError;
 use crate::external::price_provider::PriceProvider;
-use crate::jobs::{portfolio_risk_job, portfolio_correlations_job, daily_risk_snapshots_job, market_regime_update_job, hmm_training_job, regime_forecast_job, populate_optimization_cache_job, rolling_beta_cache_job, downside_risk_cache_job};
+use crate::jobs::{portfolio_risk_job, portfolio_correlations_job, daily_risk_snapshots_job, market_regime_update_job, hmm_training_job, regime_forecast_job, populate_optimization_cache_job, rolling_beta_cache_job, downside_risk_cache_job, watchlist_monitoring_job};
 use crate::services::failure_cache::FailureCache;
 use crate::services::rate_limiter::RateLimiter;
 use sqlx::PgPool;
@@ -183,6 +183,14 @@ impl JobSchedulerService {
 
         // TODO: Re-enable sentiment cache job after refactoring
         // Sentiment cache is currently populated on-demand via manual endpoint
+
+        // Watchlist monitoring - every 30 minutes during market hours
+        self.schedule_job(
+            "0 */30 * * * *",
+            "watchlist_monitoring",
+            "Every 30 minutes",
+            watchlist_monitoring_job::run_watchlist_monitoring
+        ).await?;
 
         // Weekly jobs (SUN = Sunday)
         let cleanup_schedule = if test_mode { "0 */3 * * * *" } else { "0 0 3 * * SUN" };

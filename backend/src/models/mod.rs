@@ -20,6 +20,11 @@ pub mod market_regime;
 pub mod hmm_regime;
 pub mod user_preferences;
 pub mod signal;
+pub mod recommendation;
+pub mod factor;
+pub mod watchlist;
+pub mod long_term_guidance;
+pub mod screening;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;
@@ -75,6 +80,10 @@ pub use signal::{
     TradingSignal, SignalType, SignalDirection, SignalFactors, SignalFactor,
     ConfidenceLevel as SignalConfidenceLevel, SignalResponse,
     SignalGenerationParams,
+};
+pub use recommendation::{
+    NarrativeType, ExplanationContext, RecommendationExplanation,
+    CachedExplanation, ExplanationQuery,
 };
 // Alert module models are used internally by routes/services
 // Re-export only when needed by other modules

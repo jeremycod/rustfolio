@@ -33,3 +33,4 @@ pub mod hmm_training_job;
 pub mod regime_forecast_job;
 pub mod rolling_beta_cache_job;
 pub mod downside_risk_cache_job;
+pub mod watchlist_monitoring_job;

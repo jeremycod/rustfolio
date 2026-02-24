@@ -352,13 +352,16 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
   };
 
   // Force refresh handler
-  const handleForceRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['rolling-beta', ticker, days, benchmark] });
-    // Refetch with force=true
-    const endpoint = `/api/risk/positions/${ticker}/rolling-beta?days=${days}&benchmark=${benchmark}&force=true`;
-    fetch(endpoint).then(() => {
+  const handleForceRefresh = async () => {
+    try {
+      // Call the endpoint with force=true to bypass cache
+      await getRollingBeta(ticker, days, benchmark, true);
+
+      // Invalidate the query to trigger a refetch
       queryClient.invalidateQueries({ queryKey: ['rolling-beta', ticker, days, benchmark] });
-    });
+    } catch (error) {
+      console.error('Failed to refresh data:', error);
+    }
   };
 
   return (

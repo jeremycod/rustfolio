@@ -104,6 +104,177 @@ struct OpenAiEmbeddingData {
     embedding: Vec<f32>,
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Anthropic / Claude API structures and provider
+// ──────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+struct AnthropicRequest {
+    model: String,
+    max_tokens: usize,
+    system: String,
+    messages: Vec<AnthropicMessage>,
+    temperature: f32,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct AnthropicMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicResponse {
+    content: Vec<AnthropicContent>,
+    usage: Option<AnthropicUsage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicContent {
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicUsage {
+    input_tokens: u32,
+    output_tokens: u32,
+}
+
+/// Anthropic/Claude provider implementation
+pub struct AnthropicProvider {
+    api_key: String,
+    model: String,
+    max_tokens: usize,
+    temperature: f32,
+    client: Client,
+}
+
+impl AnthropicProvider {
+    pub fn new(api_key: String, max_tokens: usize, temperature: f32) -> Self {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(60))
+            .build()
+            .expect("Failed to create HTTP client for Anthropic");
+
+        Self {
+            api_key,
+            model: "claude-sonnet-4-20250514".to_string(),
+            max_tokens,
+            temperature,
+            client,
+        }
+    }
+
+    async fn call_anthropic_with_retry(&self, request: AnthropicRequest) -> Result<AnthropicResponse, LlmError> {
+        let mut retry_count = 0;
+        let max_retries = 3;
+        let mut delay = Duration::from_secs(1);
+
+        loop {
+            match self.call_anthropic(&request).await {
+                Ok(response) => return Ok(response),
+                Err(e) => {
+                    retry_count += 1;
+                    if retry_count >= max_retries {
+                        error!("Anthropic API call failed after {} retries: {}", max_retries, e);
+                        return Err(e);
+                    }
+
+                    warn!("Anthropic API call failed (attempt {}/{}): {}. Retrying in {:?}...",
+                          retry_count, max_retries, e, delay);
+                    tokio::time::sleep(delay).await;
+                    delay *= 2;
+                }
+            }
+        }
+    }
+
+    async fn call_anthropic(&self, request: &AnthropicRequest) -> Result<AnthropicResponse, LlmError> {
+        let response = self.client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("Content-Type", "application/json")
+            .json(request)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_timeout() {
+                    LlmError::Timeout
+                } else {
+                    LlmError::NetworkError(e.to_string())
+                }
+            })?;
+
+        let status = response.status();
+
+        if status == 429 {
+            return Err(LlmError::RateLimited);
+        }
+
+        if !status.is_success() {
+            let error_text = response.text().await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(LlmError::ApiError(format!("HTTP {}: {}", status, error_text)));
+        }
+
+        response.json::<AnthropicResponse>()
+            .await
+            .map_err(|e| LlmError::InvalidResponse(e.to_string()))
+    }
+}
+
+#[async_trait]
+impl LlmProvider for AnthropicProvider {
+    async fn generate_completion(&self, prompt: String) -> Result<String, LlmError> {
+        info!("Generating Anthropic completion (model: {}, max_tokens: {})", self.model, self.max_tokens);
+
+        let request = AnthropicRequest {
+            model: self.model.clone(),
+            max_tokens: self.max_tokens,
+            system: "You are an expert financial analyst assistant for an investment portfolio application called Rustfolio. You provide educational, factual, and insightful analysis of stocks and investment recommendations. You always use clear language accessible to retail investors. You NEVER provide specific buy/sell advice. You frame all analysis probabilistically and include appropriate risk disclaimers.".to_string(),
+            messages: vec![
+                AnthropicMessage {
+                    role: "user".to_string(),
+                    content: prompt,
+                },
+            ],
+            temperature: self.temperature,
+        };
+
+        let response = self.call_anthropic_with_retry(request).await?;
+
+        let content = response.content
+            .first()
+            .ok_or_else(|| LlmError::InvalidResponse("No content blocks in Anthropic response".to_string()))?
+            .text
+            .clone();
+
+        if let Some(usage) = response.usage {
+            info!("Anthropic completion generated. Tokens: {} input + {} output",
+                  usage.input_tokens, usage.output_tokens);
+        }
+
+        Ok(content)
+    }
+
+    async fn generate_summary(&self, text: String, max_length: usize) -> Result<String, LlmError> {
+        let prompt = format!(
+            "Summarize the following text in no more than {} words:\n\n{}",
+            max_length, text
+        );
+        self.generate_completion(prompt).await
+    }
+
+    async fn get_embedding(&self, _text: String) -> Result<Vec<f32>, LlmError> {
+        Err(LlmError::ApiError("Anthropic does not support embeddings. Use OpenAI for embeddings.".to_string()))
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// OpenAI provider
+// ──────────────────────────────────────────────────────────────────────────────
+
 /// OpenAI provider implementation
 pub struct OpenAiProvider {
     api_key: String,
@@ -420,6 +591,14 @@ impl LlmService {
                     match config.provider.as_str() {
                         "openai" => {
                             let provider = OpenAiProvider::new(
+                                api_key.clone(),
+                                config.max_tokens,
+                                config.temperature,
+                            );
+                            Some(Arc::new(provider) as Arc<dyn LlmProvider>)
+                        },
+                        "anthropic" | "claude" => {
+                            let provider = AnthropicProvider::new(
                                 api_key.clone(),
                                 config.max_tokens,
                                 config.temperature,

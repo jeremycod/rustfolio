@@ -61,7 +61,23 @@ import type {
     SignalResponse,
     SentimentAwareForecast,
     RiskPreferences,
-    RiskProfile
+    RiskProfile,
+    // Phase 3 types
+    ScreeningRequest,
+    ScreeningResponse,
+    RecommendationExplanation,
+    Watchlist,
+    WatchlistItem,
+    WatchlistAlert,
+    WatchlistThresholds,
+    CreateWatchlistRequest,
+    UpdateWatchlistRequest,
+    AddWatchlistItemRequest,
+    LongTermGuidance,
+    InvestmentGoal,
+    RiskAppetite,
+    FactorType,
+    FactorPortfolio,
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -280,11 +296,15 @@ export async function getPortfolioCorrelations(
 export async function getRollingBeta(
     ticker: string,
     days: number = 180,
-    benchmark: string = 'SPY'
+    benchmark: string = 'SPY',
+    force: boolean = false
 ): Promise<RollingBetaAnalysis> {
     const params = new URLSearchParams();
     params.append('days', days.toString());
     params.append('benchmark', benchmark);
+    if (force) {
+        params.append('force', 'true');
+    }
 
     const queryString = params.toString();
     const url = `/api/risk/positions/${ticker}/rolling-beta${queryString ? `?${queryString}` : ''}`;
@@ -750,11 +770,15 @@ export async function generateOptimizationAnalysis(portfolioId: string): Promise
 export async function getPortfolioDownsideRisk(
     portfolioId: string,
     days: number = 90,
-    benchmark: string = 'SPY'
+    benchmark: string = 'SPY',
+    force: boolean = false
 ): Promise<any> {
     const params = new URLSearchParams();
     params.append('days', days.toString());
     params.append('benchmark', benchmark);
+    if (force) {
+        params.append('force', 'true');
+    }
 
     const url = `/api/risk/portfolios/${portfolioId}/downside?${params.toString()}`;
     const res = await api.get(url, { timeout: 120000 });
@@ -855,4 +879,123 @@ export async function resetUserRiskPreferences(userId: string): Promise<RiskPref
 export async function getUserRiskProfile(userId: string): Promise<RiskProfile> {
     const res = await api.get(`/api/users/${userId}/risk-profile`);
     return res.data;
+}
+
+// ============================================================================
+// Phase 3: AI-Powered Recommendations, Screening & Watchlists
+// ============================================================================
+
+// Screening Endpoints
+export async function screenStocks(request: ScreeningRequest): Promise<ScreeningResponse> {
+    const res = await api.post('/api/recommendations/screen', request, { timeout: 30000 });
+    return res.data;
+}
+
+// Recommendation Explanation Endpoint
+export async function getRecommendationExplanation(symbol: string): Promise<RecommendationExplanation> {
+    const res = await api.get(`/api/recommendations/${symbol}/explanation`, { timeout: 30000 });
+    return res.data;
+}
+
+// Long-Term Guidance Endpoint
+export async function getLongTermGuidance(
+    portfolioId: string,
+    goal: InvestmentGoal,
+    horizon: number,
+    risk_tolerance: RiskAppetite
+): Promise<LongTermGuidance> {
+    const params = new URLSearchParams();
+    params.append('goal', goal);
+    params.append('horizon', horizon.toString());
+    params.append('risk_tolerance', risk_tolerance);
+    const url = `/api/recommendations/long-term/${portfolioId}?${params.toString()}`;
+    const res = await api.get(url, { timeout: 30000 });
+    return res.data;
+}
+
+// Factor-Based Recommendations Endpoint
+export async function getFactorRecommendations(
+    portfolioId: string,
+    days?: number,
+    includeBacktest?: boolean,
+    includeEtfs?: boolean
+): Promise<FactorPortfolio> {
+    const params = new URLSearchParams();
+    if (days) params.append('days', days.toString());
+    if (includeBacktest !== undefined) params.append('include_backtest', includeBacktest.toString());
+    if (includeEtfs !== undefined) params.append('include_etfs', includeEtfs.toString());
+    const url = `/api/recommendations/factors/${portfolioId}?${params.toString()}`;
+    const res = await api.get(url, { timeout: 30000 });
+    return res.data;
+}
+
+// Watchlist Endpoints
+export async function listWatchlists(): Promise<Watchlist[]> {
+    const res = await api.get('/api/watchlists');
+    return res.data;
+}
+
+export async function createWatchlist(data: CreateWatchlistRequest): Promise<Watchlist> {
+    const res = await api.post('/api/watchlists', data);
+    return res.data;
+}
+
+export async function getWatchlist(watchlistId: string): Promise<Watchlist> {
+    const res = await api.get(`/api/watchlists/${watchlistId}`);
+    return res.data;
+}
+
+export async function updateWatchlist(watchlistId: string, data: UpdateWatchlistRequest): Promise<Watchlist> {
+    const res = await api.put(`/api/watchlists/${watchlistId}`, data);
+    return res.data;
+}
+
+export async function deleteWatchlist(watchlistId: string): Promise<void> {
+    await api.delete(`/api/watchlists/${watchlistId}`);
+}
+
+export async function getWatchlistItems(watchlistId: string): Promise<WatchlistItem[]> {
+    const res = await api.get(`/api/watchlists/${watchlistId}/items`);
+    return res.data;
+}
+
+export async function addWatchlistItem(watchlistId: string, data: AddWatchlistItemRequest): Promise<WatchlistItem> {
+    const res = await api.post(`/api/watchlists/${watchlistId}/items`, data);
+    return res.data;
+}
+
+export async function removeWatchlistItem(watchlistId: string, symbol: string): Promise<void> {
+    await api.delete(`/api/watchlists/${watchlistId}/items/${symbol}`);
+}
+
+export async function updateWatchlistThresholds(
+    watchlistId: string,
+    symbol: string,
+    thresholds: WatchlistThresholds
+): Promise<WatchlistItem> {
+    const res = await api.put(`/api/watchlists/${watchlistId}/items/${symbol}/thresholds`, thresholds);
+    return res.data;
+}
+
+export async function getWatchlistAlerts(watchlistId: string): Promise<WatchlistAlert[]> {
+    const res = await api.get(`/api/watchlists/${watchlistId}/alerts`);
+    return res.data;
+}
+
+// Export screening results to CSV
+export async function exportScreeningCSV(request: ScreeningRequest): Promise<void> {
+    const res = await api.post('/api/recommendations/screen/export', request, {
+        responseType: 'blob',
+        timeout: 30000,
+    });
+
+    const blob = new Blob([res.data], { type: 'text/csv' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `screening_results_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
 }

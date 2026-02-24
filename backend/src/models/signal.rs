@@ -5,7 +5,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 /// Type of trading signal based on analysis method
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, sqlx::Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, sqlx::Type)]
 #[sqlx(type_name = "text")]
 pub enum SignalType {
     /// Momentum-based signals (RSI, MACD, price momentum)

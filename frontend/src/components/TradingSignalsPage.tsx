@@ -19,6 +19,7 @@ import {
   AccordionSummary,
   AccordionDetails,
   Divider,
+  IconButton,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -27,16 +28,20 @@ import {
   Search,
   ExpandMore,
   Info as InfoIcon,
+  HelpOutline,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { getTradingSignals, searchTickers } from '../lib/endpoints';
 import type { SignalDirection, SignalFactor } from '../types';
+import { MetricHelpDialog } from './MetricHelpDialog';
 
 export function TradingSignalsPage() {
   const [ticker, setTicker] = useState('');
   const [searchTicker, setSearchTicker] = useState('');
   const [horizon, setHorizon] = useState(3);
   const [signalTypeFilter, setSignalTypeFilter] = useState<string>('all');
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState<string>('');
 
   // Fetch company name
   const companyInfoQ = useQuery({
@@ -110,6 +115,39 @@ export function TradingSignalsPage() {
     return `${(value * 100).toFixed(0)}%`;
   };
 
+  // Map indicator names to help keys
+  const getIndicatorHelpKey = (indicatorName: string): string | null => {
+    const normalized = indicatorName.toLowerCase().replace(/\s+/g, '_');
+
+    // Map common indicator names to help keys
+    const mappings: Record<string, string> = {
+      // Basic indicators
+      'rsi_14': 'rsi_14',
+      'rsi_meanreversion': 'rsi_meanreversion',
+      'rsi': 'rsi_14',
+      'macd': 'macd',
+      'momentum_20d': 'momentum_20d',
+      'momentum': 'momentum_20d',
+      'bollinger_bands': 'bollinger_band_percent_b',
+      'bollinger': 'bollinger_band_percent_b',
+      'price_deviation_sma50': 'price_deviation_sma50',
+      'price_deviation': 'price_deviation_sma50',
+      'moving_average_cross': 'moving_average_cross',
+      'ma_cross': 'moving_average_cross',
+      'sma_50_200_cross': 'moving_average_cross',
+      'volume_trend': 'volume_trend',
+      'volume': 'volume_trend',
+      'ema_alignment': 'ema_alignment',
+      'ema': 'ema_alignment',
+      // Meta-signals (used in Combined Signal)
+      'momentum_signal': 'momentum_signal',
+      'meanreversion_signal': 'meanreversion_signal',
+      'trend_signal': 'trend_signal',
+    };
+
+    return mappings[normalized] || null;
+  };
+
   const renderOverallRecommendation = () => {
     if (!signalsQ.data?.overall_recommendation) return null;
 
@@ -118,9 +156,29 @@ export function TradingSignalsPage() {
 
     return (
       <Paper sx={{ p: 3, mb: 3, bgcolor: `${actionColor}.50` }}>
-        <Typography variant="h6" gutterBottom>
-          Overall Recommendation
-        </Typography>
+        <Box display="flex" alignItems="center" gap={1} mb={2}>
+          <Typography variant="h6">
+            Overall Recommendation
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedMetric('trading_signal_overall');
+              setHelpOpen(true);
+            }}
+            sx={{
+              p: 0.5,
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'primary.main',
+                backgroundColor: 'primary.50',
+              },
+            }}
+          >
+            <HelpOutline fontSize="small" />
+          </IconButton>
+        </Box>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={4}>
             <Box display="flex" alignItems="center" gap={2}>
@@ -138,9 +196,29 @@ export function TradingSignalsPage() {
             </Box>
           </Grid>
           <Grid item xs={12} md={4}>
-            <Typography variant="body2" color="text.secondary">
-              Probability
-            </Typography>
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Typography variant="body2" color="text.secondary">
+                Probability
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedMetric('trading_signal_probability');
+                  setHelpOpen(true);
+                }}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.50',
+                  },
+                }}
+              >
+                <HelpOutline sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
             <Typography variant="h5">{formatPercent(rec.probability)}</Typography>
           </Grid>
           <Grid item xs={12} md={4}>
@@ -166,34 +244,100 @@ export function TradingSignalsPage() {
           Individual signals with probability scores and explanations
         </Typography>
 
-        {signalsQ.data.signals.map((signal, idx) => (
+        {signalsQ.data.signals.map((signal, idx) => {
+          // Backend sends lowercase with underscores: 'momentum', 'mean_reversion', 'trend', 'combined'
+          const signalMetricKey =
+            signal.signal_type === 'combined' ? 'trading_signal_combined' :
+            signal.signal_type === 'momentum' ? 'trading_signal_momentum' :
+            signal.signal_type === 'mean_reversion' ? 'trading_signal_mean_reversion' :
+            'trading_signal_trend';
+
+          return (
           <Accordion key={idx} sx={{ mb: 1 }}>
             <AccordionSummary expandIcon={<ExpandMore />}>
               <Box display="flex" alignItems="center" gap={2} width="100%">
                 {getDirectionIcon(signal.direction)}
-                <Box flexGrow={1}>
+                <Box flexGrow={1} display="flex" alignItems="center" gap={0.5}>
                   <Typography variant="subtitle1" fontWeight="bold">
-                    {signal.signal_type === 'Combined' ? '📊 ' :
-                     signal.signal_type === 'Momentum' ? '🔥 ' :
-                     signal.signal_type === 'MeanReversion' ? '🔄 ' : '📈 '}
-                    {signal.signal_type} Signal
+                    {signal.signal_type === 'combined' ? '📊 ' :
+                     signal.signal_type === 'momentum' ? '🔥 ' :
+                     signal.signal_type === 'mean_reversion' ? '🔄 ' : '📈 '}
+                    {signal.signal_type.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())} Signal
                   </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMetric(signalMetricKey);
+                      setHelpOpen(true);
+                    }}
+                    sx={{
+                      p: 0.5,
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                        backgroundColor: 'primary.50',
+                      },
+                    }}
+                  >
+                    <HelpOutline sx={{ fontSize: 16 }} />
+                  </IconButton>
                 </Box>
                 <Chip
                   label={signal.direction}
                   color={getDirectionColor(signal.direction)}
                   size="small"
                 />
-                <Chip
-                  label={`${formatPercent(signal.probability)} Probability`}
-                  color={getConfidenceColor(signal.confidence)}
-                  size="small"
-                />
-                <Chip
-                  label={signal.confidence}
-                  color={getConfidenceColor(signal.confidence)}
-                  size="small"
-                />
+                <Box display="flex" alignItems="center" gap={0.5}>
+                  <Chip
+                    label={`${formatPercent(signal.probability)} Probability`}
+                    color={getConfidenceColor(signal.confidence)}
+                    size="small"
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMetric('trading_signal_probability');
+                      setHelpOpen(true);
+                    }}
+                    sx={{
+                      p: 0.25,
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                        backgroundColor: 'primary.50',
+                      },
+                    }}
+                  >
+                    <HelpOutline sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Box>
+                <Box display="flex" alignItems="center" gap={0.5}>
+                  <Chip
+                    label={signal.confidence}
+                    color={getConfidenceColor(signal.confidence)}
+                    size="small"
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMetric('trading_signal_confidence');
+                      setHelpOpen(true);
+                    }}
+                    sx={{
+                      p: 0.25,
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                        backgroundColor: 'primary.50',
+                      },
+                    }}
+                  >
+                    <HelpOutline sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Box>
               </Box>
             </AccordionSummary>
             <AccordionDetails>
@@ -213,9 +357,29 @@ export function TradingSignalsPage() {
                     {signal.contributing_factors.bullish_score !== undefined && (
                       <Grid item xs={12} sm={6} md={4}>
                         <Box sx={{ p: 1, bgcolor: 'success.50', borderRadius: 1 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            BULLISH SCORE
-                          </Typography>
+                          <Box display="flex" alignItems="center" gap={0.5}>
+                            <Typography variant="caption" color="text.secondary">
+                              BULLISH SCORE
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedMetric('trading_signal_bullish_score');
+                                setHelpOpen(true);
+                              }}
+                              sx={{
+                                p: 0.25,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                  color: 'primary.main',
+                                  backgroundColor: 'primary.50',
+                                },
+                              }}
+                            >
+                              <HelpOutline sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Box>
                           <Typography variant="body2" fontWeight="bold">
                             {signal.contributing_factors.bullish_score.toFixed(2)}
                           </Typography>
@@ -225,9 +389,29 @@ export function TradingSignalsPage() {
                     {signal.contributing_factors.bearish_score !== undefined && (
                       <Grid item xs={12} sm={6} md={4}>
                         <Box sx={{ p: 1, bgcolor: 'error.50', borderRadius: 1 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            BEARISH SCORE
-                          </Typography>
+                          <Box display="flex" alignItems="center" gap={0.5}>
+                            <Typography variant="caption" color="text.secondary">
+                              BEARISH SCORE
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedMetric('trading_signal_bearish_score');
+                                setHelpOpen(true);
+                              }}
+                              sx={{
+                                p: 0.25,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                  color: 'primary.main',
+                                  backgroundColor: 'primary.50',
+                                },
+                              }}
+                            >
+                              <HelpOutline sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Box>
                           <Typography variant="body2" fontWeight="bold">
                             {signal.contributing_factors.bearish_score.toFixed(2)}
                           </Typography>
@@ -251,12 +435,36 @@ export function TradingSignalsPage() {
                   {/* Display individual factors */}
                   {signal.contributing_factors.factors && Array.isArray(signal.contributing_factors.factors) && (
                     <Box sx={{ mt: 1 }}>
-                      {signal.contributing_factors.factors.map((factor: SignalFactor, idx: number) => (
+                      {signal.contributing_factors.factors.map((factor: SignalFactor, idx: number) => {
+                        const helpKey = getIndicatorHelpKey(factor.indicator);
+                        return (
                         <Box key={idx} sx={{ mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
                           <Box display="flex" justifyContent="space-between" alignItems="center">
-                            <Typography variant="body2" fontWeight="bold">
-                              {factor.indicator.replace(/_/g, ' ')}
-                            </Typography>
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <Typography variant="body2" fontWeight="bold">
+                                {factor.indicator.replace(/_/g, ' ')}
+                              </Typography>
+                              {helpKey && (
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedMetric(helpKey);
+                                    setHelpOpen(true);
+                                  }}
+                                  sx={{
+                                    p: 0.25,
+                                    color: 'text.secondary',
+                                    '&:hover': {
+                                      color: 'primary.main',
+                                      backgroundColor: 'primary.50',
+                                    },
+                                  }}
+                                >
+                                  <HelpOutline sx={{ fontSize: 14 }} />
+                                </IconButton>
+                              )}
+                            </Box>
                             <Chip
                               label={factor.direction}
                               size="small"
@@ -270,14 +478,16 @@ export function TradingSignalsPage() {
                             {factor.interpretation}
                           </Typography>
                         </Box>
-                      ))}
+                        );
+                      })}
                     </Box>
                   )}
                 </>
               )}
             </AccordionDetails>
           </Accordion>
-        ))}
+        );
+        })}
       </Paper>
     );
   };
@@ -409,6 +619,13 @@ export function TradingSignalsPage() {
           )}
         </Box>
       )}
+
+      {/* Help Dialog */}
+      <MetricHelpDialog
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        metricKey={selectedMetric}
+      />
     </Box>
   );
 }

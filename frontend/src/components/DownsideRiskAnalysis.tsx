@@ -131,14 +131,17 @@ export function DownsideRiskAnalysis({ portfolioId: initialPortfolioId }: Downsi
   };
 
   // Force refresh handler
-  const handleForceRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['downsideRisk', portfolioId, days, benchmark] });
-    // Refetch with force=true
-    if (portfolioId) {
-      const endpoint = `/api/risk/portfolios/${portfolioId}/downside?days=${days}&benchmark=${benchmark}&force=true`;
-      fetch(endpoint).then(() => {
-        queryClient.invalidateQueries({ queryKey: ['downsideRisk', portfolioId, days, benchmark] });
-      });
+  const handleForceRefresh = async () => {
+    if (!portfolioId) return;
+
+    try {
+      // Call the endpoint with force=true to bypass cache
+      await getPortfolioDownsideRisk(portfolioId, days, benchmark, true);
+
+      // Invalidate the query to trigger a refetch
+      queryClient.invalidateQueries({ queryKey: ['downsideRisk', portfolioId, days, benchmark] });
+    } catch (error) {
+      console.error('Failed to refresh data:', error);
     }
   };
 

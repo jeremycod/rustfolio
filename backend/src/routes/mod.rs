@@ -18,4 +18,6 @@ pub mod alerts;
 pub mod market;
 pub mod preferences;
 pub mod signals;
+pub mod recommendations;
+pub mod watchlists;
 

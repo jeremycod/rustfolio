@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
 use crate::errors::AppError;
-use crate::models::{SignalType, SignalGenerationParams, SignalResponse};
+use crate::models::{SignalType, SignalGenerationParams, SignalResponse, TradingSignal};
 use crate::services::{price_service, signal_service::SignalService};
 use crate::state::AppState;
 
@@ -104,29 +104,50 @@ pub async fn get_stock_signals(
             Ok(cached_signals) if !cached_signals.is_empty() => {
                 info!("Found {} cached signals for {}", cached_signals.len(), symbol);
 
-                // Filter by signal types if requested
+                // Filter by horizon, signal types, and min probability
                 let filtered_signals: Vec<_> = if let Some(ref types) = signal_types_filter {
                     cached_signals
                         .into_iter()
+                        .filter(|s| s.horizon_months == horizon)
                         .filter(|s| types.contains(&s.signal_type))
                         .filter(|s| s.probability >= min_probability)
                         .collect()
                 } else {
                     cached_signals
                         .into_iter()
+                        .filter(|s| s.horizon_months == horizon)
                         .filter(|s| s.probability >= min_probability)
                         .collect()
                 };
 
-                if !filtered_signals.is_empty() {
+                // Deduplicate: keep only the most recent signal for each signal_type
+                // Group by signal_type and keep the one with the latest generated_at
+                use std::collections::HashMap;
+                let mut latest_signals: HashMap<SignalType, TradingSignal> = HashMap::new();
+                for signal in filtered_signals {
+                    latest_signals
+                        .entry(signal.signal_type)
+                        .and_modify(|existing| {
+                            if signal.generated_at > existing.generated_at {
+                                *existing = signal.clone();
+                            }
+                        })
+                        .or_insert(signal);
+                }
+
+                let deduplicated_signals: Vec<_> = latest_signals.into_values().collect();
+
+                if !deduplicated_signals.is_empty() {
+                    info!("Returning {} deduplicated cached signals for {}", deduplicated_signals.len(), symbol);
+
                     // Build response from cached signals
                     let (recommendation, confidence) =
-                        signal_service.calculate_overall_recommendation(&filtered_signals);
+                        signal_service.calculate_overall_recommendation(&deduplicated_signals);
 
                     let response = SignalResponse {
                         ticker: symbol.clone(),
                         current_price: None, // Not available from cache
-                        signals: filtered_signals,
+                        signals: deduplicated_signals,
                         recommendation: Some(recommendation),
                         confidence: Some(confidence),
                         analyzed_at: chrono::Utc::now(),
@@ -191,14 +212,8 @@ pub async fn get_stock_signals(
     // Generate dummy volumes (all equal since we don't have volume data in PricePoint)
     let volumes: Vec<f64> = vec![1000000.0; prices.len()];
 
-    // Generate signals for multiple horizons based on query
-    let horizons = match horizon {
-        1 => vec![1],
-        3 => vec![1, 3],
-        6 => vec![1, 3, 6],
-        12 => vec![1, 3, 6, 12],
-        _ => vec![horizon],
-    };
+    // Only generate signals for the requested horizon
+    let horizons = vec![horizon];
 
     let params = SignalGenerationParams {
         ticker: symbol.clone(),
@@ -208,7 +223,7 @@ pub async fn get_stock_signals(
         current_price,
     };
 
-    info!("Generating signals for {} with horizons: {:?}", symbol, params.horizons);
+    info!("Generating signals for {} with horizon: {}", symbol, horizon);
 
     // Generate fresh signals
     let mut response = signal_service
@@ -221,7 +236,8 @@ pub async fn get_stock_signals(
 
     info!("Generated {} signals for {}", response.signals.len(), symbol);
 
-    // Filter by signal types and min probability
+    // Filter by signal types, min probability, and requested horizon
+    response.signals.retain(|s| s.horizon_months == horizon);
     if let Some(ref types) = signal_types_filter {
         response.signals.retain(|s| types.contains(&s.signal_type));
     }

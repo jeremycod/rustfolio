@@ -26,6 +26,11 @@ import { MarketRegimePage } from "./components/MarketRegimePage";
 import { VolatilityForecasting } from "./components/VolatilityForecasting";
 import { TradingSignalsPage } from "./components/TradingSignalsPage";
 import { SentimentForecasting } from "./components/SentimentForecasting";
+// Phase 3 components
+import { ScreeningPage } from "./components/ScreeningPage";
+import { WatchlistPage } from "./components/WatchlistPage";
+import { LongTermGuidancePage } from "./components/LongTermGuidancePage";
+import { FactorPortfolioPage } from "./components/FactorPortfolioPage";
 
 export default function App() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
@@ -150,6 +155,15 @@ export default function App() {
                 return <TradingSignalsPage />;
             case 'sentiment-forecast':
                 return <SentimentForecasting />;
+            // Phase 3 features
+            case 'screening':
+                return <ScreeningPage />;
+            case 'watchlists':
+                return <WatchlistPage />;
+            case 'long-term-guidance':
+                return <LongTermGuidancePage />;
+            case 'factor-portfolio':
+                return <FactorPortfolioPage />;
             default:
                 return (
                     <Dashboard
