@@ -426,7 +426,7 @@ export function ScreeningPage() {
               <Typography variant="h6">
                 Screening Results
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" component="div">
                 {screeningQ.data.total_passed_filters} stocks matched ({screeningQ.data.total_screened} screened)
                 {screeningQ.data.cache_hit && (
                   <Chip label="Cached" size="small" sx={{ ml: 1 }} />

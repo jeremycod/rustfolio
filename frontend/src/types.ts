@@ -1311,7 +1311,7 @@ export type AddWatchlistItemRequest = {
 };
 
 // Long-Term Guidance Types
-export type InvestmentGoal = 'retirement' | 'college' | 'wealth' | 'income';
+export type InvestmentGoal = 'retirement' | 'college' | 'wealth';
 
 export type LongTermRequest = {
     goal: InvestmentGoal;

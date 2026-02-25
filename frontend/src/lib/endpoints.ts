@@ -956,11 +956,16 @@ export async function deleteWatchlist(watchlistId: string): Promise<void> {
 
 export async function getWatchlistItems(watchlistId: string): Promise<WatchlistItem[]> {
     const res = await api.get(`/api/watchlists/${watchlistId}/items`);
+    console.log('📥 Received watchlist items:', res.data);
+    if (res.data && res.data.length > 0) {
+        console.log('📥 First item:', res.data[0]);
+    }
     return res.data;
 }
 
 export async function addWatchlistItem(watchlistId: string, data: AddWatchlistItemRequest): Promise<WatchlistItem> {
     const res = await api.post(`/api/watchlists/${watchlistId}/items`, data);
+    console.log('✅ Added watchlist item response:', res.data);
     return res.data;
 }
 
@@ -979,6 +984,16 @@ export async function updateWatchlistThresholds(
 
 export async function getWatchlistAlerts(watchlistId: string): Promise<WatchlistAlert[]> {
     const res = await api.get(`/api/watchlists/${watchlistId}/alerts`);
+    return res.data;
+}
+
+export async function refreshWatchlistPrices(watchlistId: string): Promise<{
+    refreshed: number;
+    skipped: number;
+    failed: number;
+    total: number;
+}> {
+    const res = await api.post(`/api/watchlists/${watchlistId}/items/refresh`);
     return res.data;
 }
 

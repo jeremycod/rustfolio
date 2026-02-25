@@ -33,6 +33,7 @@ import {
   Badge,
   Divider,
   InputAdornment,
+  Snackbar,
 } from '@mui/material';
 import {
   Visibility,
@@ -49,6 +50,7 @@ import {
   CheckCircle,
   Warning,
   Close,
+  Refresh,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -62,6 +64,7 @@ import {
   updateWatchlistThresholds,
   getWatchlistAlerts,
   searchTickers,
+  refreshWatchlistPrices,
 } from '../lib/endpoints';
 import type {
   Watchlist,
@@ -80,6 +83,8 @@ export function WatchlistPage() {
   const [thresholdDialogOpen, setThresholdDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [refreshResultOpen, setRefreshResultOpen] = useState(false);
+  const [refreshResultMessage, setRefreshResultMessage] = useState('');
 
   const queryClient = useQueryClient();
 
@@ -117,6 +122,31 @@ export function WatchlistPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['watchlist-items', selectedWatchlistId] });
       queryClient.invalidateQueries({ queryKey: ['watchlists'] });
+    },
+  });
+
+  const refreshPricesMutation = useMutation({
+    mutationFn: (watchlistId: string) => refreshWatchlistPrices(watchlistId),
+    onSuccess: async (data) => {
+      // Refetch the items immediately to show updated prices
+      await itemsQ.refetch();
+
+      const { refreshed, skipped, failed } = data;
+      let message = '';
+      if (refreshed > 0) {
+        message = `✅ Refreshed ${refreshed} price${refreshed > 1 ? 's' : ''}`;
+      }
+      if (skipped > 0) {
+        message += message ? `, ${skipped} already had data` : `${skipped} already had data`;
+      }
+      if (failed > 0) {
+        message += message ? `, ${failed} failed` : `❌ ${failed} failed`;
+      }
+      if (!message) {
+        message = 'No prices to refresh';
+      }
+      setRefreshResultMessage(message);
+      setRefreshResultOpen(true);
     },
   });
 
@@ -196,6 +226,16 @@ export function WatchlistPage() {
                 >
                   Add Stock
                 </Button>
+                <Tooltip title="Refresh prices for items with missing data">
+                  <IconButton
+                    size="small"
+                    onClick={() => selectedWatchlistId && refreshPricesMutation.mutate(selectedWatchlistId)}
+                    disabled={refreshPricesMutation.isPending}
+                    color="primary"
+                  >
+                    <Refresh fontSize="small" />
+                  </IconButton>
+                </Tooltip>
                 <IconButton
                   size="small"
                   onClick={() => setEditDialogOpen(true)}
@@ -319,6 +359,14 @@ export function WatchlistPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Refresh Result Notification */}
+      <Snackbar
+        open={refreshResultOpen}
+        autoHideDuration={4000}
+        onClose={() => setRefreshResultOpen(false)}
+        message={refreshResultMessage}
+      />
     </Box>
   );
 }
@@ -513,13 +561,13 @@ function WatchlistItemsTable({
                 {item.custom_thresholds ? (
                   <Box display="flex" gap={0.5} flexWrap="wrap">
                     {item.custom_thresholds.price_target_high && (
-                      <Chip label={`High: $${item.custom_thresholds.price_target_high}`} size="small" variant="outlined" />
+                      <Chip key="high" label={`High: $${item.custom_thresholds.price_target_high}`} size="small" variant="outlined" />
                     )}
                     {item.custom_thresholds.price_target_low && (
-                      <Chip label={`Low: $${item.custom_thresholds.price_target_low}`} size="small" variant="outlined" />
+                      <Chip key="low" label={`Low: $${item.custom_thresholds.price_target_low}`} size="small" variant="outlined" />
                     )}
                     {!item.custom_thresholds.price_target_high && !item.custom_thresholds.price_target_low && (
-                      <Chip label="Configured" size="small" color="primary" variant="outlined" />
+                      <Chip key="configured" label="Configured" size="small" color="primary" variant="outlined" />
                     )}
                   </Box>
                 ) : (
@@ -841,9 +889,9 @@ function AddStockDialog({
 
         {searchQ.data && searchQ.data.length > 0 && (
           <Paper variant="outlined" sx={{ mt: 1, maxHeight: 200, overflow: 'auto' }}>
-            {searchQ.data.slice(0, 10).map(match => (
+            {searchQ.data.slice(0, 10).map((match, idx) => (
               <Box
-                key={match.symbol}
+                key={`${match.symbol}-${idx}`}
                 sx={{
                   p: 1.5,
                   cursor: 'pointer',

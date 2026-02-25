@@ -79,14 +79,19 @@ pub struct UpdateWatchlistItemRequest {
 pub struct WatchlistItemResponse {
     pub id: Uuid,
     pub watchlist_id: Uuid,
+    #[serde(rename = "symbol")]
     pub ticker: String,
+    pub company_name: Option<String>,
     pub notes: Option<String>,
     pub added_price: Option<f64>,
     pub target_price: Option<f64>,
     pub current_price: Option<f64>,
     pub price_change_pct: Option<f64>,
     pub sort_order: i32,
+    pub custom_thresholds: Option<serde_json::Value>,
+    pub risk_level: Option<String>,
     pub thresholds: Vec<WatchlistThresholdResponse>,
+    #[serde(rename = "added_at")]
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

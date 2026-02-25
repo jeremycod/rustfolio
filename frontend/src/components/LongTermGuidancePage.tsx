@@ -62,12 +62,6 @@ const GOAL_OPTIONS: { value: InvestmentGoal; label: string; description: string;
     description: 'Maximize long-term capital appreciation through growth-oriented investments.',
     icon: <TrendingUp sx={{ fontSize: 40 }} />,
   },
-  {
-    value: 'income',
-    label: 'Income Generation',
-    description: 'Generate regular income through dividends and interest-bearing investments.',
-    icon: <AccountBalanceWallet sx={{ fontSize: 40 }} />,
-  },
 ];
 
 const RISK_OPTIONS: { value: RiskAppetite; label: string; description: string }[] = [

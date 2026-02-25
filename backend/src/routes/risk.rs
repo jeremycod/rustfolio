@@ -219,39 +219,62 @@ pub async fn get_position_risk(
     Query(params): Query<RiskQueryParams>,
     State(state): State<AppState>,
 ) -> Result<Json<RiskAssessment>, AppError> {
+    // Check failure cache first - return 404 immediately for known-bad tickers
+    if state.failure_cache.is_failed(&ticker).is_some() {
+        info!("⚠️  Ticker {} in failure cache, returning 404 without computation", ticker);
+        return Err(AppError::NotFound(format!(
+            "Ticker {} is not available. It may be an invalid ticker, mutual fund code, or unsupported security type.",
+            ticker
+        )));
+    }
+
     info!(
-        "GET /api/risk/positions/{} - Computing risk metrics (days={}, benchmark={})",
-        ticker, params.days, params.benchmark
+        "GET /api/risk/positions/{} - Reading from cache (days={}, benchmark={}, force={})",
+        ticker, params.days, params.benchmark, params.force
     );
 
-    let risk_assessment = risk_service::compute_risk_metrics(
-        &state.pool,
-        &ticker,
-        params.days,
-        &params.benchmark,
-        state.price_provider.as_ref(),
-        &state.failure_cache,
-        &state.rate_limiter,
-        state.risk_free_rate,
-    )
-    .await
+    let risk_assessment = if params.force {
+        // Force refresh: fetch from external API and recompute
+        info!("Force refresh requested for {}, fetching fresh data", ticker);
+        risk_service::compute_risk_metrics(
+            &state.pool,
+            &ticker,
+            params.days,
+            &params.benchmark,
+            state.price_provider.as_ref(),
+            &state.failure_cache,
+            &state.rate_limiter,
+            state.risk_free_rate,
+        )
+        .await
+    } else {
+        // Default: read from cache only (no external API calls)
+        risk_service::compute_risk_metrics_from_cache(
+            &state.pool,
+            &ticker,
+            params.days,
+            &params.benchmark,
+            state.risk_free_rate,
+        )
+        .await
+    }
     .map_err(|e| {
         // Log with detailed context for debugging
         match &e {
             AppError::External(msg) if msg.contains("failure cache") => {
-                info!("⚠️  Ticker {} in failure cache, skipping API call: {}", ticker, msg);
+                info!("⚠️  Ticker {} in failure cache: {}", ticker, msg);
             }
             AppError::External(msg) if msg.contains("No price data") => {
                 warn!("📊 No price data available for {}: {}", ticker, msg);
             }
             AppError::NotFound(msg) => {
-                warn!("🔍 Ticker {} not found: {}", ticker, msg);
+                info!("🔍 No cached data for {}: {}", ticker, msg);
             }
             AppError::RateLimited => {
                 warn!("⏳ Rate limited when fetching {}", ticker);
             }
             _ => {
-                error!("❌ Failed to compute risk metrics for {}: {:?}", ticker, e);
+                error!("❌ Failed to get risk metrics for {}: {:?}", ticker, e);
             }
         }
         e

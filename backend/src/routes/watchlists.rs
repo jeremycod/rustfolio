@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::Deserialize;
 use sqlx::PgPool;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::db::{alert_queries, watchlist_queries, price_queries};
@@ -25,7 +26,8 @@ pub fn router() -> Router<AppState> {
         .route("/watchlists/:id", get(get_watchlist))
         .route("/watchlists/:id", put(update_watchlist))
         .route("/watchlists/:id", delete(delete_watchlist))
-        // Watchlist Items
+        // Watchlist Items (specific routes BEFORE parameterized routes)
+        .route("/watchlists/:id/items/refresh", post(refresh_watchlist_prices))
         .route("/watchlists/:id/items", post(add_item))
         .route("/watchlists/:id/items", get(get_items))
         .route("/watchlists/:watchlist_id/items/:item_id", put(update_item))
@@ -35,6 +37,7 @@ pub fn router() -> Router<AppState> {
         .route("/watchlists/items/:item_id/thresholds/:threshold_id", delete(delete_threshold))
         // Alerts
         .route("/watchlists/alerts", get(get_alerts))
+        .route("/watchlists/:id/alerts", get(get_watchlist_alerts))
         .route("/watchlists/alerts/:alert_id/read", post(mark_alert_read))
 }
 
@@ -139,16 +142,33 @@ async fn get_watchlist(
         // Get current price for this ticker
         let (current_price, price_change_pct) = get_current_price_data(pool, &item).await;
 
+        // Try to get company name
+        let company_name = match crate::services::price_service::search_for_ticker_from_api(
+            state.price_provider.as_ref(),
+            &item.ticker
+        ).await {
+            Ok(matches) => {
+                matches.iter()
+                    .find(|m| m.symbol.eq_ignore_ascii_case(&item.ticker))
+                    .or(matches.first())
+                    .map(|m| m.name.clone())
+            }
+            Err(_) => None,
+        };
+
         item_responses.push(WatchlistItemResponse {
             id: item.id,
             watchlist_id: item.watchlist_id,
-            ticker: item.ticker,
-            notes: item.notes,
-            added_price: item.added_price.and_then(|p| p.to_string().parse().ok()),
-            target_price: item.target_price.and_then(|p| p.to_string().parse().ok()),
+            ticker: item.ticker.clone(),
+            company_name,
+            notes: item.notes.clone(),
+            added_price: item.added_price.as_ref().and_then(|p| p.to_string().parse().ok()),
+            target_price: item.target_price.as_ref().and_then(|p| p.to_string().parse().ok()),
             current_price,
             price_change_pct,
             sort_order: item.sort_order,
+            custom_thresholds: None,
+            risk_level: None,
             thresholds: thresholds.into_iter().map(WatchlistThresholdResponse::from).collect(),
             created_at: item.created_at,
             updated_at: item.updated_at,
@@ -242,18 +262,71 @@ async fn add_item(
         .await
         .map_err(|e| (StatusCode::NOT_FOUND, format!("Watchlist not found: {}", e)))?;
 
-    // Get current price to store as added_price
-    let added_price = match price_queries::fetch_latest(pool, &req.ticker).await {
-        Ok(Some(pp)) => Some(pp.close_price),
-        _ => None,
+    let ticker_upper = req.ticker.to_uppercase();
+
+    // Try to get company name by searching for the ticker
+    let company_name = match crate::services::price_service::search_for_ticker_from_api(
+        state.price_provider.as_ref(),
+        &ticker_upper
+    ).await {
+        Ok(matches) => {
+            // Find exact match or use first result
+            matches.iter()
+                .find(|m| m.symbol.eq_ignore_ascii_case(&ticker_upper))
+                .or(matches.first())
+                .map(|m| m.name.clone())
+        }
+        Err(e) => {
+            info!("Could not fetch company name for {}: {}", ticker_upper, e);
+            None
+        }
     };
 
-    let target_price_bd = req.target_price.and_then(|p| p.to_string().parse().ok()); // Convert f64 to BigDecimal
+    // Get current price to store as added_price
+    let added_price = match price_queries::fetch_latest(pool, &ticker_upper).await {
+        Ok(Some(pp)) => {
+            info!("Found cached price for {}: ${}", ticker_upper, pp.close_price);
+            Some(pp.close_price)
+        }
+        Ok(None) => {
+            info!("No cached price data found for {} - fetching from API", ticker_upper);
+            // Try to fetch from API when adding new ticker to watchlist
+            match crate::services::price_service::refresh_from_api(
+                pool,
+                state.price_provider.as_ref(),
+                &ticker_upper,
+                &state.failure_cache,
+                state.rate_limiter.as_ref(),
+            ).await {
+                Ok(()) => {
+                    info!("✓ Successfully fetched price data from API for {}", ticker_upper);
+                    // Now fetch the latest price from database
+                    match price_queries::fetch_latest(pool, &ticker_upper).await {
+                        Ok(Some(pp)) => {
+                            info!("✓ Cached price now available for {}: ${}", ticker_upper, pp.close_price);
+                            Some(pp.close_price)
+                        }
+                        _ => None,
+                    }
+                }
+                Err(e) => {
+                    warn!("⚠️ Could not fetch price from API for {}: {} - will retry later", ticker_upper, e);
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Error fetching price for {}: {}", ticker_upper, e);
+            None
+        }
+    };
+
+    let target_price_bd = req.target_price.and_then(|p| p.to_string().parse().ok());
 
     let item = watchlist_queries::add_watchlist_item(
         pool,
         watchlist_id,
-        &req.ticker.to_uppercase(),
+        &ticker_upper,
         req.notes.as_deref(),
         added_price,
         target_price_bd,
@@ -272,17 +345,24 @@ async fn add_item(
     let response = WatchlistItemResponse {
         id: item.id,
         watchlist_id: item.watchlist_id,
-        ticker: item.ticker,
-        notes: item.notes,
-        added_price: item.added_price.and_then(|p| p.to_string().parse().ok()),
-        target_price: item.target_price.and_then(|p| p.to_string().parse().ok()),
+        ticker: item.ticker.clone(),
+        company_name: company_name.clone(),
+        notes: item.notes.clone(),
+        added_price: item.added_price.as_ref().and_then(|p| p.to_string().parse().ok()),
+        target_price: item.target_price.as_ref().and_then(|p| p.to_string().parse().ok()),
         current_price,
         price_change_pct,
         sort_order: item.sort_order,
+        custom_thresholds: None,
+        risk_level: None,
         thresholds: Vec::new(),
         created_at: item.created_at,
         updated_at: item.updated_at,
     };
+
+    // Log the full response for debugging
+    info!("✅ Watchlist item response: ticker={}, company_name={:?}, current_price={:?}, added_price={:?}, change={:?}",
+        response.ticker, response.company_name, response.current_price, response.added_price, response.price_change_pct);
 
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -305,22 +385,45 @@ async fn get_items(
 
         let (current_price, price_change_pct) = get_current_price_data(pool, &item).await;
 
-        responses.push(WatchlistItemResponse {
+        // Try to get company name by searching for the ticker (cached in memory by provider)
+        let company_name = match crate::services::price_service::search_for_ticker_from_api(
+            state.price_provider.as_ref(),
+            &item.ticker
+        ).await {
+            Ok(matches) => {
+                matches.iter()
+                    .find(|m| m.symbol.eq_ignore_ascii_case(&item.ticker))
+                    .or(matches.first())
+                    .map(|m| m.name.clone())
+            }
+            Err(_) => None,
+        };
+
+        let response = WatchlistItemResponse {
             id: item.id,
             watchlist_id: item.watchlist_id,
-            ticker: item.ticker,
-            notes: item.notes,
-            added_price: item.added_price.and_then(|p| p.to_string().parse().ok()),
-            target_price: item.target_price.and_then(|p| p.to_string().parse().ok()),
+            ticker: item.ticker.clone(),
+            company_name: company_name.clone(),
+            notes: item.notes.clone(),
+            added_price: item.added_price.as_ref().and_then(|p| p.to_string().parse().ok()),
+            target_price: item.target_price.as_ref().and_then(|p| p.to_string().parse().ok()),
             current_price,
             price_change_pct,
             sort_order: item.sort_order,
+            custom_thresholds: None,
+            risk_level: None,
             thresholds: thresholds.into_iter().map(WatchlistThresholdResponse::from).collect(),
             created_at: item.created_at,
             updated_at: item.updated_at,
-        });
+        };
+
+        info!("📋 Get items - ticker={}, company={:?}, price={:?}, change={:?}",
+            response.ticker, response.company_name, response.current_price, response.price_change_pct);
+
+        responses.push(response);
     }
 
+    info!("📋 Returning {} watchlist items", responses.len());
     Ok(Json(responses))
 }
 
@@ -349,16 +452,33 @@ async fn update_item(
 
     let (current_price, price_change_pct) = get_current_price_data(pool, &item).await;
 
+    // Try to get company name
+    let company_name = match crate::services::price_service::search_for_ticker_from_api(
+        state.price_provider.as_ref(),
+        &item.ticker
+    ).await {
+        Ok(matches) => {
+            matches.iter()
+                .find(|m| m.symbol.eq_ignore_ascii_case(&item.ticker))
+                .or(matches.first())
+                .map(|m| m.name.clone())
+        }
+        Err(_) => None,
+    };
+
     let response = WatchlistItemResponse {
         id: item.id,
         watchlist_id: item.watchlist_id,
-        ticker: item.ticker,
-        notes: item.notes,
-        added_price: item.added_price.and_then(|p| p.to_string().parse().ok()),
-        target_price: item.target_price.and_then(|p| p.to_string().parse().ok()),
+        ticker: item.ticker.clone(),
+        company_name,
+        notes: item.notes.clone(),
+        added_price: item.added_price.as_ref().and_then(|p| p.to_string().parse().ok()),
+        target_price: item.target_price.as_ref().and_then(|p| p.to_string().parse().ok()),
         current_price,
         price_change_pct,
         sort_order: item.sort_order,
+        custom_thresholds: None,
+        risk_level: None,
         thresholds: thresholds.into_iter().map(WatchlistThresholdResponse::from).collect(),
         created_at: item.created_at,
         updated_at: item.updated_at,
@@ -378,6 +498,70 @@ async fn remove_item(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn refresh_watchlist_prices(
+    State(state): State<AppState>,
+    Path(watchlist_id): Path<Uuid>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    info!("🔄 Force refresh prices for watchlist {}", watchlist_id);
+
+    // Get all items in the watchlist
+    let items = watchlist_queries::get_watchlist_items(pool, watchlist_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut refreshed = 0;
+    let mut failed = 0;
+    let mut skipped = 0;
+
+    for item in items.iter() {
+        let ticker = &item.ticker;
+
+        // Check if price data already exists
+        let has_price = price_queries::fetch_latest(pool, ticker)
+            .await
+            .ok()
+            .flatten()
+            .is_some();
+
+        if has_price {
+            info!("⏭️ Skipping {} - already has price data", ticker);
+            skipped += 1;
+            continue;
+        }
+
+        info!("🔄 Fetching price for {}", ticker);
+
+        // Try to fetch from API
+        match crate::services::price_service::refresh_from_api(
+            pool,
+            state.price_provider.as_ref(),
+            ticker,
+            &state.failure_cache,
+            state.rate_limiter.as_ref(),
+        ).await {
+            Ok(()) => {
+                info!("✅ Successfully refreshed price for {}", ticker);
+                refreshed += 1;
+            }
+            Err(e) => {
+                warn!("❌ Failed to refresh price for {}: {}", ticker, e);
+                failed += 1;
+            }
+        }
+    }
+
+    info!("🔄 Refresh complete: {} refreshed, {} skipped, {} failed", refreshed, skipped, failed);
+
+    Ok(Json(serde_json::json!({
+        "refreshed": refreshed,
+        "skipped": skipped,
+        "failed": failed,
+        "total": items.len()
+    })))
 }
 
 // ==============================================================================
@@ -438,6 +622,23 @@ async fn get_alerts(
     let user_id = get_default_user_id(pool).await?;
 
     let alerts = watchlist_queries::get_watchlist_alerts(pool, user_id, params.limit, params.offset)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let responses: Vec<WatchlistAlertResponse> =
+        alerts.into_iter().map(WatchlistAlertResponse::from).collect();
+
+    Ok(Json(responses))
+}
+
+async fn get_watchlist_alerts(
+    State(state): State<AppState>,
+    Path(watchlist_id): Path<Uuid>,
+    Query(params): Query<PaginationParams>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let alerts = watchlist_queries::get_alerts_for_watchlist(pool, watchlist_id, params.limit)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

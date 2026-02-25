@@ -27,6 +27,120 @@ use tracing::{info, warn};
 ///
 /// # Returns
 /// A `RiskAssessment` containing all risk metrics and an overall risk score.
+/// Compute risk metrics from cache only (no external API calls)
+/// Returns cached data or 404 if insufficient data exists
+pub async fn compute_risk_metrics_from_cache(
+    pool: &PgPool,
+    ticker: &str,
+    days: i64,
+    benchmark: &str,
+    risk_free_rate: f64,
+) -> Result<RiskAssessment, AppError> {
+    // Fetch price history from database only (no API calls)
+    let series = price_queries::fetch_window(pool, ticker, days).await?;
+    let bench = price_queries::fetch_window(pool, benchmark, days).await?;
+
+    if series.is_empty() {
+        return Err(AppError::NotFound(format!(
+            "No cached price data found for ticker {}. Data will be available after the next scheduled update.",
+            ticker
+        )));
+    }
+
+    if bench.len() < 2 {
+        return Err(AppError::NotFound(format!(
+            "Insufficient cached benchmark data for {}.",
+            benchmark
+        )));
+    }
+
+    // Compute individual risk metrics
+    let (volatility, max_drawdown) = compute_vol_drawdown(&series);
+    let beta = compute_beta(&series, &bench);
+    let sharpe = compute_sharpe(&series, risk_free_rate);
+    let sortino = compute_sortino(&series, risk_free_rate);
+    let annualized_return = compute_annualized_return(&series);
+    let var = compute_var(&series);
+    let (var_95, var_99) = compute_var_multi(&series);
+    let (es_95, es_99) = compute_expected_shortfall(&series);
+
+    // Compute multi-benchmark betas from cache only
+    let beta_spy = if benchmark != "SPY" {
+        let spy_data = price_queries::fetch_window(pool, "SPY", days).await.ok();
+        spy_data.and_then(|spy| {
+            if spy.len() >= 2 {
+                compute_beta(&series, &spy)
+            } else {
+                None
+            }
+        })
+    } else {
+        beta
+    };
+
+    let beta_qqq = if benchmark != "QQQ" {
+        let qqq_data = price_queries::fetch_window(pool, "QQQ", days).await.ok();
+        qqq_data.and_then(|qqq| {
+            if qqq.len() >= 2 {
+                compute_beta(&series, &qqq)
+            } else {
+                None
+            }
+        })
+    } else {
+        None
+    };
+
+    let beta_iwm = if benchmark != "IWM" {
+        let iwm_data = price_queries::fetch_window(pool, "IWM", days).await.ok();
+        iwm_data.and_then(|iwm| {
+            if iwm.len() >= 2 {
+                compute_beta(&series, &iwm)
+            } else {
+                None
+            }
+        })
+    } else {
+        None
+    };
+
+    // Compute risk decomposition (requires benchmark data)
+    let risk_decomposition = if beta.is_some() {
+        compute_risk_decomposition(&series, &bench, volatility)
+    } else {
+        None
+    };
+
+    let metrics = PositionRisk {
+        volatility,
+        max_drawdown,
+        beta,
+        beta_spy,
+        beta_qqq,
+        beta_iwm,
+        risk_decomposition,
+        sharpe,
+        sortino,
+        annualized_return,
+        value_at_risk: var,
+        var_95,
+        var_99,
+        expected_shortfall_95: es_95,
+        expected_shortfall_99: es_99,
+    };
+
+    // Calculate overall risk score
+    let risk_score = score_risk(&metrics);
+    let risk_level = RiskLevel::from_score(risk_score);
+
+    Ok(RiskAssessment {
+        ticker: ticker.to_string(),
+        metrics,
+        risk_score,
+        risk_level,
+    })
+}
+
 pub async fn compute_risk_metrics(
     pool: &PgPool,
     ticker: &str,
