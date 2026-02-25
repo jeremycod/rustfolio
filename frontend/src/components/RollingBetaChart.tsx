@@ -51,21 +51,23 @@ interface RollingBetaChartProps {
   ticker: string;
   benchmark?: string;
   days?: number;
+  autoCalculate?: boolean; // Auto-calculate if data not cached
 }
 
 type WindowSize = '30d' | '60d' | '90d';
 
-export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: RollingBetaChartProps) {
+export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180, autoCalculate = false }: RollingBetaChartProps) {
   const [selectedWindow, setSelectedWindow] = useState<WindowSize>('90d');
   const [helpOpen, setHelpOpen] = useState<string | null>(null);
+  const [forceCalculate, setForceCalculate] = useState(autoCalculate);
   const queryClient = useQueryClient();
 
   // Fetch rolling beta data
   const rollingBetaQuery = useQuery({
-    queryKey: ['rolling-beta', ticker, days, benchmark],
-    queryFn: () => getRollingBeta(ticker, days, benchmark),
+    queryKey: ['rolling-beta', ticker, days, benchmark, forceCalculate],
+    queryFn: () => getRollingBeta(ticker, days, benchmark, forceCalculate),
     staleTime: 1000 * 60 * 60, // 1 hour
-    retry: 1,
+    retry: forceCalculate ? 2 : 1, // Retry more when forcing calculation
   });
 
   // Mutation for fetching price history
@@ -238,6 +240,49 @@ export function RollingBetaChart({ ticker, benchmark = 'SPY', days = 180 }: Roll
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 3 }}>
                 <Info fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
                 This is a one-time setup. Data will be cached and updated automatically.
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Check if it's a "data not available" error that can be force-calculated
+    const isDataNotAvailable = errorMessage.includes('not available') || errorMessage.includes('background job');
+
+    if (isDataNotAvailable && !forceCalculate) {
+      return (
+        <Card elevation={2}>
+          <CardContent>
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <AccessTime sx={{ fontSize: 80, color: 'warning.main', mb: 2 }} />
+
+              <Typography variant="h5" gutterBottom>
+                Rolling Beta Data Not Cached
+              </Typography>
+
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 600, mx: 'auto' }}>
+                Rolling beta analysis for {ticker} vs {benchmark} hasn't been calculated yet.
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 3, maxWidth: 600, mx: 'auto', textAlign: 'left' }}>
+                <Typography variant="body2">
+                  {errorMessage}
+                </Typography>
+              </Alert>
+
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<Refresh />}
+                onClick={() => setForceCalculate(true)}
+                sx={{ minWidth: 250 }}
+              >
+                Calculate Now
+              </Button>
+
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                This will calculate the rolling beta immediately (may take 30-60 seconds)
               </Typography>
             </Box>
           </CardContent>

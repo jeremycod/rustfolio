@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -35,6 +35,7 @@ import {
   InputAdornment,
   Snackbar,
 } from '@mui/material';
+import { TickerActionMenu } from './TickerActionMenu';
 import {
   Visibility,
   Add,
@@ -51,6 +52,7 @@ import {
   Warning,
   Close,
   Refresh,
+  FilterList,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -65,6 +67,9 @@ import {
   getWatchlistAlerts,
   searchTickers,
   refreshWatchlistPrices,
+  listIndexTemplates,
+  getIndexTemplate,
+  createWatchlistFromTemplate,
 } from '../lib/endpoints';
 import type {
   Watchlist,
@@ -72,12 +77,16 @@ import type {
   WatchlistAlert,
   WatchlistThresholds,
   CreateWatchlistRequest,
+  IndexTemplateListItem,
+  IndexTemplate,
+  CreateWatchlistFromTemplateRequest,
 } from '../types';
 
-export function WatchlistPage() {
+export function WatchlistPage({ onTickerNavigate }: { onTickerNavigate?: (ticker: string, page?: string) => void }) {
   const [selectedWatchlistId, setSelectedWatchlistId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [addStockDialogOpen, setAddStockDialogOpen] = useState(false);
   const [thresholdDialogOpen, setThresholdDialogOpen] = useState(false);
@@ -161,13 +170,22 @@ export function WatchlistPage() {
             Watchlists
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => setCreateDialogOpen(true)}
-        >
-          New Watchlist
-        </Button>
+        <Box display="flex" gap={1}>
+          <Button
+            variant="outlined"
+            startIcon={<FilterList />}
+            onClick={() => setTemplateDialogOpen(true)}
+          >
+            From Template
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setCreateDialogOpen(true)}
+          >
+            New Watchlist
+          </Button>
+        </Box>
       </Box>
 
       {watchlistsQ.isLoading && (
@@ -278,6 +296,7 @@ export function WatchlistPage() {
                 setSelectedItem(item);
                 setThresholdDialogOpen(true);
               }}
+              onTickerNavigate={onTickerNavigate}
             />
           )}
 
@@ -299,6 +318,16 @@ export function WatchlistPage() {
           queryClient.invalidateQueries({ queryKey: ['watchlists'] });
           setSelectedWatchlistId(watchlist.id);
           setCreateDialogOpen(false);
+        }}
+      />
+
+      <TemplateSelectionDialog
+        open={templateDialogOpen}
+        onClose={() => setTemplateDialogOpen(false)}
+        onCreated={(watchlistId) => {
+          queryClient.invalidateQueries({ queryKey: ['watchlists'] });
+          setSelectedWatchlistId(watchlistId);
+          setTemplateDialogOpen(false);
         }}
       />
 
@@ -471,12 +500,14 @@ function WatchlistItemsTable({
   watchlistId,
   onRemove,
   onConfigureThresholds,
+  onTickerNavigate,
 }: {
   items: WatchlistItem[];
   loading: boolean;
   watchlistId: string;
   onRemove: (symbol: string) => void;
   onConfigureThresholds: (item: WatchlistItem) => void;
+  onTickerNavigate?: (ticker: string, page?: string) => void;
 }) {
   const [menuAnchor, setMenuAnchor] = useState<{ el: HTMLElement; item: WatchlistItem } | null>(null);
 
@@ -519,7 +550,15 @@ function WatchlistItemsTable({
           {items.map(item => (
             <TableRow key={item.symbol} hover>
               <TableCell>
-                <Typography fontWeight="bold">{item.symbol}</Typography>
+                {onTickerNavigate ? (
+                  <TickerActionMenu
+                    ticker={item.symbol}
+                    variant="text"
+                    onNavigate={onTickerNavigate}
+                  />
+                ) : (
+                  <Typography fontWeight="bold">{item.symbol}</Typography>
+                )}
               </TableCell>
               <TableCell>
                 <Typography variant="body2" noWrap sx={{ maxWidth: 180 }}>
@@ -1093,3 +1132,351 @@ function ThresholdDialog({
     </Dialog>
   );
 }
+
+// Template Selection Dialog
+function TemplateSelectionDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (watchlistId: string) => void;
+}) {
+  const [step, setStep] = useState(0); // 0 = template selection, 1 = stock selection
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
+  const [tickerFilter, setTickerFilter] = useState('');
+  const [customName, setCustomName] = useState('');
+
+  const templatesQ = useQuery({
+    queryKey: ['index-templates'],
+    queryFn: listIndexTemplates,
+    enabled: open,
+  });
+
+  const templateDetailsQ = useQuery({
+    queryKey: ['index-template', selectedTemplate],
+    queryFn: () => getIndexTemplate(selectedTemplate!),
+    enabled: !!selectedTemplate && step === 1,
+  });
+
+  const mutation = useMutation({
+    mutationFn: (data: CreateWatchlistFromTemplateRequest) => createWatchlistFromTemplate(data),
+    onSuccess: (response) => {
+      setStep(0);
+      setSelectedTemplate(null);
+      setSelectedTickers([]);
+      setCustomName('');
+      setTickerFilter('');
+      onCreated(response.watchlist_id);
+    },
+  });
+
+  const templates = templatesQ.data || [];
+  const selectedTemplateData = templates.find(t => t.id === selectedTemplate);
+  const templateDetails = templateDetailsQ.data;
+
+  // Group templates by category
+  const templatesByCategory = templates.reduce((acc, template) => {
+    if (!acc[template.category]) {
+      acc[template.category] = [];
+    }
+    acc[template.category].push(template);
+    return acc;
+  }, {} as Record<string, IndexTemplateListItem[]>);
+
+  // Filter tickers based on search
+  const filteredTickers = templateDetails?.tickers.filter(ticker =>
+    ticker.toLowerCase().includes(tickerFilter.toLowerCase())
+  ) || [];
+
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+  };
+
+  const handleNext = () => {
+    if (step === 0 && selectedTemplate) {
+      setStep(1);
+      // Default to all tickers selected
+      const template = templates.find(t => t.id === selectedTemplate);
+      if (template) {
+        // We'll set them once template details load
+      }
+    }
+  };
+
+  const handleBack = () => {
+    setStep(0);
+    setTickerFilter('');
+  };
+
+  const handleToggleTicker = (ticker: string) => {
+    setSelectedTickers(prev =>
+      prev.includes(ticker) ? prev.filter(t => t !== ticker) : [...prev, ticker]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedTickers(templateDetails?.tickers || []);
+  };
+
+  const handleSelectNone = () => {
+    setSelectedTickers([]);
+  };
+
+  const handleSelectTop = (count: number) => {
+    setSelectedTickers(templateDetails?.tickers.slice(0, count) || []);
+  };
+
+  const handleCreate = () => {
+    if (!selectedTemplate) return;
+    mutation.mutate({
+      template_id: selectedTemplate,
+      custom_name: customName || undefined,
+      selected_tickers: selectedTickers.length > 0 ? selectedTickers : undefined,
+    });
+  };
+
+  // Auto-select all tickers when template details load
+  useEffect(() => {
+    if (templateDetails && selectedTickers.length === 0) {
+      setSelectedTickers(templateDetails.tickers);
+    }
+  }, [templateDetails, selectedTickers.length]);
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+      <DialogTitle>
+        {step === 0 ? 'Select Index Template' : 'Select Stocks'}
+      </DialogTitle>
+      <DialogContent>
+        {/* Step 0: Template Selection */}
+        {step === 0 && (
+          <>
+            {templatesQ.isLoading && (
+              <Box display="flex" justifyContent="center" py={4}>
+                <CircularProgress />
+              </Box>
+            )}
+
+            {templatesQ.error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                Failed to load templates: {(templatesQ.error as Error).message}
+              </Alert>
+            )}
+
+            {!templatesQ.isLoading && !templatesQ.error && (
+              <>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  Select a predefined index or sector watchlist
+                </Typography>
+
+                {Object.entries(templatesByCategory).map(([category, categoryTemplates]) => (
+                  <Box key={category} mb={3}>
+                    <Typography variant="subtitle2" color="primary" mb={1}>
+                      {category}
+                    </Typography>
+                    <Grid container spacing={2}>
+                      {categoryTemplates.map(template => (
+                        <Grid item xs={12} sm={6} md={4} key={template.id}>
+                          <Card
+                            sx={{
+                              cursor: 'pointer',
+                              border: '2px solid',
+                              borderColor: selectedTemplate === template.id ? 'primary.main' : 'divider',
+                              '&:hover': { borderColor: 'primary.main' },
+                              transition: 'border-color 0.2s',
+                            }}
+                            onClick={() => handleTemplateSelect(template.id)}
+                          >
+                            <CardContent>
+                              <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                                <Box flex={1}>
+                                  <Typography variant="subtitle1" fontWeight="bold">
+                                    {template.name}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary" mt={0.5}>
+                                    {template.description}
+                                  </Typography>
+                                </Box>
+                                {selectedTemplate === template.id && (
+                                  <CheckCircle color="primary" sx={{ ml: 1 }} />
+                                )}
+                              </Box>
+                              <Chip
+                                label={`${template.ticker_count} stocks`}
+                                size="small"
+                                variant="outlined"
+                                sx={{ mt: 1 }}
+                              />
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Box>
+                ))}
+              </>
+            )}
+          </>
+        )}
+
+        {/* Step 1: Stock Selection */}
+        {step === 1 && (
+          <>
+            {templateDetailsQ.isLoading && (
+              <Box display="flex" justifyContent="center" py={4}>
+                <CircularProgress />
+              </Box>
+            )}
+
+            {templateDetails && (
+              <>
+                <Box mb={2}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Select stocks to include in your watchlist ({selectedTickers.length} of {templateDetails.tickers.length} selected)
+                  </Typography>
+
+                  {/* Quick Selection Buttons */}
+                  <Box display="flex" gap={1} flexWrap="wrap" mt={2} mb={2}>
+                    <Button
+                      size="small"
+                      variant={selectedTickers.length === templateDetails.tickers.length ? 'contained' : 'outlined'}
+                      onClick={handleSelectAll}
+                    >
+                      Select All ({templateDetails.tickers.length})
+                    </Button>
+                    <Button size="small" variant="outlined" onClick={() => handleSelectTop(10)}>
+                      Top 10
+                    </Button>
+                    <Button size="small" variant="outlined" onClick={() => handleSelectTop(25)}>
+                      Top 25
+                    </Button>
+                    <Button size="small" variant="outlined" onClick={() => handleSelectTop(50)}>
+                      Top 50
+                    </Button>
+                    <Button size="small" variant="outlined" color="error" onClick={handleSelectNone}>
+                      Clear All
+                    </Button>
+                  </Box>
+
+                  {/* Search Filter */}
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search tickers..."
+                    value={tickerFilter}
+                    onChange={(e) => setTickerFilter(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ mb: 2 }}
+                  />
+
+                  {/* Custom Name */}
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Watchlist Name (optional)"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    placeholder={selectedTemplateData?.name}
+                    helperText={`Default: "${selectedTemplateData?.name}"`}
+                    sx={{ mb: 2 }}
+                  />
+                </Box>
+
+                {/* Ticker List with Checkboxes */}
+                <Paper variant="outlined" sx={{ maxHeight: 400, overflow: 'auto', p: 2 }}>
+                  <Grid container spacing={1}>
+                    {filteredTickers.map(ticker => (
+                      <Grid item xs={6} sm={4} md={3} lg={2} key={ticker}>
+                        <Box
+                          sx={{
+                            p: 0.5,
+                            cursor: 'pointer',
+                            borderRadius: 1,
+                            border: '1px solid',
+                            borderColor: selectedTickers.includes(ticker) ? 'primary.main' : 'divider',
+                            bgcolor: selectedTickers.includes(ticker) ? 'primary.50' : 'transparent',
+                            '&:hover': { bgcolor: 'action.hover' },
+                          }}
+                          onClick={() => handleToggleTicker(ticker)}
+                        >
+                          <Box display="flex" alignItems="center" gap={0.5}>
+                            <Typography variant="body2" fontWeight={selectedTickers.includes(ticker) ? 'bold' : 'normal'}>
+                              {ticker}
+                            </Typography>
+                            {selectedTickers.includes(ticker) && (
+                              <CheckCircle sx={{ fontSize: 16 }} color="primary" />
+                            )}
+                          </Box>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
+              </>
+            )}
+
+            {mutation.isPending && (
+              <Box mt={3} textAlign="center">
+                <CircularProgress size={24} sx={{ mb: 1 }} />
+                <Typography variant="body2" color="text.secondary">
+                  Creating watchlist and adding {selectedTickers.length} stocks...
+                </Typography>
+              </Box>
+            )}
+
+            {mutation.isSuccess && mutation.data && (
+              <Alert severity="success" sx={{ mt: 2 }}>
+                ✅ Created "{mutation.data.name}" with {mutation.data.added_count} stocks
+                {mutation.data.failed_count > 0 && ` (${mutation.data.failed_count} failed)`}
+              </Alert>
+            )}
+
+            {mutation.error && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {(mutation.error as Error).message}
+              </Alert>
+            )}
+          </>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={mutation.isPending}>
+          Cancel
+        </Button>
+        {step === 1 && (
+          <Button onClick={handleBack} disabled={mutation.isPending}>
+            Back
+          </Button>
+        )}
+        {step === 0 && (
+          <Button
+            variant="contained"
+            onClick={handleNext}
+            disabled={!selectedTemplate}
+          >
+            Next: Select Stocks
+          </Button>
+        )}
+        {step === 1 && (
+          <Button
+            variant="contained"
+            onClick={handleCreate}
+            disabled={selectedTickers.length === 0 || mutation.isPending}
+          >
+            {mutation.isPending ? 'Creating...' : `Create with ${selectedTickers.length} Stocks`}
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
+

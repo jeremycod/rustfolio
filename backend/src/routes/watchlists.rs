@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::db::{alert_queries, watchlist_queries, price_queries};
 use crate::models::watchlist::*;
+use crate::models::index_templates::{self, CreateWatchlistFromTemplateRequest, CreateWatchlistFromTemplateResponse, IndexTemplateListItem};
 use crate::state::AppState;
 
 // ==============================================================================
@@ -20,6 +21,10 @@ use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        // Index Templates
+        .route("/watchlists/templates", get(list_templates))
+        .route("/watchlists/templates/:id", get(get_template))
+        .route("/watchlists/templates/create", post(create_from_template))
         // Watchlist CRUD
         .route("/watchlists", post(create_watchlist))
         .route("/watchlists", get(list_watchlists))
@@ -49,6 +54,116 @@ pub fn router() -> Router<AppState> {
 struct PaginationParams {
     limit: Option<i64>,
     offset: Option<i64>,
+}
+
+// ==============================================================================
+// Index Template Handlers
+// ==============================================================================
+
+async fn list_templates() -> Result<impl IntoResponse, (StatusCode, String)> {
+    info!("📋 Listing all index templates");
+
+    let templates = index_templates::get_all_templates();
+    let template_list: Vec<IndexTemplateListItem> = templates
+        .iter()
+        .map(IndexTemplateListItem::from)
+        .collect();
+
+    info!("📋 Returning {} index templates", template_list.len());
+    Ok(Json(template_list))
+}
+
+async fn get_template(
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    info!("📋 Getting template details for: {}", id);
+
+    let template = index_templates::get_template_by_id(&id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Template '{}' not found", id)))?;
+
+    info!("📋 Returning template '{}' with {} tickers", template.name, template.ticker_count);
+    Ok(Json(template))
+}
+
+async fn create_from_template(
+    State(state): State<AppState>,
+    Json(req): Json<CreateWatchlistFromTemplateRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    info!("🎯 Creating watchlist from template: {}", req.template_id);
+
+    // Get the template
+    let template = index_templates::get_template_by_id(&req.template_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Template '{}' not found", req.template_id)))?;
+
+    // Get user ID
+    let user_id = get_default_user_id(pool).await?;
+
+    // Determine watchlist name
+    let watchlist_name = req.custom_name.unwrap_or_else(|| template.name.clone());
+
+    // Create the watchlist
+    let watchlist = watchlist_queries::create_watchlist(
+        pool,
+        user_id,
+        &watchlist_name,
+        Some(&template.description),
+        false,
+    )
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    info!("✅ Created watchlist '{}' (id: {})", watchlist_name, watchlist.id);
+
+    // Determine which tickers to add (use selected_tickers if provided, otherwise all from template)
+    let tickers_to_add = req.selected_tickers.as_ref().unwrap_or(&template.tickers);
+
+    // Add tickers to the watchlist
+    let mut added_count = 0;
+    let mut failed_count = 0;
+    let mut failed_tickers = Vec::new();
+
+    info!("📊 Adding {} tickers to watchlist...", tickers_to_add.len());
+
+    for (idx, ticker) in tickers_to_add.iter().enumerate() {
+        let ticker_upper = ticker.to_uppercase();
+
+        if (idx + 1) % 10 == 0 {
+            info!("   Progress: {}/{} tickers added", idx + 1, tickers_to_add.len());
+        }
+
+        // Try to add the ticker
+        match watchlist_queries::add_watchlist_item(
+            pool,
+            watchlist.id,
+            &ticker_upper,
+            None, // no notes
+            None, // no added_price
+            None, // no target_price
+        ).await {
+            Ok(_) => {
+                added_count += 1;
+            }
+            Err(e) => {
+                warn!("⚠️ Failed to add ticker {}: {}", ticker_upper, e);
+                failed_count += 1;
+                failed_tickers.push(ticker_upper);
+            }
+        }
+    }
+
+    info!("✅ Watchlist created: {} added, {} failed", added_count, failed_count);
+
+    let response = CreateWatchlistFromTemplateResponse {
+        watchlist_id: watchlist.id.to_string(),
+        name: watchlist_name,
+        added_count,
+        failed_count,
+        failed_tickers,
+    };
+
+    Ok((StatusCode::CREATED, Json(response)))
 }
 
 // ==============================================================================

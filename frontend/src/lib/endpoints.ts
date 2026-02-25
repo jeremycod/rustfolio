@@ -73,6 +73,10 @@ import type {
     CreateWatchlistRequest,
     UpdateWatchlistRequest,
     AddWatchlistItemRequest,
+    IndexTemplateListItem,
+    IndexTemplate,
+    CreateWatchlistFromTemplateRequest,
+    CreateWatchlistFromTemplateResponse,
     LongTermGuidance,
     InvestmentGoal,
     RiskAppetite,
@@ -994,6 +998,23 @@ export async function refreshWatchlistPrices(watchlistId: string): Promise<{
     total: number;
 }> {
     const res = await api.post(`/api/watchlists/${watchlistId}/items/refresh`);
+    return res.data;
+}
+
+export async function listIndexTemplates(): Promise<IndexTemplateListItem[]> {
+    const res = await api.get('/api/watchlists/templates');
+    return res.data;
+}
+
+export async function getIndexTemplate(templateId: string): Promise<IndexTemplate> {
+    const res = await api.get(`/api/watchlists/templates/${templateId}`);
+    return res.data;
+}
+
+export async function createWatchlistFromTemplate(
+    request: CreateWatchlistFromTemplateRequest
+): Promise<CreateWatchlistFromTemplateResponse> {
+    const res = await api.post('/api/watchlists/templates/create', request);
     return res.data;
 }
 

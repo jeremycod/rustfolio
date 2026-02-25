@@ -25,6 +25,7 @@ pub mod factor;
 pub mod watchlist;
 pub mod long_term_guidance;
 pub mod screening;
+pub mod index_templates;
 
 pub use portfolio::Portfolio;
 pub use portfolio::CreatePortfolio;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -24,12 +24,20 @@ import { getSentimentForecast, searchTickers } from '../lib/endpoints';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { MetricHelpDialog } from './MetricHelpDialog';
 
-export function SentimentForecasting() {
-  const [ticker, setTicker] = useState('');
-  const [searchTicker, setSearchTicker] = useState('');
+export function SentimentForecasting({ initialTicker }: { initialTicker?: string }) {
+  const [ticker, setTicker] = useState(initialTicker || '');
+  const [searchTicker, setSearchTicker] = useState(initialTicker || '');
   const [days, setDays] = useState(30);
   const [helpOpen, setHelpOpen] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<string>('');
+
+  // Handle initialTicker changes
+  useEffect(() => {
+    if (initialTicker) {
+      setTicker(initialTicker);
+      setSearchTicker(initialTicker);
+    }
+  }, [initialTicker]);
 
   // Fetch company name
   const companyInfoQ = useQuery({

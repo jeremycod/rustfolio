@@ -150,16 +150,16 @@ export default function App() {
                 return <MarketRegimePage />;
             // Phase 2 features
             case 'volatility-forecast':
-                return <VolatilityForecasting />;
+                return <VolatilityForecasting initialTicker={selectedTicker || undefined} />;
             case 'trading-signals':
-                return <TradingSignalsPage />;
+                return <TradingSignalsPage initialTicker={selectedTicker || undefined} />;
             case 'sentiment-forecast':
-                return <SentimentForecasting />;
+                return <SentimentForecasting initialTicker={selectedTicker || undefined} />;
             // Phase 3 features
             case 'screening':
                 return <ScreeningPage />;
             case 'watchlists':
-                return <WatchlistPage />;
+                return <WatchlistPage onTickerNavigate={handleTickerNavigate} />;
             case 'long-term-guidance':
                 return <LongTermGuidancePage />;
             case 'factor-portfolio':
@@ -181,15 +181,16 @@ export default function App() {
         if (page !== 'accounts') {
             setSelectedAccountId(null);
         }
-        // Clear ticker selection when navigating away from risk page
-        if (page !== 'risk') {
+        // Clear ticker selection when navigating away from ticker-specific pages
+        const tickerPages = ['risk', 'volatility-forecast', 'trading-signals', 'sentiment-forecast', 'rolling-beta', 'downside-risk'];
+        if (!tickerPages.includes(page)) {
             setSelectedTicker(null);
         }
     };
 
-    const handleTickerNavigate = (ticker: string) => {
+    const handleTickerNavigate = (ticker: string, page?: string) => {
         setSelectedTicker(ticker);
-        setCurrentPage('risk');
+        setCurrentPage(page || 'risk');
     };
 
     return (

@@ -1310,6 +1310,38 @@ export type AddWatchlistItemRequest = {
     target_price?: number;
 };
 
+// Index Template Types
+export type IndexTemplateListItem = {
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    ticker_count: number;
+};
+
+export type IndexTemplate = {
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    ticker_count: number;
+    tickers: string[];
+};
+
+export type CreateWatchlistFromTemplateRequest = {
+    template_id: string;
+    custom_name?: string;
+    selected_tickers?: string[]; // If not provided, all tickers from template are used
+};
+
+export type CreateWatchlistFromTemplateResponse = {
+    watchlist_id: string;
+    name: string;
+    added_count: number;
+    failed_count: number;
+    failed_tickers: string[];
+};
+
 // Long-Term Guidance Types
 export type InvestmentGoal = 'retirement' | 'college' | 'wealth';
 

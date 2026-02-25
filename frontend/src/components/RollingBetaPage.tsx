@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -43,6 +43,15 @@ export function RollingBetaPage({
   const [selectedBenchmark, setSelectedBenchmark] = useState<string>('SPY');
   const [days] = useState<number>(180);
   const [view, setView] = useState<'historical' | 'forecast'>('historical');
+  const [shouldAutoCalculate, setShouldAutoCalculate] = useState(!!initialTicker);
+
+  // Handle initialTicker changes
+  useEffect(() => {
+    if (initialTicker) {
+      setSelectedTicker(initialTicker);
+      setShouldAutoCalculate(true);
+    }
+  }, [initialTicker]);
 
   const portfoliosQ = useQuery({
     queryKey: ['portfolios'],
@@ -77,19 +86,26 @@ export function RollingBetaPage({
     enabled: !!selectedPortfolioId && !!accountsQ.data && accountsQ.data.length > 0,
   });
 
-  // Get unique tickers from holdings
+  // Get unique tickers from holdings, plus initialTicker if provided
   const availableTickers = useMemo(() => {
-    if (!holdingsQueries.data) return [];
-
     const tickerSet = new Set<string>();
-    holdingsQueries.data.forEach((holding) => {
-      if (holding.ticker) {
-        tickerSet.add(holding.ticker);
-      }
-    });
+
+    // Add initialTicker if provided (for navigation from ticker menu)
+    if (initialTicker) {
+      tickerSet.add(initialTicker);
+    }
+
+    // Add tickers from holdings
+    if (holdingsQueries.data) {
+      holdingsQueries.data.forEach((holding) => {
+        if (holding.ticker) {
+          tickerSet.add(holding.ticker);
+        }
+      });
+    }
 
     return Array.from(tickerSet).sort();
-  }, [holdingsQueries.data]);
+  }, [holdingsQueries.data, initialTicker]);
 
   // Check if selected ticker might be unsupported
   const getTickerWarning = (ticker: string): string | null => {
@@ -150,7 +166,10 @@ export function RollingBetaPage({
               <InputLabel>Ticker</InputLabel>
               <Select
                 value={selectedTicker}
-                onChange={(e) => setSelectedTicker(e.target.value)}
+                onChange={(e) => {
+                  setSelectedTicker(e.target.value);
+                  setShouldAutoCalculate(false); // Don't auto-calculate when manually changing
+                }}
                 label="Ticker"
               >
                 {availableTickers.map((ticker) => (
@@ -160,7 +179,9 @@ export function RollingBetaPage({
                 ))}
               </Select>
               <FormHelperText>
-                Best results with stocks and ETFs
+                {initialTicker && !holdingsQueries.data?.some(h => h.ticker === initialTicker)
+                  ? `Showing ${initialTicker} (not in portfolio)`
+                  : 'Best results with stocks and ETFs'}
               </FormHelperText>
             </FormControl>
           </Grid>
@@ -221,12 +242,13 @@ export function RollingBetaPage({
       </Paper>
 
       {/* Render Chart Based on View */}
-      {selectedPortfolioId && selectedTicker ? (
+      {selectedTicker ? (
         view === 'historical' ? (
           <RollingBetaChart
             ticker={selectedTicker}
             benchmark={selectedBenchmark}
             days={days}
+            autoCalculate={shouldAutoCalculate}
           />
         ) : (
           <BetaForecastChart
@@ -234,6 +256,10 @@ export function RollingBetaPage({
             benchmark={selectedBenchmark}
           />
         )
+      ) : selectedPortfolioId ? (
+        <Alert severity="info">
+          Please select a ticker to view rolling beta analysis.
+        </Alert>
       ) : (
         <Alert severity="info">
           Please select a portfolio to view rolling beta analysis.

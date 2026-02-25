@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -28,11 +28,19 @@ import { useQuery } from '@tanstack/react-query';
 import { getVolatilityForecast, searchTickers } from '../lib/endpoints';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, ComposedChart } from 'recharts';
 
-export function VolatilityForecasting() {
-  const [ticker, setTicker] = useState('');
-  const [searchTicker, setSearchTicker] = useState('');
+export function VolatilityForecasting({ initialTicker }: { initialTicker?: string }) {
+  const [ticker, setTicker] = useState(initialTicker || '');
+  const [searchTicker, setSearchTicker] = useState(initialTicker || '');
   const [days, setDays] = useState(30);
   const [confidenceLevel, setConfidenceLevel] = useState(0.95);
+
+  // Handle initialTicker changes
+  useEffect(() => {
+    if (initialTicker) {
+      setTicker(initialTicker);
+      setSearchTicker(initialTicker);
+    }
+  }, [initialTicker]);
 
   // Fetch company name when ticker is searched
   const companyInfoQ = useQuery({
