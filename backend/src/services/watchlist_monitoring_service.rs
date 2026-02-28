@@ -51,15 +51,18 @@ pub async fn check_thresholds(
             None => continue,
         };
 
+        // Convert BigDecimal threshold value to f64 for comparison
+        let threshold_f64 = threshold.value.to_string().parse::<f64>().unwrap_or(0.0);
+
         let triggered = match threshold.threshold_type.as_str() {
             "price_above" | "price_below" => {
-                comparison.evaluate(current_price, threshold.value)
+                comparison.evaluate(current_price, threshold_f64)
             }
             "price_change_pct" => {
                 if let Some(added_price) = item.added_price.as_ref().and_then(|p| p.to_string().parse::<f64>().ok()) {
                     if added_price > 0.0 {
                         let change_pct = ((current_price - added_price) / added_price) * 100.0;
-                        comparison.evaluate(change_pct.abs(), threshold.value)
+                        comparison.evaluate(change_pct.abs(), threshold_f64)
                     } else {
                         false
                     }
@@ -69,21 +72,21 @@ pub async fn check_thresholds(
             }
             "volatility" => {
                 if let Some(vol) = volatility {
-                    comparison.evaluate(vol, threshold.value)
+                    comparison.evaluate(vol, threshold_f64)
                 } else {
                     false
                 }
             }
             "volume_spike" => {
                 if let Some(ratio) = volume_ratio {
-                    comparison.evaluate(ratio, threshold.value)
+                    comparison.evaluate(ratio, threshold_f64)
                 } else {
                     false
                 }
             }
             "rsi_overbought" => {
                 if let Some(rsi) = rsi_value {
-                    comparison.evaluate(rsi, threshold.value)
+                    comparison.evaluate(rsi, threshold_f64)
                 } else {
                     false
                 }
@@ -91,7 +94,7 @@ pub async fn check_thresholds(
             "rsi_oversold" => {
                 if let Some(rsi) = rsi_value {
                     // For oversold, we typically check rsi < threshold
-                    comparison.evaluate(rsi, threshold.value)
+                    comparison.evaluate(rsi, threshold_f64)
                 } else {
                     false
                 }
@@ -115,12 +118,12 @@ pub async fn check_thresholds(
                 _ => 0.0,
             };
 
-            let severity = determine_severity(&threshold.threshold_type, actual, threshold.value);
+            let severity = determine_severity(&threshold.threshold_type, actual, threshold_f64);
             let message = format_alert_message(
                 &item.ticker,
                 &threshold.threshold_type,
                 actual,
-                threshold.value,
+                threshold_f64,
             );
 
             results.push(MonitoringResult {
@@ -131,7 +134,7 @@ pub async fn check_thresholds(
                 severity,
                 message,
                 actual_value: actual,
-                threshold_value: Some(threshold.value),
+                threshold_value: Some(threshold_f64),
                 metadata: json!({
                     "current_price": current_price,
                     "rsi": rsi_value,

@@ -106,7 +106,7 @@ pub struct WatchlistThreshold {
     pub watchlist_item_id: Uuid,
     pub threshold_type: String,
     pub comparison: String,
-    pub value: f64,
+    pub value: BigDecimal,
     pub enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -135,7 +135,7 @@ impl From<WatchlistThreshold> for WatchlistThresholdResponse {
             id: t.id,
             threshold_type: t.threshold_type,
             comparison: t.comparison,
-            value: t.value,
+            value: t.value.to_string().parse::<f64>().unwrap_or(0.0),
             enabled: t.enabled,
         }
     }

@@ -960,30 +960,93 @@ export async function deleteWatchlist(watchlistId: string): Promise<void> {
 
 export async function getWatchlistItems(watchlistId: string): Promise<WatchlistItem[]> {
     const res = await api.get(`/api/watchlists/${watchlistId}/items`);
-    console.log('📥 Received watchlist items:', res.data);
-    if (res.data && res.data.length > 0) {
-        console.log('📥 First item:', res.data[0]);
-    }
     return res.data;
 }
 
 export async function addWatchlistItem(watchlistId: string, data: AddWatchlistItemRequest): Promise<WatchlistItem> {
     const res = await api.post(`/api/watchlists/${watchlistId}/items`, data);
-    console.log('✅ Added watchlist item response:', res.data);
     return res.data;
 }
 
-export async function removeWatchlistItem(watchlistId: string, symbol: string): Promise<void> {
-    await api.delete(`/api/watchlists/${watchlistId}/items/${symbol}`);
+export async function removeWatchlistItem(watchlistId: string, itemId: string): Promise<void> {
+    await api.delete(`/api/watchlists/${watchlistId}/items/${itemId}`);
 }
 
 export async function updateWatchlistThresholds(
-    watchlistId: string,
-    symbol: string,
+    itemId: string,
     thresholds: WatchlistThresholds
-): Promise<WatchlistItem> {
-    const res = await api.put(`/api/watchlists/${watchlistId}/items/${symbol}/thresholds`, thresholds);
-    return res.data;
+): Promise<void> {
+    // First, delete all existing thresholds
+    await api.delete(`/api/watchlists/items/${itemId}/thresholds`);
+
+    // Convert frontend threshold format to backend format
+    // Backend expects individual threshold requests with type, comparison, and value
+    const requests = [];
+
+    if (thresholds.price_target_high !== undefined) {
+        requests.push({
+            threshold_type: 'price_above',
+            comparison: 'gte',
+            value: thresholds.price_target_high,
+            enabled: true
+        });
+    }
+
+    if (thresholds.price_target_low !== undefined) {
+        requests.push({
+            threshold_type: 'price_below',
+            comparison: 'lte',
+            value: thresholds.price_target_low,
+            enabled: true
+        });
+    }
+
+    if (thresholds.volatility_threshold !== undefined) {
+        requests.push({
+            threshold_type: 'volatility',
+            comparison: 'gt',
+            value: thresholds.volatility_threshold,
+            enabled: true
+        });
+    }
+
+    if (thresholds.volume_anomaly_threshold !== undefined) {
+        requests.push({
+            threshold_type: 'volume_spike',
+            comparison: 'gt',
+            value: thresholds.volume_anomaly_threshold,
+            enabled: true
+        });
+    }
+
+    if (thresholds.rsi_overbought !== undefined) {
+        requests.push({
+            threshold_type: 'rsi_overbought',
+            comparison: 'gte',
+            value: thresholds.rsi_overbought,
+            enabled: true
+        });
+    }
+
+    if (thresholds.rsi_oversold !== undefined) {
+        requests.push({
+            threshold_type: 'rsi_oversold',
+            comparison: 'lte',
+            value: thresholds.rsi_oversold,
+            enabled: true
+        });
+    }
+
+    // Note: sentiment_threshold is not yet supported by the backend
+
+    // Send all threshold requests
+    if (requests.length > 0) {
+        await Promise.all(
+            requests.map(req => 
+                api.post(`/api/watchlists/items/${itemId}/thresholds`, req)
+            )
+        );
+    }
 }
 
 export async function getWatchlistAlerts(watchlistId: string): Promise<WatchlistAlert[]> {

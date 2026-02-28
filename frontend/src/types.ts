@@ -1265,6 +1265,14 @@ export type WatchlistThresholds = {
     sentiment_threshold?: number;
 };
 
+export type WatchlistThreshold = {
+    id: string;
+    threshold_type: string;
+    comparison: string;
+    value: number;
+    enabled: boolean;
+};
+
 export type WatchlistItem = {
     id: string;
     watchlist_id: string;
@@ -1272,6 +1280,7 @@ export type WatchlistItem = {
     company_name?: string;
     added_at: string;
     custom_thresholds: WatchlistThresholds | null;
+    thresholds?: WatchlistThreshold[];
     notes: string | null;
     current_price?: number;
     price_change_pct?: number;

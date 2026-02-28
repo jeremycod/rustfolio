@@ -1,4 +1,5 @@
 use bigdecimal::BigDecimal;
+use std::str::FromStr;
 use crate::models::watchlist::*;
 use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
@@ -304,7 +305,14 @@ pub async fn set_threshold(
     value: f64,
     enabled: bool,
 ) -> Result<WatchlistThreshold, sqlx::Error> {
-    sqlx::query_as::<_, WatchlistThreshold>(
+    tracing::info!("📝 DB: set_threshold - item_id={}, type={}, comparison={}, value={}, enabled={}",
+        watchlist_item_id, threshold_type, comparison, value, enabled);
+
+    // Convert f64 to BigDecimal for database storage
+    let value_bd = BigDecimal::from_str(&value.to_string())
+        .unwrap_or_else(|_| BigDecimal::from(0));
+
+    let result = sqlx::query_as::<_, WatchlistThreshold>(
         r#"
         INSERT INTO watchlist_thresholds (watchlist_item_id, threshold_type, comparison, value, enabled)
         VALUES ($1, $2, $3, $4, $5)
@@ -316,10 +324,21 @@ pub async fn set_threshold(
     .bind(watchlist_item_id)
     .bind(threshold_type)
     .bind(comparison)
-    .bind(value)
+    .bind(value_bd)
     .bind(enabled)
     .fetch_one(pool)
-    .await
+    .await;
+
+    match &result {
+        Ok(threshold) => {
+            tracing::info!("✅ DB: Threshold saved successfully with id={}", threshold.id);
+        }
+        Err(e) => {
+            tracing::error!("❌ DB: Failed to save threshold: {:?}", e);
+        }
+    }
+
+    result
 }
 
 pub async fn get_thresholds_for_item(
@@ -338,12 +357,53 @@ pub async fn get_thresholds_for_item(
     .await
 }
 
+pub async fn get_thresholds_for_items(
+    pool: &PgPool,
+    watchlist_item_ids: &[Uuid],
+) -> Result<std::collections::HashMap<Uuid, Vec<WatchlistThreshold>>, sqlx::Error> {
+    if watchlist_item_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let thresholds = sqlx::query_as::<_, WatchlistThreshold>(
+        r#"
+        SELECT * FROM watchlist_thresholds
+        WHERE watchlist_item_id = ANY($1)
+        ORDER BY watchlist_item_id, threshold_type ASC
+        "#,
+    )
+    .bind(watchlist_item_ids)
+    .fetch_all(pool)
+    .await?;
+
+    // Group by item_id
+    let mut map: std::collections::HashMap<Uuid, Vec<WatchlistThreshold>> = std::collections::HashMap::new();
+    for threshold in thresholds {
+        map.entry(threshold.watchlist_item_id)
+            .or_insert_with(Vec::new)
+            .push(threshold);
+    }
+
+    Ok(map)
+}
+
 pub async fn delete_threshold(
     pool: &PgPool,
     threshold_id: Uuid,
 ) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM watchlist_thresholds WHERE id = $1")
         .bind(threshold_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_all_thresholds_for_item(
+    pool: &PgPool,
+    watchlist_item_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM watchlist_thresholds WHERE watchlist_item_id = $1")
+        .bind(watchlist_item_id)
         .execute(pool)
         .await?;
     Ok(())
@@ -369,7 +429,7 @@ pub async fn get_all_enabled_thresholds(
         threshold_id: Uuid,
         threshold_type: String,
         comparison: String,
-        value: f64,
+        value: BigDecimal,
         enabled: bool,
         threshold_created_at: chrono::DateTime<chrono::Utc>,
         threshold_updated_at: chrono::DateTime<chrono::Utc>,

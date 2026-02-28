@@ -45,6 +45,7 @@ ndarray = "0.15"
 linfa = "0.7"
 linfa-clustering = "0.7"
 karma = { version = "1.0.0", features = ["serde"] }
+futures = "0.3.32"
 
 [features]
 default = ["loki"]

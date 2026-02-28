@@ -126,8 +126,8 @@ export function WatchlistPage({ onTickerNavigate }: { onTickerNavigate?: (ticker
   });
 
   const removeItemMutation = useMutation({
-    mutationFn: ({ watchlistId, symbol }: { watchlistId: string; symbol: string }) =>
-      removeWatchlistItem(watchlistId, symbol),
+    mutationFn: ({ watchlistId, itemId }: { watchlistId: string; itemId: string }) =>
+      removeWatchlistItem(watchlistId, itemId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['watchlist-items', selectedWatchlistId] });
       queryClient.invalidateQueries({ queryKey: ['watchlists'] });
@@ -291,7 +291,7 @@ export function WatchlistPage({ onTickerNavigate }: { onTickerNavigate?: (ticker
               items={itemsQ.data || []}
               loading={itemsQ.isLoading}
               watchlistId={selectedWatchlistId!}
-              onRemove={(symbol) => removeItemMutation.mutate({ watchlistId: selectedWatchlistId!, symbol })}
+              onRemove={(itemId) => removeItemMutation.mutate({ watchlistId: selectedWatchlistId!, itemId })}
               onConfigureThresholds={(item) => {
                 setSelectedItem(item);
                 setThresholdDialogOpen(true);
@@ -505,7 +505,7 @@ function WatchlistItemsTable({
   items: WatchlistItem[];
   loading: boolean;
   watchlistId: string;
-  onRemove: (symbol: string) => void;
+  onRemove: (itemId: string) => void;
   onConfigureThresholds: (item: WatchlistItem) => void;
   onTickerNavigate?: (ticker: string, page?: string) => void;
 }) {
@@ -597,17 +597,37 @@ function WatchlistItemsTable({
                 ) : '--'}
               </TableCell>
               <TableCell>
-                {item.custom_thresholds ? (
+                {item.thresholds && item.thresholds.length > 0 ? (
                   <Box display="flex" gap={0.5} flexWrap="wrap">
-                    {item.custom_thresholds.price_target_high && (
-                      <Chip key="high" label={`High: $${item.custom_thresholds.price_target_high}`} size="small" variant="outlined" />
-                    )}
-                    {item.custom_thresholds.price_target_low && (
-                      <Chip key="low" label={`Low: $${item.custom_thresholds.price_target_low}`} size="small" variant="outlined" />
-                    )}
-                    {!item.custom_thresholds.price_target_high && !item.custom_thresholds.price_target_low && (
-                      <Chip key="configured" label="Configured" size="small" color="primary" variant="outlined" />
-                    )}
+                    {item.thresholds.map((t) => {
+                      const label = (() => {
+                        switch (t.threshold_type) {
+                          case 'price_above':
+                            return `High: $${t.value.toFixed(2)}`;
+                          case 'price_below':
+                            return `Low: $${t.value.toFixed(2)}`;
+                          case 'volatility':
+                            return `Vol: ${t.value.toFixed(1)}%`;
+                          case 'volume_spike':
+                            return `Vol Spike: ${t.value.toFixed(1)}x`;
+                          case 'rsi_overbought':
+                            return `RSI>: ${t.value.toFixed(0)}`;
+                          case 'rsi_oversold':
+                            return `RSI<: ${t.value.toFixed(0)}`;
+                          default:
+                            return `${t.threshold_type}: ${t.value}`;
+                        }
+                      })();
+                      return (
+                        <Chip
+                          key={t.id}
+                          label={label}
+                          size="small"
+                          variant="outlined"
+                          color={t.enabled ? 'primary' : 'default'}
+                        />
+                      );
+                    })}
                   </Box>
                 ) : (
                   <Typography variant="caption" color="text.disabled">None</Typography>
@@ -650,7 +670,7 @@ function WatchlistItemsTable({
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (menuAnchor) onRemove(menuAnchor.item.symbol);
+            if (menuAnchor) onRemove(menuAnchor.item.id);
             setMenuAnchor(null);
           }}
           sx={{ color: 'error.main' }}
@@ -1002,7 +1022,32 @@ function ThresholdDialog({
   item: WatchlistItem;
   onUpdated: () => void;
 }) {
-  const existing = item.custom_thresholds || {};
+  // Convert thresholds array to WatchlistThresholds object
+  const existingThresholds = item.thresholds || [];
+  const existing: WatchlistThresholds = {};
+  existingThresholds.forEach((t) => {
+    switch (t.threshold_type) {
+      case 'price_above':
+        existing.price_target_high = t.value;
+        break;
+      case 'price_below':
+        existing.price_target_low = t.value;
+        break;
+      case 'volatility':
+        existing.volatility_threshold = t.value;
+        break;
+      case 'volume_spike':
+        existing.volume_anomaly_threshold = t.value;
+        break;
+      case 'rsi_overbought':
+        existing.rsi_overbought = t.value;
+        break;
+      case 'rsi_oversold':
+        existing.rsi_oversold = t.value;
+        break;
+    }
+  });
+
   const [thresholds, setThresholds] = useState<WatchlistThresholds>({
     price_target_high: existing.price_target_high,
     price_target_low: existing.price_target_low,
@@ -1014,7 +1059,7 @@ function ThresholdDialog({
   });
 
   const mutation = useMutation({
-    mutationFn: () => updateWatchlistThresholds(watchlistId, item.symbol, thresholds),
+    mutationFn: () => updateWatchlistThresholds(item.id, thresholds),
     onSuccess: () => onUpdated(),
   });
 

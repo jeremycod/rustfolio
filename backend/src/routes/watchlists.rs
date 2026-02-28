@@ -14,6 +14,7 @@ use crate::db::{alert_queries, watchlist_queries, price_queries};
 use crate::models::watchlist::*;
 use crate::models::index_templates::{self, CreateWatchlistFromTemplateRequest, CreateWatchlistFromTemplateResponse, IndexTemplateListItem};
 use crate::state::AppState;
+use crate::services::risk_service;
 
 // ==============================================================================
 // Router - 13 endpoints
@@ -39,6 +40,7 @@ pub fn router() -> Router<AppState> {
         .route("/watchlists/:watchlist_id/items/:item_id", delete(remove_item))
         // Thresholds
         .route("/watchlists/items/:item_id/thresholds", post(set_threshold))
+        .route("/watchlists/items/:item_id/thresholds", delete(delete_all_thresholds))
         .route("/watchlists/items/:item_id/thresholds/:threshold_id", delete(delete_threshold))
         // Alerts
         .route("/watchlists/alerts", get(get_alerts))
@@ -257,6 +259,9 @@ async fn get_watchlist(
         // Get current price for this ticker
         let (current_price, price_change_pct) = get_current_price_data(pool, &item).await;
 
+        // Get risk level from cached data
+        let risk_level = get_risk_level(pool, &item.ticker).await;
+
         // Try to get company name
         let company_name = match crate::services::price_service::search_for_ticker_from_api(
             state.price_provider.as_ref(),
@@ -283,7 +288,7 @@ async fn get_watchlist(
             price_change_pct,
             sort_order: item.sort_order,
             custom_thresholds: None,
-            risk_level: None,
+            risk_level,
             thresholds: thresholds.into_iter().map(WatchlistThresholdResponse::from).collect(),
             created_at: item.created_at,
             updated_at: item.updated_at,
@@ -457,6 +462,9 @@ async fn add_item(
 
     let (current_price, price_change_pct) = get_current_price_data(pool, &item).await;
 
+    // Get risk level from cached data
+    let risk_level = get_risk_level(pool, &item.ticker).await;
+
     let response = WatchlistItemResponse {
         id: item.id,
         watchlist_id: item.watchlist_id,
@@ -469,15 +477,15 @@ async fn add_item(
         price_change_pct,
         sort_order: item.sort_order,
         custom_thresholds: None,
-        risk_level: None,
+        risk_level,
         thresholds: Vec::new(),
         created_at: item.created_at,
         updated_at: item.updated_at,
     };
 
     // Log the full response for debugging
-    info!("✅ Watchlist item response: ticker={}, company_name={:?}, current_price={:?}, added_price={:?}, change={:?}",
-        response.ticker, response.company_name, response.current_price, response.added_price, response.price_change_pct);
+    info!("✅ Watchlist item response: ticker={}, company_name={:?}, current_price={:?}, added_price={:?}, change={:?}, risk={:?}",
+        response.ticker, response.company_name, response.current_price, response.added_price, response.price_change_pct, response.risk_level);
 
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -488,37 +496,91 @@ async fn get_items(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
 
+    info!("📋 Fetching watchlist items for watchlist {}", watchlist_id);
+    let start = std::time::Instant::now();
+
     let items = watchlist_queries::get_watchlist_items(pool, watchlist_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    info!("📋 Fetched {} items in {:?}", items.len(), start.elapsed());
+
+    if items.is_empty() {
+        return Ok(Json(vec![]));
+    }
+
+    // Batch fetch all thresholds for all items
+    let batch_start = std::time::Instant::now();
+    let item_ids: Vec<Uuid> = items.iter().map(|i| i.id).collect();
+    let all_thresholds = watchlist_queries::get_thresholds_for_items(pool, &item_ids)
+        .await
+        .unwrap_or_default();
+    info!("📋 Batch fetched thresholds in {:?}", batch_start.elapsed());
+
+    // Batch fetch all prices
+    let batch_start = std::time::Instant::now();
+    let tickers: Vec<String> = items.iter().map(|i| i.ticker.clone()).collect();
+    let prices_map = price_queries::fetch_latest_batch(pool, &tickers)
+        .await
+        .unwrap_or_default();
+    info!("📋 Batch fetched prices in {:?}", batch_start.elapsed());
+
+    // Fetch company names in parallel (limit concurrency to avoid overwhelming the API)
+    let batch_start = std::time::Instant::now();
+    let company_name_futures: Vec<_> = tickers.iter().map(|ticker| {
+        let ticker = ticker.clone();
+        let provider = state.price_provider.clone();
+        async move {
+            let name: Option<String> = match crate::services::price_service::search_for_ticker_from_api(
+                provider.as_ref(),
+                &ticker
+            ).await {
+                Ok(matches) => {
+                    matches.iter()
+                        .find(|m| m.symbol.eq_ignore_ascii_case(&ticker))
+                        .or(matches.first())
+                        .map(|m| m.name.clone())
+                }
+                Err(_) => None,
+            };
+            (ticker, name)
+        }
+    }).collect();
+
+    let company_name_results: Vec<(String, Option<String>)> = futures::future::join_all(company_name_futures).await;
+    let company_names: std::collections::HashMap<String, String> = company_name_results
+        .into_iter()
+        .filter_map(|(ticker, name): (String, Option<String>)| name.map(|n| (ticker, n)))
+        .collect();
+    info!("📋 Fetched {} company names in {:?}", company_names.len(), batch_start.elapsed());
+
+    // Build responses
     let mut responses = Vec::new();
     for item in items {
-        let thresholds = watchlist_queries::get_thresholds_for_item(pool, item.id)
-            .await
-            .unwrap_or_default();
+        let thresholds = all_thresholds.get(&item.id).cloned().unwrap_or_default();
 
-        let (current_price, price_change_pct) = get_current_price_data(pool, &item).await;
-
-        // Try to get company name by searching for the ticker (cached in memory by provider)
-        let company_name = match crate::services::price_service::search_for_ticker_from_api(
-            state.price_provider.as_ref(),
-            &item.ticker
-        ).await {
-            Ok(matches) => {
-                matches.iter()
-                    .find(|m| m.symbol.eq_ignore_ascii_case(&item.ticker))
-                    .or(matches.first())
-                    .map(|m| m.name.clone())
-            }
-            Err(_) => None,
+        let (current_price, price_change_pct) = if let Some(price_point) = prices_map.get(&item.ticker) {
+            let current_price = Some(price_point.close_price.to_string().parse::<f64>().unwrap_or(0.0));
+            let added_price_f64 = item.added_price.as_ref().and_then(|p| p.to_string().parse::<f64>().ok());
+            let price_change_pct = match (current_price, added_price_f64) {
+                (Some(current), Some(added)) if added > 0.0 => {
+                    Some(((current - added) / added) * 100.0)
+                }
+                _ => None,
+            };
+            (current_price, price_change_pct)
+        } else {
+            (None, None)
         };
+
+        let risk_level = get_risk_level(pool, &item.ticker).await;
+        let company_name = company_names.get(&item.ticker).cloned();
 
         let response = WatchlistItemResponse {
             id: item.id,
             watchlist_id: item.watchlist_id,
             ticker: item.ticker.clone(),
-            company_name: company_name.clone(),
+            company_name,
             notes: item.notes.clone(),
             added_price: item.added_price.as_ref().and_then(|p| p.to_string().parse().ok()),
             target_price: item.target_price.as_ref().and_then(|p| p.to_string().parse().ok()),
@@ -526,19 +588,16 @@ async fn get_items(
             price_change_pct,
             sort_order: item.sort_order,
             custom_thresholds: None,
-            risk_level: None,
+            risk_level,
             thresholds: thresholds.into_iter().map(WatchlistThresholdResponse::from).collect(),
             created_at: item.created_at,
             updated_at: item.updated_at,
         };
 
-        info!("📋 Get items - ticker={}, company={:?}, price={:?}, change={:?}",
-            response.ticker, response.company_name, response.current_price, response.price_change_pct);
-
         responses.push(response);
     }
 
-    info!("📋 Returning {} watchlist items", responses.len());
+    info!("📋 Returning {} watchlist items in total {:?}", responses.len(), start.elapsed());
     Ok(Json(responses))
 }
 
@@ -567,6 +626,9 @@ async fn update_item(
 
     let (current_price, price_change_pct) = get_current_price_data(pool, &item).await;
 
+    // Get risk level from cached data
+    let risk_level = get_risk_level(pool, &item.ticker).await;
+
     // Try to get company name
     let company_name = match crate::services::price_service::search_for_ticker_from_api(
         state.price_provider.as_ref(),
@@ -593,7 +655,7 @@ async fn update_item(
         price_change_pct,
         sort_order: item.sort_order,
         custom_thresholds: None,
-        risk_level: None,
+        risk_level,
         thresholds: thresholds.into_iter().map(WatchlistThresholdResponse::from).collect(),
         created_at: item.created_at,
         updated_at: item.updated_at,
@@ -690,11 +752,26 @@ async fn set_threshold(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
 
-    // Verify item exists
-    watchlist_queries::get_watchlist_item(pool, item_id)
-        .await
-        .map_err(|e| (StatusCode::NOT_FOUND, format!("Watchlist item not found: {}", e)))?;
+    info!("🎯 SET_THRESHOLD REQUEST RECEIVED");
+    info!("   item_id: {}", item_id);
+    info!("   threshold_type: {:?} (as_str: {})", req.threshold_type, req.threshold_type.as_str());
+    info!("   comparison: {:?} (as_str: {})", req.comparison, req.comparison.as_str());
+    info!("   value: {}", req.value);
+    info!("   enabled: {:?}", req.enabled);
 
+    // Verify item exists
+    info!("🔍 Verifying watchlist item exists...");
+    match watchlist_queries::get_watchlist_item(pool, item_id).await {
+        Ok(item) => {
+            info!("✅ Found watchlist item: ticker={}, watchlist_id={}", item.ticker, item.watchlist_id);
+        }
+        Err(e) => {
+            warn!("❌ Watchlist item not found: {}", e);
+            return Err((StatusCode::NOT_FOUND, format!("Watchlist item not found: {}", e)));
+        }
+    }
+
+    info!("💾 Saving threshold to database...");
     let threshold = watchlist_queries::set_threshold(
         pool,
         item_id,
@@ -704,9 +781,32 @@ async fn set_threshold(
         req.enabled.unwrap_or(true),
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| {
+        warn!("❌ Failed to save threshold: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save threshold: {}", e))
+    })?;
 
+    info!("✅ Threshold saved successfully: id={}", threshold.id);
     Ok((StatusCode::CREATED, Json(WatchlistThresholdResponse::from(threshold))))
+}
+
+async fn delete_all_thresholds(
+    State(state): State<AppState>,
+    Path(item_id): Path<Uuid>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    info!("🗑️  DELETE_ALL_THRESHOLDS - item_id: {}", item_id);
+
+    watchlist_queries::delete_all_thresholds_for_item(pool, item_id)
+        .await
+        .map_err(|e| {
+            warn!("❌ Failed to delete thresholds: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete thresholds: {}", e))
+        })?;
+
+    info!("✅ All thresholds deleted for item {}", item_id);
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn delete_threshold(
@@ -797,14 +897,36 @@ async fn get_current_price_data(pool: &PgPool, item: &WatchlistItem) -> (Option<
         _ => None,
     };
 
-    let added_price_f64 = item.added_price.as_ref().and_then(|p| p.to_string().parse::<f64>().ok());
+    // Calculate daily price change (today vs yesterday)
+    let price_change_pct = match price_queries::fetch_window(pool, &item.ticker, 2).await {
+        Ok(prices) if prices.len() >= 2 => {
+            // prices are sorted by date DESC, so [0] is most recent, [1] is previous
+            let current = prices[0].close_price.to_string().parse::<f64>().ok();
+            let previous = prices[1].close_price.to_string().parse::<f64>().ok();
 
-    let price_change_pct = match (current_price, added_price_f64) {
-        (Some(current), Some(added)) if added > 0.0 => {
-            Some(((current - added) / added) * 100.0)
+            match (current, previous) {
+                (Some(curr), Some(prev)) if prev > 0.0 => {
+                    Some(((curr - prev) / prev) * 100.0)
+                }
+                _ => None,
+            }
         }
         _ => None,
     };
 
     (current_price, price_change_pct)
+}
+
+async fn get_risk_level(pool: &PgPool, ticker: &str) -> Option<String> {
+    // Try to compute risk metrics from cache (no external API calls)
+    match risk_service::compute_risk_metrics_from_cache(
+        pool,
+        ticker,
+        90,  // 90 days default window
+        "SPY",  // default benchmark
+        0.045,  // 4.5% risk-free rate
+    ).await {
+        Ok(assessment) => Some(assessment.risk_level.to_string()),
+        Err(_) => None,  // No cached data available yet
+    }
 }

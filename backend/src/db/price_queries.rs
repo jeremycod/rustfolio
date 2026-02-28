@@ -63,6 +63,35 @@ pub async fn fetch_latest(
         .await
 }
 
+pub async fn fetch_latest_batch(
+    pool: &PgPool,
+    tickers: &[String],
+) -> Result<std::collections::HashMap<String, PricePoint>, sqlx::Error> {
+    if tickers.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    // Use DISTINCT ON to get the latest price for each ticker efficiently
+    let prices = sqlx::query_as::<_, PricePoint>(
+        r#"
+        SELECT DISTINCT ON (ticker) id, ticker, date, close_price, created_at
+        FROM price_points
+        WHERE ticker = ANY($1)
+        ORDER BY ticker, date DESC
+        "#,
+    )
+    .bind(tickers)
+    .fetch_all(pool)
+    .await?;
+
+    // Convert to HashMap for O(1) lookups
+    let map = prices.into_iter()
+        .map(|p| (p.ticker.clone(), p))
+        .collect();
+
+    Ok(map)
+}
+
 pub async fn upsert_external_points(
     pool: &PgPool,
     ticker: &str,

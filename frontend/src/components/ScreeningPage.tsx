@@ -473,7 +473,7 @@ export function ScreeningPage({ onTickerNavigate }: ScreeningPageProps = {}) {
               </TableHead>
               <TableBody>
                 {screeningQ.data.results.map((result) => (
-                  <ScreeningResultRow key={result.symbol} result={result} />
+                  <ScreeningResultRow key={result.symbol} result={result} onTickerNavigate={onTickerNavigate} />
                 ))}
                 {screeningQ.data.results.length === 0 && (
                   <TableRow>
@@ -504,7 +504,7 @@ export function ScreeningPage({ onTickerNavigate }: ScreeningPageProps = {}) {
   );
 }
 
-function ScreeningResultRow({ result }: { result: ScreeningResult }) {
+function ScreeningResultRow({ result, onTickerNavigate }: { result: ScreeningResult; onTickerNavigate?: (ticker: string, page?: string) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   const scoreColor = result.composite_score >= 70 ? 'success.main' :
