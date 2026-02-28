@@ -41,6 +41,7 @@ export function DownsideRiskAnalysis({ portfolioId: initialPortfolioId, onTicker
   const [benchmark, setBenchmark] = useState('SPY');
   const [helpOpen, setHelpOpen] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<string>('');
+  const [refreshCounter, setRefreshCounter] = useState(0);
   const queryClient = useQueryClient();
 
   // Fetch portfolios
@@ -58,8 +59,13 @@ export function DownsideRiskAnalysis({ portfolioId: initialPortfolioId, onTicker
 
   // Fetch downside risk data
   const downsideRiskQ = useQuery({
-    queryKey: ['downsideRisk', portfolioId, days, benchmark],
-    queryFn: () => portfolioId ? getPortfolioDownsideRisk(portfolioId, days, benchmark) : Promise.reject('No portfolio'),
+    queryKey: ['downsideRisk', portfolioId, days, benchmark, refreshCounter],
+    queryFn: () => {
+      if (!portfolioId) return Promise.reject('No portfolio');
+      // Force refresh if refreshCounter > 0 (user clicked refresh button)
+      const shouldForce = refreshCounter > 0;
+      return getPortfolioDownsideRisk(portfolioId, days, benchmark, shouldForce);
+    },
     enabled: !!portfolioId,
     retry: 1,
   });
@@ -133,18 +139,10 @@ export function DownsideRiskAnalysis({ portfolioId: initialPortfolioId, onTicker
   };
 
   // Force refresh handler
-  const handleForceRefresh = async () => {
+  const handleForceRefresh = () => {
     if (!portfolioId) return;
-
-    try {
-      // Call the endpoint with force=true to bypass cache
-      await getPortfolioDownsideRisk(portfolioId, days, benchmark, true);
-
-      // Invalidate the query to trigger a refetch
-      queryClient.invalidateQueries({ queryKey: ['downsideRisk', portfolioId, days, benchmark] });
-    } catch (error) {
-      console.error('Failed to refresh data:', error);
-    }
+    // Increment counter to trigger a refetch with force=true
+    setRefreshCounter(prev => prev + 1);
   };
 
   const renderPortfolioMetrics = () => {
