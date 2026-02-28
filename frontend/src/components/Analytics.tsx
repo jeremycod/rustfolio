@@ -23,13 +23,15 @@ import { useQuery } from '@tanstack/react-query';
 import { getAnalytics, listPortfolios, getPortfolioHistory, getPortfolioRisk } from '../lib/endpoints';
 import { PortfolioChart } from './PortfolioChart';
 import { ForecastChart } from './ForecastChart';
+import { TickerActionMenu } from './TickerActionMenu';
 
 interface AnalyticsProps {
   selectedPortfolioId: string | null;
   onPortfolioChange: (id: string) => void;
+  onTickerNavigate?: (ticker: string, page?: string) => void;
 }
 
-export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsProps) {
+export function Analytics({ selectedPortfolioId, onPortfolioChange, onTickerNavigate }: AnalyticsProps) {
   const [currentTab, setCurrentTab] = useState(0);
   const [dateRange, setDateRange] = useState('3m');
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
@@ -348,7 +350,18 @@ export function Analytics({ selectedPortfolioId, onPortfolioChange }: AnalyticsP
                     const weight = alloc.weight * 100;
                     return (
                       <Box key={alloc.ticker} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="body2">{alloc.ticker}:</Typography>
+                        <Box>
+                          {onTickerNavigate ? (
+                            <TickerActionMenu
+                              ticker={alloc.ticker}
+                              variant="text"
+                              size="small"
+                              onNavigate={onTickerNavigate}
+                            />
+                          ) : (
+                            <Typography variant="body2">{alloc.ticker}:</Typography>
+                          )}
+                        </Box>
                         <Typography variant="body2">{formatPercent(weight)}</Typography>
                       </Box>
                     );

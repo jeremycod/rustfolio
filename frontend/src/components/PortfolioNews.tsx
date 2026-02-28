@@ -22,12 +22,14 @@ import NewsThemeCard from './NewsThemeCard';
 import SentimentBadge from './SentimentBadge';
 import AIBadge from './AIBadge';
 import AILoadingState from './AILoadingState';
+import { TickerActionMenu } from './TickerActionMenu';
 
 type Props = {
   portfolioId: string;
+  onTickerNavigate?: (ticker: string, page?: string) => void;
 };
 
-export default function PortfolioNews({ portfolioId }: Props) {
+export default function PortfolioNews({ portfolioId, onTickerNavigate }: Props) {
   const [days, setDays] = useState(7);
   const [activeTab, setActiveTab] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -210,10 +212,18 @@ export default function PortfolioNews({ portfolioId }: Props) {
 
               return (
                 <Box key={ticker} sx={{ mb: 4 }}>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {ticker}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    {onTickerNavigate ? (
+                      <TickerActionMenu
+                        ticker={ticker}
+                        variant="text"
+                        onNavigate={onTickerNavigate}
+                      />
+                    ) : (
+                      <Typography variant="h6" component="span">{ticker}</Typography>
+                    )}
                     <Chip label={`${themes.length} theme${themes.length !== 1 ? 's' : ''}`} size="small" />
-                  </Typography>
+                  </Box>
                   {themes.map((theme, idx) => (
                     <NewsThemeCard key={idx} theme={theme} />
                   ))}

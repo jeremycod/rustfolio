@@ -42,6 +42,7 @@ import {
 } from '@mui/icons-material';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { screenStocks, exportScreeningCSV } from '../lib/endpoints';
+import { TickerActionMenu } from './TickerActionMenu';
 import type {
   ScreeningRequest,
   ScreeningResponse,
@@ -86,7 +87,11 @@ const DEFAULT_FILTERS: ScreeningFilter[] = [
 type SortField = 'composite_score' | 'symbol' | 'price' | 'market_cap' | 'risk_level';
 type SortDir = 'asc' | 'desc';
 
-export function ScreeningPage() {
+interface ScreeningPageProps {
+  onTickerNavigate?: (ticker: string, page?: string) => void;
+}
+
+export function ScreeningPage({ onTickerNavigate }: ScreeningPageProps = {}) {
   const [factors, setFactors] = useState<ScreeningFactorCategory[]>(['fundamental', 'technical']);
   const [filters, setFilters] = useState<ScreeningFilter[]>(DEFAULT_FILTERS);
   const [sector, setSector] = useState('All Sectors');
@@ -530,7 +535,15 @@ function ScreeningResultRow({ result }: { result: ScreeningResult }) {
           </IconButton>
         </TableCell>
         <TableCell>
-          <Typography fontWeight="bold">{result.symbol}</Typography>
+          {onTickerNavigate ? (
+            <TickerActionMenu
+              ticker={result.symbol}
+              variant="text"
+              onNavigate={onTickerNavigate}
+            />
+          ) : (
+            <Typography fontWeight="bold">{result.symbol}</Typography>
+          )}
         </TableCell>
         <TableCell align="center">
           <Chip label={`#${result.rank}`} size="small" variant="outlined" />

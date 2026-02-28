@@ -41,6 +41,7 @@ import {
   HelpOutline,
 } from '@mui/icons-material';
 import { MetricHelpDialog } from './MetricHelpDialog';
+import { TickerActionMenu } from './TickerActionMenu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createPortfolio,
@@ -60,6 +61,7 @@ interface DashboardProps {
   selectedPortfolioId: string | null;
   onPortfolioChange: (id: string) => void;
   onNavigate?: (page: string) => void;
+  onTickerNavigate?: (ticker: string, page?: string) => void;
 }
 
 interface MetricCardWithHelpProps {
@@ -127,7 +129,7 @@ function MetricCardWithHelp({ label, value, subValue, helpKey, isLoading }: Metr
   );
 }
 
-export function Dashboard({ selectedPortfolioId, onPortfolioChange, onNavigate }: DashboardProps) {
+export function Dashboard({ selectedPortfolioId, onPortfolioChange, onNavigate, onTickerNavigate }: DashboardProps) {
   const qc = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [portfolioName, setPortfolioName] = useState('');
@@ -603,9 +605,18 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange, onNavigate }
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="body2">{getRiskIcon(pos.risk_assessment?.risk_score ?? 0)}</Typography>
-                        <Typography variant="body2" fontWeight="bold">
-                          {pos.ticker}
-                        </Typography>
+                        {onTickerNavigate ? (
+                          <TickerActionMenu
+                            ticker={pos.ticker}
+                            variant="text"
+                            size="small"
+                            onNavigate={onTickerNavigate}
+                          />
+                        ) : (
+                          <Typography variant="body2" fontWeight="bold">
+                            {pos.ticker}
+                          </Typography>
+                        )}
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Chip
@@ -672,9 +683,18 @@ export function Dashboard({ selectedPortfolioId, onPortfolioChange, onNavigate }
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <Chip label={rec.action_type} size="small" color="primary" variant="outlined" />
-                        <Typography variant="body2" fontWeight="bold">
-                          {rec.ticker}
-                        </Typography>
+                        {onTickerNavigate ? (
+                          <TickerActionMenu
+                            ticker={rec.ticker}
+                            variant="text"
+                            size="small"
+                            onNavigate={onTickerNavigate}
+                          />
+                        ) : (
+                          <Typography variant="body2" fontWeight="bold">
+                            {rec.ticker}
+                          </Typography>
+                        )}
                       </Box>
                       <Typography variant="caption" color="textSecondary">
                         {rec.rationale}

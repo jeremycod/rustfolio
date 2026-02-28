@@ -72,6 +72,7 @@ export default function App() {
                         selectedPortfolioId={selectedPortfolioId}
                         onPortfolioChange={setSelectedPortfolioId}
                         onNavigate={handlePageChange}
+                        onTickerNavigate={handleTickerNavigate}
                     />
                 );
             case 'accounts':
@@ -104,6 +105,7 @@ export default function App() {
                     <Analytics
                         selectedPortfolioId={selectedPortfolioId}
                         onPortfolioChange={setSelectedPortfolioId}
+                        onTickerNavigate={handleTickerNavigate}
                     />
                 );
             case 'risk':
@@ -117,10 +119,13 @@ export default function App() {
                     />
                 );
             case 'risk-comparison':
-                return <RiskComparison />;
+                return <RiskComparison onTickerNavigate={handleTickerNavigate} />;
             case 'correlations':
                 return selectedPortfolioId ? (
-                    <CorrelationHeatmap portfolioId={selectedPortfolioId} />
+                    <CorrelationHeatmap
+                        portfolioId={selectedPortfolioId}
+                        onTickerNavigate={handleTickerNavigate}
+                    />
                 ) : null;
             case 'rolling-beta':
                 return (
@@ -142,10 +147,16 @@ export default function App() {
                 return <AlertHistoryPage />;
             // Phase 1 features
             case 'cvar':
-                return <CVaRAnalysis selectedPortfolioId={selectedPortfolioId} />;
+                return <CVaRAnalysis
+                    selectedPortfolioId={selectedPortfolioId}
+                    onTickerNavigate={handleTickerNavigate}
+                />;
             case 'downside-risk':
                 return selectedPortfolioId ?
-                    <DownsideRiskAnalysis portfolioId={selectedPortfolioId} /> : null;
+                    <DownsideRiskAnalysis
+                        portfolioId={selectedPortfolioId}
+                        onTickerNavigate={handleTickerNavigate}
+                    /> : null;
             case 'market-regime':
                 return <MarketRegimePage />;
             // Phase 2 features
@@ -157,7 +168,7 @@ export default function App() {
                 return <SentimentForecasting initialTicker={selectedTicker || undefined} />;
             // Phase 3 features
             case 'screening':
-                return <ScreeningPage />;
+                return <ScreeningPage onTickerNavigate={handleTickerNavigate} />;
             case 'watchlists':
                 return <WatchlistPage onTickerNavigate={handleTickerNavigate} />;
             case 'long-term-guidance':

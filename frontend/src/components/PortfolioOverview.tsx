@@ -37,7 +37,7 @@ import {
 } from '../lib/endpoints';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
 import { arrayToCSV, downloadCSV, generateFilename, generatePortfolioPDF, type PortfolioPDFData } from '../lib/exportUtils';
-import { TickerChip } from './TickerChip';
+import { TickerActionMenu } from './TickerActionMenu';
 import { RiskBadge } from './RiskBadge';
 import { AssetTypeChip } from './AssetTypeChip';
 import { AssetTypeLegend } from './AssetTypeLegend';
@@ -47,7 +47,7 @@ import { PortfolioPerformance } from './PortfolioPerformance';
 interface PortfolioOverviewProps {
   selectedPortfolioId: string | null;
   onPortfolioChange: (id: string) => void;
-  onTickerNavigate: (ticker: string) => void;
+  onTickerNavigate?: (ticker: string, page?: string) => void;
 }
 
 export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTickerNavigate }: PortfolioOverviewProps) {
@@ -519,7 +519,15 @@ export function PortfolioOverview({ selectedPortfolioId, onPortfolioChange, onTi
                       return (
                         <TableRow key={holding.ticker}>
                           <TableCell>
-                            <TickerChip ticker={holding.ticker} onNavigate={onTickerNavigate} />
+                            {onTickerNavigate ? (
+                              <TickerActionMenu
+                                ticker={holding.ticker}
+                                variant="text"
+                                onNavigate={onTickerNavigate}
+                              />
+                            ) : (
+                              <Typography fontWeight="bold">{holding.ticker}</Typography>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2">

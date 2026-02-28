@@ -43,7 +43,7 @@ import { MetricHelpDialog } from './MetricHelpDialog';
 interface PortfolioRiskOverviewProps {
   selectedPortfolioId: string | null;
   onPortfolioChange: (id: string) => void;
-  onTickerNavigate: (ticker: string) => void;
+  onTickerNavigate: (ticker: string, page?: string) => void;
 }
 
 interface TabPanelProps {
@@ -647,7 +647,10 @@ export function PortfolioRiskOverview({
 
               {/* Sub-tab 2: News & Sentiment */}
               {aiInsightsSubTab === 1 && (
-                <PortfolioNews portfolioId={selectedPortfolioId!} />
+                <PortfolioNews
+                  portfolioId={selectedPortfolioId!}
+                  onTickerNavigate={onTickerNavigate}
+                />
               )}
 
               {/* Sub-tab 3: Ask AI */}

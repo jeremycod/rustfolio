@@ -28,12 +28,14 @@ import { useQuery } from '@tanstack/react-query';
 import { getPortfolioRisk, listPortfolios, searchTickers } from '../lib/endpoints';
 import type { Portfolio } from '../types';
 import { MetricHelpDialog } from './MetricHelpDialog';
+import { TickerActionMenu } from './TickerActionMenu';
 
 interface CVaRAnalysisProps {
   selectedPortfolioId?: string | null;
+  onTickerNavigate?: (ticker: string, page?: string) => void;
 }
 
-export function CVaRAnalysis({ selectedPortfolioId }: CVaRAnalysisProps) {
+export function CVaRAnalysis({ selectedPortfolioId, onTickerNavigate }: CVaRAnalysisProps) {
   const [ticker, setTicker] = useState('');
   const [searchTicker, setSearchTicker] = useState('');
   const [days, setDays] = useState(90);
@@ -311,7 +313,15 @@ export function CVaRAnalysis({ selectedPortfolioId }: CVaRAnalysisProps) {
                 {portfolioData.position_risks?.map((pos) => (
                   <TableRow key={pos.ticker}>
                     <TableCell>
-                      <strong>{pos.ticker}</strong>
+                      {onTickerNavigate ? (
+                        <TickerActionMenu
+                          ticker={pos.ticker}
+                          variant="text"
+                          onNavigate={onTickerNavigate}
+                        />
+                      ) : (
+                        <strong>{pos.ticker}</strong>
+                      )}
                     </TableCell>
                     <TableCell align="right">{(pos.weight * 100).toFixed(1)}%</TableCell>
                     <TableCell align="right" sx={{ color: getRiskColor(pos.risk_assessment.metrics.var_95) }}>

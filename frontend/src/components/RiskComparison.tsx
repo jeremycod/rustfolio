@@ -31,6 +31,7 @@ import {
   HelpOutline,
 } from '@mui/icons-material';
 import { MetricHelpDialog } from './MetricHelpDialog';
+import { TickerActionMenu } from './TickerActionMenu';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { getPositionRisk, listPortfolios } from '../lib/endpoints';
 import { RiskLevel } from '../types';
@@ -45,7 +46,11 @@ import {
   Cell,
 } from 'recharts';
 
-export function RiskComparison() {
+interface RiskComparisonProps {
+  onTickerNavigate?: (ticker: string, page?: string) => void;
+}
+
+export function RiskComparison({ onTickerNavigate }: RiskComparisonProps) {
   const [tickers, setTickers] = useState<string[]>([]);
   const [tickerInput, setTickerInput] = useState('');
   const [days] = useState(90);
@@ -334,7 +339,15 @@ export function RiskComparison() {
                     <TableCell><strong>Metric</strong></TableCell>
                     {comparisonData.map((item) => (
                       <TableCell key={item.ticker} align="right">
-                        <strong>{item.ticker}</strong>
+                        {onTickerNavigate ? (
+                          <TickerActionMenu
+                            ticker={item.ticker}
+                            variant="text"
+                            onNavigate={onTickerNavigate}
+                          />
+                        ) : (
+                          <strong>{item.ticker}</strong>
+                        )}
                       </TableCell>
                     ))}
                   </TableRow>

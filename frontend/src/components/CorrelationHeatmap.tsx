@@ -20,12 +20,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPortfolioCorrelations, listPortfolios } from '../lib/endpoints';
 import { CorrelationMatrix, CorrelationMatrixWithStats } from '../types';
 import CorrelationStatsCard from './CorrelationStatsCard';
+import { TickerActionMenu } from './TickerActionMenu';
 
 type CorrelationHeatmapProps = {
   portfolioId: string;
+  onTickerNavigate?: (ticker: string, page?: string) => void;
 };
 
-export function CorrelationHeatmap({ portfolioId: initialPortfolioId }: CorrelationHeatmapProps) {
+export function CorrelationHeatmap({ portfolioId: initialPortfolioId, onTickerNavigate }: CorrelationHeatmapProps) {
   const [days, setDays] = useState(90);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState(initialPortfolioId);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -408,7 +410,16 @@ export function CorrelationHeatmap({ portfolioId: initialPortfolioId }: Correlat
                   borderRadius: '4px',
                 }}
               >
-                {ticker}
+                {onTickerNavigate ? (
+                  <TickerActionMenu
+                    ticker={ticker}
+                    variant="text"
+                    size="small"
+                    onNavigate={onTickerNavigate}
+                  />
+                ) : (
+                  ticker
+                )}
               </Box>
             ))}
 
@@ -432,7 +443,16 @@ export function CorrelationHeatmap({ portfolioId: initialPortfolioId }: Correlat
                     borderRadius: '4px',
                   }}
                 >
-                  {rowTicker}
+                  {onTickerNavigate ? (
+                    <TickerActionMenu
+                      ticker={rowTicker}
+                      variant="text"
+                      size="small"
+                      onNavigate={onTickerNavigate}
+                    />
+                  ) : (
+                    rowTicker
+                  )}
                 </Box>
 
                 {/* Correlation cells */}

@@ -27,13 +27,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPortfolioDownsideRisk, listPortfolios } from '../lib/endpoints';
 import type { Portfolio, PositionDownsideContribution } from '../types';
 import { MetricHelpDialog } from './MetricHelpDialog';
+import { TickerActionMenu } from './TickerActionMenu';
 import { Button } from '@mui/material';
 
 interface DownsideRiskAnalysisProps {
   portfolioId?: string | null;
+  onTickerNavigate?: (ticker: string, page?: string) => void;
 }
 
-export function DownsideRiskAnalysis({ portfolioId: initialPortfolioId }: DownsideRiskAnalysisProps) {
+export function DownsideRiskAnalysis({ portfolioId: initialPortfolioId, onTickerNavigate }: DownsideRiskAnalysisProps) {
   const [portfolioId, setPortfolioId] = useState<string | null>(initialPortfolioId || null);
   const [days, setDays] = useState(90);
   const [benchmark, setBenchmark] = useState('SPY');
@@ -393,7 +395,15 @@ export function DownsideRiskAnalysis({ portfolioId: initialPortfolioId }: Downsi
                     .map((pos: PositionDownsideContribution) => (
                       <TableRow key={pos.ticker}>
                         <TableCell>
-                          <strong>{pos.ticker}</strong>
+                          {onTickerNavigate ? (
+                            <TickerActionMenu
+                              ticker={pos.ticker}
+                              variant="text"
+                              onNavigate={onTickerNavigate}
+                            />
+                          ) : (
+                            <strong>{pos.ticker}</strong>
+                          )}
                         </TableCell>
                         <TableCell align="right">{(pos.weight * 100).toFixed(1)}%</TableCell>
                         <TableCell align="right">
