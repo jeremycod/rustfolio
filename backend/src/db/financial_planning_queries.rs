@@ -149,15 +149,18 @@ pub async fn upsert_income_info(
         .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
     let employer_match_rate = req.employer_match_rate
         .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
+    let desired_annual_retirement_income = req.desired_annual_retirement_income
+        .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
 
     sqlx::query_as::<_, SurveyIncomeInfo>(
         r#"
         INSERT INTO survey_income_info (
             survey_id, gross_annual_income, pay_frequency,
             retirement_contribution_rate, employer_match_rate,
-            planned_retirement_age, currency, notes
+            planned_retirement_age, desired_annual_retirement_income,
+            retirement_income_needs_notes, currency, notes
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT (survey_id)
         DO UPDATE SET
             gross_annual_income = COALESCE($2, survey_income_info.gross_annual_income),
@@ -165,8 +168,10 @@ pub async fn upsert_income_info(
             retirement_contribution_rate = COALESCE($4, survey_income_info.retirement_contribution_rate),
             employer_match_rate = COALESCE($5, survey_income_info.employer_match_rate),
             planned_retirement_age = COALESCE($6, survey_income_info.planned_retirement_age),
-            currency = COALESCE($7, survey_income_info.currency),
-            notes = COALESCE($8, survey_income_info.notes),
+            desired_annual_retirement_income = COALESCE($7, survey_income_info.desired_annual_retirement_income),
+            retirement_income_needs_notes = COALESCE($8, survey_income_info.retirement_income_needs_notes),
+            currency = COALESCE($9, survey_income_info.currency),
+            notes = COALESCE($10, survey_income_info.notes),
             updated_at = NOW()
         RETURNING *
         "#,
@@ -177,6 +182,8 @@ pub async fn upsert_income_info(
     .bind(retirement_contribution_rate)
     .bind(employer_match_rate)
     .bind(req.planned_retirement_age)
+    .bind(desired_annual_retirement_income)
+    .bind(&req.retirement_income_needs_notes)
     .bind(&req.currency)
     .bind(&req.notes)
     .fetch_one(pool)
@@ -193,6 +200,184 @@ pub async fn get_income_info(
     .bind(survey_id)
     .fetch_optional(pool)
     .await
+}
+
+// ==============================================================================
+// Additional Income Operations
+// ==============================================================================
+
+pub async fn create_additional_income(
+    pool: &PgPool,
+    survey_id: Uuid,
+    req: &CreateAdditionalIncomeRequest,
+) -> Result<SurveyAdditionalIncome, sqlx::Error> {
+    let monthly_amount = BigDecimal::from_str(&req.monthly_amount.to_string())
+        .unwrap_or_else(|_| BigDecimal::from(0));
+
+    sqlx::query_as::<_, SurveyAdditionalIncome>(
+        r#"
+        INSERT INTO survey_additional_income (
+            survey_id, income_type, description, monthly_amount, is_recurring, currency, notes
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+        "#,
+    )
+    .bind(survey_id)
+    .bind(&req.income_type)
+    .bind(&req.description)
+    .bind(monthly_amount)
+    .bind(req.is_recurring)
+    .bind(&req.currency)
+    .bind(&req.notes)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn get_additional_income(
+    pool: &PgPool,
+    survey_id: Uuid,
+) -> Result<Vec<SurveyAdditionalIncome>, sqlx::Error> {
+    sqlx::query_as::<_, SurveyAdditionalIncome>(
+        r#"
+        SELECT * FROM survey_additional_income
+        WHERE survey_id = $1
+        ORDER BY income_type ASC, created_at ASC
+        "#,
+    )
+    .bind(survey_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn update_additional_income(
+    pool: &PgPool,
+    income_id: Uuid,
+    req: &UpdateAdditionalIncomeRequest,
+) -> Result<SurveyAdditionalIncome, sqlx::Error> {
+    let monthly_amount = req.monthly_amount
+        .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
+
+    sqlx::query_as::<_, SurveyAdditionalIncome>(
+        r#"
+        UPDATE survey_additional_income SET
+            income_type = COALESCE($2, income_type),
+            description = COALESCE($3, description),
+            monthly_amount = COALESCE($4, monthly_amount),
+            is_recurring = COALESCE($5, is_recurring),
+            currency = COALESCE($6, currency),
+            notes = COALESCE($7, notes),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+        "#,
+    )
+    .bind(income_id)
+    .bind(&req.income_type)
+    .bind(&req.description)
+    .bind(monthly_amount)
+    .bind(req.is_recurring)
+    .bind(&req.currency)
+    .bind(&req.notes)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn delete_additional_income(pool: &PgPool, income_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM survey_additional_income WHERE id = $1")
+        .bind(income_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+// ==============================================================================
+// Expense Operations
+// ==============================================================================
+
+pub async fn create_expense(
+    pool: &PgPool,
+    survey_id: Uuid,
+    req: &CreateExpenseRequest,
+) -> Result<SurveyExpense, sqlx::Error> {
+    let monthly_amount = BigDecimal::from_str(&req.monthly_amount.to_string())
+        .unwrap_or_else(|_| BigDecimal::from(0));
+
+    sqlx::query_as::<_, SurveyExpense>(
+        r#"
+        INSERT INTO survey_expenses (
+            survey_id, expense_category, description, monthly_amount, is_recurring, currency, notes
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+        "#,
+    )
+    .bind(survey_id)
+    .bind(&req.expense_category)
+    .bind(&req.description)
+    .bind(monthly_amount)
+    .bind(req.is_recurring)
+    .bind(&req.currency)
+    .bind(&req.notes)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn get_expenses(
+    pool: &PgPool,
+    survey_id: Uuid,
+) -> Result<Vec<SurveyExpense>, sqlx::Error> {
+    sqlx::query_as::<_, SurveyExpense>(
+        r#"
+        SELECT * FROM survey_expenses
+        WHERE survey_id = $1
+        ORDER BY expense_category ASC, created_at ASC
+        "#,
+    )
+    .bind(survey_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn update_expense(
+    pool: &PgPool,
+    expense_id: Uuid,
+    req: &UpdateExpenseRequest,
+) -> Result<SurveyExpense, sqlx::Error> {
+    let monthly_amount = req.monthly_amount
+        .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
+
+    sqlx::query_as::<_, SurveyExpense>(
+        r#"
+        UPDATE survey_expenses SET
+            expense_category = COALESCE($2, expense_category),
+            description = COALESCE($3, description),
+            monthly_amount = COALESCE($4, monthly_amount),
+            is_recurring = COALESCE($5, is_recurring),
+            currency = COALESCE($6, currency),
+            notes = COALESCE($7, notes),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+        "#,
+    )
+    .bind(expense_id)
+    .bind(&req.expense_category)
+    .bind(&req.description)
+    .bind(monthly_amount)
+    .bind(req.is_recurring)
+    .bind(&req.currency)
+    .bind(&req.notes)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn delete_expense(pool: &PgPool, expense_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM survey_expenses WHERE id = $1")
+        .bind(expense_id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 // ==============================================================================

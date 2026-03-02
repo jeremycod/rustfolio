@@ -1165,6 +1165,70 @@ export async function updateIncomeInfo(
     return res.data;
 }
 
+// Additional Income CRUD
+export async function createAdditionalIncome(
+    surveyId: string,
+    data: CreateAdditionalIncomeRequest
+): Promise<SurveyAdditionalIncome> {
+    const res = await api.post(`/api/financial-planning/surveys/${surveyId}/additional-income`, data);
+    return res.data;
+}
+
+export async function getAdditionalIncomeList(
+    surveyId: string
+): Promise<SurveyAdditionalIncome[]> {
+    const res = await api.get(`/api/financial-planning/surveys/${surveyId}/additional-income`);
+    return res.data;
+}
+
+export async function updateAdditionalIncome(
+    surveyId: string,
+    incomeId: string,
+    data: UpdateAdditionalIncomeRequest
+): Promise<SurveyAdditionalIncome> {
+    const res = await api.put(`/api/financial-planning/surveys/${surveyId}/additional-income/${incomeId}`, data);
+    return res.data;
+}
+
+export async function deleteAdditionalIncome(
+    surveyId: string,
+    incomeId: string
+): Promise<void> {
+    await api.delete(`/api/financial-planning/surveys/${surveyId}/additional-income/${incomeId}`);
+}
+
+// Expenses CRUD
+export async function createExpense(
+    surveyId: string,
+    data: CreateExpenseRequest
+): Promise<SurveyExpense> {
+    const res = await api.post(`/api/financial-planning/surveys/${surveyId}/expenses`, data);
+    return res.data;
+}
+
+export async function getExpensesList(
+    surveyId: string
+): Promise<SurveyExpense[]> {
+    const res = await api.get(`/api/financial-planning/surveys/${surveyId}/expenses`);
+    return res.data;
+}
+
+export async function updateExpense(
+    surveyId: string,
+    expenseId: string,
+    data: UpdateExpenseRequest
+): Promise<SurveyExpense> {
+    const res = await api.put(`/api/financial-planning/surveys/${surveyId}/expenses/${expenseId}`, data);
+    return res.data;
+}
+
+export async function deleteExpense(
+    surveyId: string,
+    expenseId: string
+): Promise<void> {
+    await api.delete(`/api/financial-planning/surveys/${surveyId}/expenses/${expenseId}`);
+}
+
 // Assets CRUD
 export async function createSurveyAsset(
     surveyId: string,

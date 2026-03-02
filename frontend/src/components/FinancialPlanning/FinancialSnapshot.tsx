@@ -89,6 +89,15 @@ export function FinancialSnapshotView({ surveyId, onEdit }: FinancialSnapshotVie
     const currentAge = birthYear ? new Date().getFullYear() - birthYear : null;
     const grossAnnualIncome = survey?.income_info?.gross_annual_income || null;
 
+    // Check if user has entered actual expenses
+    const hasActualExpenses = (survey?.expenses?.length || 0) > 0;
+
+    // Calculate total monthly contribution needed for all goals
+    const totalMonthlyNeeded = snapshotData.goal_progress.reduce(
+        (sum, goal) => sum + (goal.monthly_contribution_needed || 0),
+        0
+    );
+
     return (
         <Box>
             {/* Header */}
@@ -211,6 +220,9 @@ export function FinancialSnapshotView({ surveyId, onEdit }: FinancialSnapshotVie
                         monthlyCashFlow={snapshotData.cash_flow.monthly_cash_flow}
                         savingsRate={snapshotData.cash_flow.savings_rate}
                         grossAnnualIncome={grossAnnualIncome}
+                        monthlyGrossIncome={snapshotData.cash_flow.monthly_gross_income}
+                        estimatedMonthlyExpenses={snapshotData.cash_flow.estimated_monthly_expenses}
+                        usingActualExpenses={hasActualExpenses}
                     />
                 </Grid>
 
@@ -225,6 +237,8 @@ export function FinancialSnapshotView({ surveyId, onEdit }: FinancialSnapshotVie
                         <RetirementProjectionChart
                             projection={snapshotData.retirement}
                             currentAge={currentAge}
+                            additionalMonthlySavings={totalMonthlyNeeded}
+                            desiredAnnualRetirementIncome={survey?.income_info?.desired_annual_retirement_income || null}
                         />
                     </Grid>
                 )}

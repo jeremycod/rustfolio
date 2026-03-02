@@ -1570,6 +1570,8 @@ export type SurveyIncomeInfo = {
     retirement_contribution_rate: number | null;
     employer_match_rate: number | null;
     planned_retirement_age: number | null;
+    desired_annual_retirement_income: number | null;
+    retirement_income_needs_notes: string | null;
     currency: string;
     notes: string | null;
     created_at: string;
@@ -1628,6 +1630,8 @@ export type SurveyRiskProfile = {
 export type FinancialSurveyFull = FinancialSurvey & {
     personal_info: SurveyPersonalInfo | null;
     income_info: SurveyIncomeInfo | null;
+    additional_income: SurveyAdditionalIncome[];
+    expenses: SurveyExpense[];
     assets: SurveyAsset[];
     liabilities: SurveyLiability[];
     goals: SurveyGoal[];
@@ -1650,6 +1654,99 @@ export type UpdateIncomeInfoRequest = {
     retirement_contribution_rate?: number;
     employer_match_rate?: number;
     planned_retirement_age?: number;
+    desired_annual_retirement_income?: number;
+    retirement_income_needs_notes?: string;
+    currency?: string;
+    notes?: string;
+};
+
+// Additional Income types
+export type AdditionalIncomeType =
+    | 'dividends'
+    | 'interest'
+    | 'rental_income'
+    | 'side_business'
+    | 'pension'
+    | 'social_security'
+    | 'disability'
+    | 'child_support'
+    | 'alimony'
+    | 'other';
+
+export type SurveyAdditionalIncome = {
+    id: string;
+    income_type: AdditionalIncomeType;
+    description: string | null;
+    monthly_amount: number;
+    is_recurring: boolean;
+    currency: string | null;
+    notes: string | null;
+};
+
+export type CreateAdditionalIncomeRequest = {
+    income_type: AdditionalIncomeType;
+    description?: string;
+    monthly_amount: number;
+    is_recurring?: boolean;
+    currency?: string;
+    notes?: string;
+};
+
+export type UpdateAdditionalIncomeRequest = {
+    income_type?: AdditionalIncomeType;
+    description?: string;
+    monthly_amount?: number;
+    is_recurring?: boolean;
+    currency?: string;
+    notes?: string;
+};
+
+// Expense types
+export type ExpenseCategory =
+    | 'housing'
+    | 'utilities'
+    | 'groceries'
+    | 'transportation'
+    | 'insurance'
+    | 'healthcare'
+    | 'childcare'
+    | 'education'
+    | 'entertainment'
+    | 'dining_out'
+    | 'subscriptions'
+    | 'personal_care'
+    | 'clothing'
+    | 'gifts_donations'
+    | 'pet_care'
+    | 'home_maintenance'
+    | 'savings_investments'
+    | 'miscellaneous'
+    | 'other';
+
+export type SurveyExpense = {
+    id: string;
+    expense_category: ExpenseCategory;
+    description: string | null;
+    monthly_amount: number;
+    is_recurring: boolean;
+    currency: string | null;
+    notes: string | null;
+};
+
+export type CreateExpenseRequest = {
+    expense_category: ExpenseCategory;
+    description?: string;
+    monthly_amount: number;
+    is_recurring?: boolean;
+    currency?: string;
+    notes?: string;
+};
+
+export type UpdateExpenseRequest = {
+    expense_category?: ExpenseCategory;
+    description?: string;
+    monthly_amount?: number;
+    is_recurring?: boolean;
     currency?: string;
     notes?: string;
 };

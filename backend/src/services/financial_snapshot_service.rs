@@ -98,6 +98,14 @@ pub async fn generate_snapshot(
         .await
         .map_err(|e| format!("Failed to fetch income info: {}", e))?;
 
+    let additional_income = financial_planning_queries::get_additional_income(pool, survey_id)
+        .await
+        .map_err(|e| format!("Failed to fetch additional income: {}", e))?;
+
+    let expenses = financial_planning_queries::get_expenses(pool, survey_id)
+        .await
+        .map_err(|e| format!("Failed to fetch expenses: {}", e))?;
+
     let personal_info = financial_planning_queries::get_personal_info(pool, survey_id)
         .await
         .map_err(|e| format!("Failed to fetch personal info: {}", e))?;
@@ -110,7 +118,7 @@ pub async fn generate_snapshot(
     let net_worth_breakdown = calculate_net_worth(&assets, &liabilities);
 
     // Calculate cash flow
-    let cash_flow = estimate_monthly_cash_flow(&income_info, &liabilities);
+    let cash_flow = estimate_monthly_cash_flow(&income_info, &additional_income, &expenses, &liabilities);
 
     // Calculate retirement projection
     let retirement = project_retirement_income(
@@ -214,6 +222,8 @@ fn calculate_net_worth(
 
 fn estimate_monthly_cash_flow(
     income_info: &Option<SurveyIncomeInfo>,
+    additional_income: &[SurveyAdditionalIncome],
+    expenses: &[SurveyExpense],
     liabilities: &[SurveyLiability],
 ) -> CashFlowProjection {
     let income = match income_info {
@@ -229,18 +239,23 @@ fn estimate_monthly_cash_flow(
         }
     };
 
+    // gross_annual_income is ALWAYS annual, so divide by 12
+    // pay_frequency just indicates how often they get paid, not the value's frequency
     let gross_annual = income.gross_annual_income
         .as_ref()
         .and_then(|v| v.to_string().parse::<f64>().ok())
         .unwrap_or(0.0);
 
-    let monthly_gross = match income.pay_frequency.as_deref() {
-        Some("annual") => gross_annual / 12.0,
-        Some("monthly") => gross_annual,
-        Some("bi_weekly") => gross_annual * 26.0 / 12.0,
-        Some("weekly") => gross_annual * 52.0 / 12.0,
-        _ => gross_annual / 12.0,
-    };
+    let employment_income_monthly = gross_annual / 12.0;
+
+    // Add recurring additional income sources (dividends, rental, etc.)
+    let additional_income_monthly: f64 = additional_income
+        .iter()
+        .filter(|i| i.is_recurring.unwrap_or(true))
+        .filter_map(|i| i.monthly_amount.to_string().parse::<f64>().ok())
+        .sum();
+
+    let monthly_gross = employment_income_monthly + additional_income_monthly;
 
     // Calculate total monthly debt payments from all liabilities
     let monthly_debt_payments: f64 = liabilities
@@ -267,8 +282,20 @@ fn estimate_monthly_cash_flow(
         })
         .sum();
 
-    let estimated_expenses = monthly_gross * EXPENSE_RATIO;
-    let monthly_cash_flow = monthly_gross - estimated_expenses - monthly_debt_payments;
+    // Calculate actual expenses from survey if available, otherwise use 70% estimate
+    let total_actual_expenses: f64 = expenses
+        .iter()
+        .filter(|e| e.is_recurring.unwrap_or(true))
+        .filter_map(|e| e.monthly_amount.to_string().parse::<f64>().ok())
+        .sum();
+
+    let monthly_expenses = if total_actual_expenses > 0.0 {
+        total_actual_expenses
+    } else {
+        monthly_gross * EXPENSE_RATIO  // Fall back to 70% estimate if no expenses entered
+    };
+
+    let monthly_cash_flow = monthly_gross - monthly_expenses - monthly_debt_payments;
     let savings_rate = if monthly_gross > 0.0 {
         (monthly_cash_flow / monthly_gross) * 100.0
     } else {
@@ -277,7 +304,7 @@ fn estimate_monthly_cash_flow(
 
     CashFlowProjection {
         monthly_gross_income: monthly_gross,
-        estimated_monthly_expenses: estimated_expenses,
+        estimated_monthly_expenses: monthly_expenses,
         monthly_cash_flow,
         annual_cash_flow: monthly_cash_flow * 12.0,
         savings_rate,

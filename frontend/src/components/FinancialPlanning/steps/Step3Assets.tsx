@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -234,14 +234,14 @@ function AssetFormDialog({
     const [notes, setNotes] = useState(editAsset?.notes || '');
 
     // Reset form when dialog opens with different data
-    useState(() => {
+    useEffect(() => {
         if (open) {
             setAssetType(editAsset?.asset_type || 'liquid');
             setDescription(editAsset?.description || '');
             setCurrentValue(editAsset?.current_value?.toString() || '');
             setNotes(editAsset?.notes || '');
         }
-    });
+    }, [open, editAsset]);
 
     const handleSave = () => {
         onSubmit({

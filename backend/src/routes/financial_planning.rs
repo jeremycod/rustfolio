@@ -32,6 +32,16 @@ pub fn router() -> Router<AppState> {
         // Income info
         .route("/surveys/:id/income-info", put(upsert_income_info))
         .route("/surveys/:id/income-info", get(get_income_info))
+        // Additional income
+        .route("/surveys/:id/additional-income", post(create_additional_income))
+        .route("/surveys/:id/additional-income", get(get_additional_income_list))
+        .route("/surveys/:survey_id/additional-income/:income_id", put(update_additional_income))
+        .route("/surveys/:survey_id/additional-income/:income_id", delete(delete_additional_income))
+        // Expenses
+        .route("/surveys/:id/expenses", post(create_expense))
+        .route("/surveys/:id/expenses", get(get_expenses_list))
+        .route("/surveys/:survey_id/expenses/:expense_id", put(update_expense))
+        .route("/surveys/:survey_id/expenses/:expense_id", delete(delete_expense))
         // Assets
         .route("/surveys/:id/assets", post(create_asset))
         .route("/surveys/:id/assets", get(get_assets))
@@ -123,6 +133,20 @@ async fn get_survey(
         .unwrap_or(None)
         .map(IncomeInfoResponse::from);
 
+    let additional_income: Vec<AdditionalIncomeResponse> = financial_planning_queries::get_additional_income(pool, id)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(AdditionalIncomeResponse::from)
+        .collect();
+
+    let expenses: Vec<ExpenseResponse> = financial_planning_queries::get_expenses(pool, id)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(ExpenseResponse::from)
+        .collect();
+
     let assets: Vec<AssetResponse> = financial_planning_queries::get_assets(pool, id)
         .await
         .unwrap_or_default()
@@ -160,6 +184,8 @@ async fn get_survey(
         status: survey.status,
         personal_info,
         income_info,
+        additional_income,
+        expenses,
         assets,
         liabilities,
         goals,
@@ -270,6 +296,124 @@ async fn get_income_info(
         Some(i) => Ok(Json(serde_json::to_value(IncomeInfoResponse::from(i)).unwrap())),
         None => Ok(Json(serde_json::Value::Null)),
     }
+}
+
+// ==============================================================================
+// Additional Income Handlers
+// ==============================================================================
+
+async fn create_additional_income(
+    State(state): State<AppState>,
+    Path(survey_id): Path<Uuid>,
+    Json(req): Json<CreateAdditionalIncomeRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let income = financial_planning_queries::create_additional_income(pool, survey_id, &req)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok((StatusCode::CREATED, Json(AdditionalIncomeResponse::from(income))))
+}
+
+async fn get_additional_income_list(
+    State(state): State<AppState>,
+    Path(survey_id): Path<Uuid>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let income_list = financial_planning_queries::get_additional_income(pool, survey_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let responses: Vec<AdditionalIncomeResponse> = income_list.into_iter().map(AdditionalIncomeResponse::from).collect();
+    Ok(Json(responses))
+}
+
+async fn update_additional_income(
+    State(state): State<AppState>,
+    Path((_survey_id, income_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<UpdateAdditionalIncomeRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let income = financial_planning_queries::update_additional_income(pool, income_id, &req)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(AdditionalIncomeResponse::from(income)))
+}
+
+async fn delete_additional_income(
+    State(state): State<AppState>,
+    Path((_survey_id, income_id)): Path<(Uuid, Uuid)>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    financial_planning_queries::delete_additional_income(pool, income_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ==============================================================================
+// Expense Handlers
+// ==============================================================================
+
+async fn create_expense(
+    State(state): State<AppState>,
+    Path(survey_id): Path<Uuid>,
+    Json(req): Json<CreateExpenseRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let expense = financial_planning_queries::create_expense(pool, survey_id, &req)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok((StatusCode::CREATED, Json(ExpenseResponse::from(expense))))
+}
+
+async fn get_expenses_list(
+    State(state): State<AppState>,
+    Path(survey_id): Path<Uuid>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let expenses = financial_planning_queries::get_expenses(pool, survey_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let responses: Vec<ExpenseResponse> = expenses.into_iter().map(ExpenseResponse::from).collect();
+    Ok(Json(responses))
+}
+
+async fn update_expense(
+    State(state): State<AppState>,
+    Path((_survey_id, expense_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<UpdateExpenseRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let expense = financial_planning_queries::update_expense(pool, expense_id, &req)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(ExpenseResponse::from(expense)))
+}
+
+async fn delete_expense(
+    State(state): State<AppState>,
+    Path((_survey_id, expense_id)): Path<(Uuid, Uuid)>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    financial_planning_queries::delete_expense(pool, expense_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ==============================================================================

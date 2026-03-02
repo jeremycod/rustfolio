@@ -25,6 +25,7 @@ import type {
 } from '../../types';
 import { Step1PersonalDetails } from './steps/Step1PersonalDetails';
 import { Step2IncomeRetirement } from './steps/Step2IncomeRetirement';
+import { Step2_5Expenses } from './steps/Step2_5Expenses';
 import { Step3Assets } from './steps/Step3Assets';
 import { Step4Liabilities } from './steps/Step4Liabilities';
 import { Step5Goals } from './steps/Step5Goals';
@@ -33,6 +34,7 @@ import { Step6RiskProfile } from './steps/Step6RiskProfile';
 const STEPS = [
     'Personal Details',
     'Income & Retirement',
+    'Monthly Expenses',
     'Assets',
     'Liabilities',
     'Goals',
@@ -144,6 +146,7 @@ export function SurveyWizard({ surveyId, onComplete, onBack }: SurveyWizardProps
             case 1:
                 return (
                     <Step2IncomeRetirement
+                        surveyId={surveyId}
                         data={survey.income_info}
                         onSave={handleSaveIncomeInfo}
                         isSaving={incomeInfoMutation.isPending}
@@ -151,26 +154,32 @@ export function SurveyWizard({ surveyId, onComplete, onBack }: SurveyWizardProps
                 );
             case 2:
                 return (
+                    <Step2_5Expenses
+                        surveyId={surveyId}
+                    />
+                );
+            case 3:
+                return (
                     <Step3Assets
                         surveyId={surveyId}
                         assets={survey.assets}
                     />
                 );
-            case 3:
+            case 4:
                 return (
                     <Step4Liabilities
                         surveyId={surveyId}
                         liabilities={survey.liabilities}
                     />
                 );
-            case 4:
+            case 5:
                 return (
                     <Step5Goals
                         surveyId={surveyId}
                         goals={survey.goals}
                     />
                 );
-            case 5:
+            case 6:
                 return (
                     <Step6RiskProfile
                         data={survey.risk_profile}

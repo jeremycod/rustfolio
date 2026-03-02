@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -264,7 +264,8 @@ function LiabilityFormDialog({
     const [paymentFrequency, setPaymentFrequency] = useState<PaymentFrequency>(editLiability?.payment_frequency || 'monthly');
     const [notes, setNotes] = useState(editLiability?.notes || '');
 
-    useState(() => {
+    // Update form when dialog opens with edit data
+    useEffect(() => {
         if (open) {
             setLiabilityType(editLiability?.liability_type || 'mortgage');
             setDescription(editLiability?.description || '');
@@ -274,7 +275,7 @@ function LiabilityFormDialog({
             setPaymentFrequency(editLiability?.payment_frequency || 'monthly');
             setNotes(editLiability?.notes || '');
         }
-    });
+    }, [open, editLiability]);
 
     const handleSave = () => {
         onSubmit({

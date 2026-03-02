@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -235,7 +235,8 @@ function GoalFormDialog({
     const [priority, setPriority] = useState<GoalPriority>(editGoal?.priority || 'medium');
     const [notes, setNotes] = useState(editGoal?.notes || '');
 
-    useState(() => {
+    // Update form fields when dialog opens with edit data
+    useEffect(() => {
         if (open) {
             setGoalType(editGoal?.goal_type || 'retirement');
             setDescription(editGoal?.description || '');
@@ -245,7 +246,7 @@ function GoalFormDialog({
             setPriority(editGoal?.priority || 'medium');
             setNotes(editGoal?.notes || '');
         }
-    });
+    }, [open, editGoal]);
 
     const handleSave = () => {
         onSubmit({

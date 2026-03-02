@@ -108,6 +108,8 @@ pub struct SurveyIncomeInfo {
     pub retirement_contribution_rate: Option<BigDecimal>,
     pub employer_match_rate: Option<BigDecimal>,
     pub planned_retirement_age: Option<i32>,
+    pub desired_annual_retirement_income: Option<BigDecimal>,
+    pub retirement_income_needs_notes: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -121,6 +123,8 @@ pub struct UpsertIncomeInfoRequest {
     pub retirement_contribution_rate: Option<f64>,
     pub employer_match_rate: Option<f64>,
     pub planned_retirement_age: Option<i32>,
+    pub desired_annual_retirement_income: Option<f64>,
+    pub retirement_income_needs_notes: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
 }
@@ -133,6 +137,8 @@ pub struct IncomeInfoResponse {
     pub retirement_contribution_rate: Option<f64>,
     pub employer_match_rate: Option<f64>,
     pub planned_retirement_age: Option<i32>,
+    pub desired_annual_retirement_income: Option<f64>,
+    pub retirement_income_needs_notes: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
 }
@@ -146,6 +152,8 @@ impl From<SurveyIncomeInfo> for IncomeInfoResponse {
             retirement_contribution_rate: i.retirement_contribution_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
             employer_match_rate: i.employer_match_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
             planned_retirement_age: i.planned_retirement_age,
+            desired_annual_retirement_income: i.desired_annual_retirement_income.as_ref().and_then(|v| v.to_string().parse().ok()),
+            retirement_income_needs_notes: i.retirement_income_needs_notes,
             currency: i.currency,
             notes: i.notes,
         }
@@ -449,6 +457,132 @@ impl From<FinancialSnapshot> for SnapshotResponse {
 }
 
 // ==============================================================================
+// Additional Income Models
+// ==============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SurveyAdditionalIncome {
+    pub id: Uuid,
+    pub survey_id: Uuid,
+    pub income_type: String,
+    pub description: Option<String>,
+    pub monthly_amount: BigDecimal,
+    pub is_recurring: Option<bool>,
+    pub currency: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateAdditionalIncomeRequest {
+    pub income_type: String,
+    pub description: Option<String>,
+    pub monthly_amount: f64,
+    pub is_recurring: Option<bool>,
+    pub currency: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateAdditionalIncomeRequest {
+    pub income_type: Option<String>,
+    pub description: Option<String>,
+    pub monthly_amount: Option<f64>,
+    pub is_recurring: Option<bool>,
+    pub currency: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdditionalIncomeResponse {
+    pub id: Uuid,
+    pub income_type: String,
+    pub description: Option<String>,
+    pub monthly_amount: f64,
+    pub is_recurring: bool,
+    pub currency: Option<String>,
+    pub notes: Option<String>,
+}
+
+impl From<SurveyAdditionalIncome> for AdditionalIncomeResponse {
+    fn from(i: SurveyAdditionalIncome) -> Self {
+        Self {
+            id: i.id,
+            income_type: i.income_type,
+            description: i.description,
+            monthly_amount: i.monthly_amount.to_string().parse().unwrap_or(0.0),
+            is_recurring: i.is_recurring.unwrap_or(true),
+            currency: i.currency,
+            notes: i.notes,
+        }
+    }
+}
+
+// ==============================================================================
+// Expense Models
+// ==============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SurveyExpense {
+    pub id: Uuid,
+    pub survey_id: Uuid,
+    pub expense_category: String,
+    pub description: Option<String>,
+    pub monthly_amount: BigDecimal,
+    pub is_recurring: Option<bool>,
+    pub currency: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateExpenseRequest {
+    pub expense_category: String,
+    pub description: Option<String>,
+    pub monthly_amount: f64,
+    pub is_recurring: Option<bool>,
+    pub currency: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateExpenseRequest {
+    pub expense_category: Option<String>,
+    pub description: Option<String>,
+    pub monthly_amount: Option<f64>,
+    pub is_recurring: Option<bool>,
+    pub currency: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExpenseResponse {
+    pub id: Uuid,
+    pub expense_category: String,
+    pub description: Option<String>,
+    pub monthly_amount: f64,
+    pub is_recurring: bool,
+    pub currency: Option<String>,
+    pub notes: Option<String>,
+}
+
+impl From<SurveyExpense> for ExpenseResponse {
+    fn from(e: SurveyExpense) -> Self {
+        Self {
+            id: e.id,
+            expense_category: e.expense_category,
+            description: e.description,
+            monthly_amount: e.monthly_amount.to_string().parse().unwrap_or(0.0),
+            is_recurring: e.is_recurring.unwrap_or(true),
+            currency: e.currency,
+            notes: e.notes,
+        }
+    }
+}
+
+// ==============================================================================
 // Full Survey Detail Response (combines all sections)
 // ==============================================================================
 
@@ -459,6 +593,8 @@ pub struct SurveyDetailResponse {
     pub status: String,
     pub personal_info: Option<PersonalInfoResponse>,
     pub income_info: Option<IncomeInfoResponse>,
+    pub additional_income: Vec<AdditionalIncomeResponse>,
+    pub expenses: Vec<ExpenseResponse>,
     pub assets: Vec<AssetResponse>,
     pub liabilities: Vec<LiabilityResponse>,
     pub goals: Vec<GoalResponse>,
