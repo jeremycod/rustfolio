@@ -31,6 +31,8 @@ import { ScreeningPage } from "./components/ScreeningPage";
 import { WatchlistPage } from "./components/WatchlistPage";
 import { LongTermGuidancePage } from "./components/LongTermGuidancePage";
 import { FactorPortfolioPage } from "./components/FactorPortfolioPage";
+// Financial Planning
+import { FinancialPlanningPage } from "./components/FinancialPlanning/FinancialPlanningPage";
 
 export default function App() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
@@ -166,6 +168,9 @@ export default function App() {
                 return <TradingSignalsPage initialTicker={selectedTicker || undefined} />;
             case 'sentiment-forecast':
                 return <SentimentForecasting initialTicker={selectedTicker || undefined} />;
+            // Financial Planning
+            case 'financial-planning':
+                return <FinancialPlanningPage />;
             // Phase 3 features
             case 'screening':
                 return <ScreeningPage onTickerNavigate={handleTickerNavigate} />;

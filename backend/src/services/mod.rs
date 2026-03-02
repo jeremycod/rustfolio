@@ -36,3 +36,4 @@ pub mod watchlist_monitoring_service;
 pub mod long_term_guidance_service;
 pub mod screening_service;
 pub(crate) mod indicators;
+pub mod financial_snapshot_service;

@@ -1523,3 +1523,256 @@ export type FactorPortfolio = {
     factor_correlations: Record<string, Record<string, number>>;
     generated_at: string;
 };
+
+// ============================================================================
+// Financial Planning Survey Types
+// ============================================================================
+
+export type SurveyStatus = 'draft' | 'completed';
+export type MaritalStatus = 'single' | 'married' | 'divorced' | 'widowed' | 'other';
+export type EmploymentStatus = 'employed' | 'self_employed' | 'retired' | 'unemployed' | 'student' | 'other';
+export type PayFrequency = 'annual' | 'monthly' | 'bi_weekly' | 'weekly';
+export type PaymentFrequency = 'monthly' | 'bi_weekly' | 'weekly';
+export type AssetType = 'liquid' | 'investment' | 'retirement' | 'real_estate' | 'tfsa' | 'rrsp' | 'lira' | 'resp' | 'rrif' | 'fhsa' | 'other';
+export type LiabilityType = 'mortgage' | 'student_loan' | 'auto_loan' | 'credit_card' | 'other';
+export type GoalType = 'retirement' | 'home_purchase' | 'education' | 'travel' | 'emergency_fund' | 'other';
+export type GoalPriority = 'high' | 'medium' | 'low';
+export type InvestmentExperience = 'none' | 'beginner' | 'intermediate' | 'advanced';
+export type SurveyRiskTolerance = 'conservative' | 'moderate' | 'aggressive';
+
+export type FinancialSurvey = {
+    id: string;
+    user_id: string;
+    version: number;
+    status: SurveyStatus;
+    created_at: string;
+    updated_at: string;
+    completed_at: string | null;
+};
+
+export type SurveyPersonalInfo = {
+    id: string;
+    survey_id: string;
+    full_name: string | null;
+    birth_year: number | null;
+    marital_status: MaritalStatus | null;
+    employment_status: EmploymentStatus | null;
+    dependents: number;
+    contact_email: string | null;
+    created_at: string;
+};
+
+export type SurveyIncomeInfo = {
+    id: string;
+    survey_id: string;
+    gross_annual_income: number | null;
+    pay_frequency: PayFrequency | null;
+    retirement_contribution_rate: number | null;
+    employer_match_rate: number | null;
+    planned_retirement_age: number | null;
+    currency: string;
+    notes: string | null;
+    created_at: string;
+};
+
+export type SurveyAsset = {
+    id: string;
+    survey_id: string;
+    asset_type: AssetType;
+    description: string | null;
+    current_value: number;
+    currency: string;
+    notes: string | null;
+    created_at: string;
+};
+
+export type SurveyLiability = {
+    id: string;
+    survey_id: string;
+    liability_type: LiabilityType;
+    description: string | null;
+    balance: number;
+    interest_rate: number | null;
+    monthly_payment: number | null;
+    payment_frequency: PaymentFrequency | null;
+    linked_asset_id: string | null;
+    currency: string;
+    notes: string | null;
+    created_at: string;
+};
+
+export type SurveyGoal = {
+    id: string;
+    survey_id: string;
+    goal_type: GoalType;
+    description: string | null;
+    target_amount: number | null;
+    current_savings: number;
+    target_date: string | null;
+    priority: GoalPriority | null;
+    currency: string;
+    notes: string | null;
+    created_at: string;
+};
+
+export type SurveyRiskProfile = {
+    id: string;
+    survey_id: string;
+    risk_tolerance: SurveyRiskTolerance | null;
+    investment_experience: InvestmentExperience | null;
+    time_horizon_years: number | null;
+    created_at: string;
+};
+
+// Survey with all nested sections
+export type FinancialSurveyFull = FinancialSurvey & {
+    personal_info: SurveyPersonalInfo | null;
+    income_info: SurveyIncomeInfo | null;
+    assets: SurveyAsset[];
+    liabilities: SurveyLiability[];
+    goals: SurveyGoal[];
+    risk_profile: SurveyRiskProfile | null;
+};
+
+// Request types for creating/updating survey sections
+export type UpdatePersonalInfoRequest = {
+    full_name?: string;
+    birth_year?: number;
+    marital_status?: MaritalStatus;
+    employment_status?: EmploymentStatus;
+    dependents?: number;
+    contact_email?: string;
+};
+
+export type UpdateIncomeInfoRequest = {
+    gross_annual_income?: number;
+    pay_frequency?: PayFrequency;
+    retirement_contribution_rate?: number;
+    employer_match_rate?: number;
+    planned_retirement_age?: number;
+    currency?: string;
+    notes?: string;
+};
+
+export type CreateAssetRequest = {
+    asset_type: AssetType;
+    description?: string;
+    current_value: number;
+    currency?: string;
+    notes?: string;
+};
+
+export type UpdateAssetRequest = {
+    asset_type?: AssetType;
+    description?: string;
+    current_value?: number;
+    currency?: string;
+    notes?: string;
+};
+
+export type CreateLiabilityRequest = {
+    liability_type: LiabilityType;
+    description?: string;
+    balance: number;
+    interest_rate?: number;
+    monthly_payment?: number;
+    payment_frequency?: PaymentFrequency;
+    linked_asset_id?: string;
+    currency?: string;
+    notes?: string;
+};
+
+export type UpdateLiabilityRequest = {
+    liability_type?: LiabilityType;
+    description?: string;
+    balance?: number;
+    interest_rate?: number;
+    monthly_payment?: number;
+    payment_frequency?: PaymentFrequency;
+    linked_asset_id?: string;
+    currency?: string;
+    notes?: string;
+};
+
+export type CreateGoalRequest = {
+    goal_type: GoalType;
+    description?: string;
+    target_amount?: number;
+    current_savings?: number;
+    target_date?: string;
+    priority?: GoalPriority;
+    currency?: string;
+    notes?: string;
+};
+
+export type UpdateGoalRequest = {
+    goal_type?: GoalType;
+    description?: string;
+    target_amount?: number;
+    current_savings?: number;
+    target_date?: string;
+    priority?: GoalPriority;
+    currency?: string;
+    notes?: string;
+};
+
+export type UpdateRiskProfileRequest = {
+    risk_tolerance?: SurveyRiskTolerance;
+    investment_experience?: InvestmentExperience;
+    time_horizon_years?: number;
+};
+
+// Financial Snapshot types
+export type GoalProgress = {
+    goal_id: string;
+    goal_type: GoalType;
+    description: string | null;
+    target_amount: number;
+    current_savings: number;
+    progress_percentage: number;
+    months_remaining: number | null;
+    monthly_contribution_needed: number | null;
+    status: 'on_track' | 'behind' | 'at_risk' | 'completed';
+};
+
+export type RetirementProjection = {
+    current_retirement_savings: number;
+    annual_contribution: number;
+    years_to_retirement: number;
+    projected_total_at_retirement: number;
+    estimated_monthly_income: number;
+    assumed_return_rate: number;
+    assumed_withdrawal_rate: number;
+};
+
+export type FinancialSnapshot = {
+    id: string;
+    survey_id: string;
+    net_worth: number | null;
+    total_assets: number | null;
+    total_liabilities: number | null;
+    monthly_cash_flow: number | null;
+    projected_retirement_income: number | null;
+    snapshot_data: SnapshotData | null;
+    generated_at: string;
+};
+
+export type SnapshotData = {
+    net_worth_breakdown: {
+        total_assets: number;
+        total_liabilities: number;
+        net_worth: number;
+        assets_by_type: Array<{ category: string; amount: number }>;
+        liabilities_by_type: Array<{ category: string; amount: number }>;
+    };
+    cash_flow: {
+        monthly_gross_income: number;
+        estimated_monthly_expenses: number;
+        monthly_cash_flow: number;
+        annual_cash_flow: number;
+        savings_rate: number;
+    };
+    retirement: RetirementProjection | null;
+    goal_progress: GoalProgress[];
+    recommendations: string[];
+};

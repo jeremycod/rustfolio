@@ -17,3 +17,4 @@ pub mod hmm_queries;
 pub mod recommendation_queries;
 pub mod watchlist_queries;
 pub mod long_term_guidance_queries;
+pub mod financial_planning_queries;

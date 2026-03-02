@@ -82,6 +82,25 @@ import type {
     RiskAppetite,
     FactorType,
     FactorPortfolio,
+    // Financial Planning types
+    FinancialSurvey,
+    FinancialSurveyFull,
+    SurveyPersonalInfo,
+    SurveyIncomeInfo,
+    SurveyAsset,
+    SurveyLiability,
+    SurveyGoal,
+    SurveyRiskProfile,
+    UpdatePersonalInfoRequest,
+    UpdateIncomeInfoRequest,
+    CreateAssetRequest,
+    UpdateAssetRequest,
+    CreateLiabilityRequest,
+    UpdateLiabilityRequest,
+    CreateGoalRequest,
+    UpdateGoalRequest,
+    UpdateRiskProfileRequest,
+    FinancialSnapshot,
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -1097,4 +1116,146 @@ export async function exportScreeningCSV(request: ScreeningRequest): Promise<voi
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(downloadUrl);
+}
+
+// ============================================================================
+// Financial Planning Survey Endpoints
+// ============================================================================
+
+// Survey Management
+export async function createFinancialSurvey(): Promise<FinancialSurvey> {
+    const res = await api.post('/api/financial-planning/surveys');
+    return res.data;
+}
+
+export async function listFinancialSurveys(): Promise<FinancialSurvey[]> {
+    const res = await api.get('/api/financial-planning/surveys');
+    return res.data;
+}
+
+export async function getFinancialSurvey(surveyId: string): Promise<FinancialSurveyFull> {
+    const res = await api.get(`/api/financial-planning/surveys/${surveyId}`);
+    return res.data;
+}
+
+export async function deleteFinancialSurvey(surveyId: string): Promise<void> {
+    await api.delete(`/api/financial-planning/surveys/${surveyId}`);
+}
+
+export async function completeSurvey(surveyId: string): Promise<FinancialSurvey> {
+    const res = await api.post(`/api/financial-planning/surveys/${surveyId}/complete`);
+    return res.data;
+}
+
+// Personal Info
+export async function updatePersonalInfo(
+    surveyId: string,
+    data: UpdatePersonalInfoRequest
+): Promise<SurveyPersonalInfo> {
+    const res = await api.put(`/api/financial-planning/surveys/${surveyId}/personal-info`, data);
+    return res.data;
+}
+
+// Income Info
+export async function updateIncomeInfo(
+    surveyId: string,
+    data: UpdateIncomeInfoRequest
+): Promise<SurveyIncomeInfo> {
+    const res = await api.put(`/api/financial-planning/surveys/${surveyId}/income-info`, data);
+    return res.data;
+}
+
+// Assets CRUD
+export async function createSurveyAsset(
+    surveyId: string,
+    data: CreateAssetRequest
+): Promise<SurveyAsset> {
+    const res = await api.post(`/api/financial-planning/surveys/${surveyId}/assets`, data);
+    return res.data;
+}
+
+export async function updateSurveyAsset(
+    surveyId: string,
+    assetId: string,
+    data: UpdateAssetRequest
+): Promise<SurveyAsset> {
+    const res = await api.put(`/api/financial-planning/surveys/${surveyId}/assets/${assetId}`, data);
+    return res.data;
+}
+
+export async function deleteSurveyAsset(
+    surveyId: string,
+    assetId: string
+): Promise<void> {
+    await api.delete(`/api/financial-planning/surveys/${surveyId}/assets/${assetId}`);
+}
+
+// Liabilities CRUD
+export async function createSurveyLiability(
+    surveyId: string,
+    data: CreateLiabilityRequest
+): Promise<SurveyLiability> {
+    const res = await api.post(`/api/financial-planning/surveys/${surveyId}/liabilities`, data);
+    return res.data;
+}
+
+export async function updateSurveyLiability(
+    surveyId: string,
+    liabilityId: string,
+    data: UpdateLiabilityRequest
+): Promise<SurveyLiability> {
+    const res = await api.put(`/api/financial-planning/surveys/${surveyId}/liabilities/${liabilityId}`, data);
+    return res.data;
+}
+
+export async function deleteSurveyLiability(
+    surveyId: string,
+    liabilityId: string
+): Promise<void> {
+    await api.delete(`/api/financial-planning/surveys/${surveyId}/liabilities/${liabilityId}`);
+}
+
+// Goals CRUD
+export async function createSurveyGoal(
+    surveyId: string,
+    data: CreateGoalRequest
+): Promise<SurveyGoal> {
+    const res = await api.post(`/api/financial-planning/surveys/${surveyId}/goals`, data);
+    return res.data;
+}
+
+export async function updateSurveyGoal(
+    surveyId: string,
+    goalId: string,
+    data: UpdateGoalRequest
+): Promise<SurveyGoal> {
+    const res = await api.put(`/api/financial-planning/surveys/${surveyId}/goals/${goalId}`, data);
+    return res.data;
+}
+
+export async function deleteSurveyGoal(
+    surveyId: string,
+    goalId: string
+): Promise<void> {
+    await api.delete(`/api/financial-planning/surveys/${surveyId}/goals/${goalId}`);
+}
+
+// Risk Profile
+export async function updateSurveyRiskProfile(
+    surveyId: string,
+    data: UpdateRiskProfileRequest
+): Promise<SurveyRiskProfile> {
+    const res = await api.put(`/api/financial-planning/surveys/${surveyId}/risk-profile`, data);
+    return res.data;
+}
+
+// Snapshot Generation
+export async function getFinancialSnapshot(surveyId: string): Promise<FinancialSnapshot> {
+    const res = await api.get(`/api/financial-planning/surveys/${surveyId}/snapshot`);
+    return res.data;
+}
+
+export async function regenerateFinancialSnapshot(surveyId: string): Promise<FinancialSnapshot> {
+    const res = await api.post(`/api/financial-planning/surveys/${surveyId}/snapshot/regenerate`);
+    return res.data;
 }

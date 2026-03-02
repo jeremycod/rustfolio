@@ -20,4 +20,5 @@ pub mod preferences;
 pub mod signals;
 pub mod recommendations;
 pub mod watchlists;
+pub mod financial_planning;
 

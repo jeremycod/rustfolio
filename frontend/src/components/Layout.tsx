@@ -59,6 +59,8 @@ const menuItems = [
   { text: 'Volatility Forecast', icon: <ShowChart />, path: 'volatility-forecast' },
   { text: 'Trading Signals', icon: <SignalCellularAlt />, path: 'trading-signals' },
   { text: 'Sentiment Forecast', icon: <Psychology />, path: 'sentiment-forecast' },
+  // Financial Planning
+  { text: 'Financial Planning', icon: <Assessment />, path: 'financial-planning' },
   // Phase 3 features
   { text: 'Stock Screener', icon: <FilterList />, path: 'screening' },
   { text: 'Watchlists', icon: <Visibility />, path: 'watchlists' },
