@@ -327,6 +327,8 @@ pub async fn generate_portfolio_optimization(
         price_provider: state.price_provider.clone(),
         failure_cache: Arc::new(state.failure_cache.clone()),
         rate_limiter: state.rate_limiter.clone(),
+        news_service: state.news_service.clone(),
+        llm_service: state.llm_service.clone(),
     };
 
     // Import the job function

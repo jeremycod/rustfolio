@@ -26,7 +26,7 @@
 pub mod portfolio_risk_job;
 pub mod portfolio_correlations_job;
 pub mod daily_risk_snapshots_job;
-// pub mod populate_sentiment_cache_job; // TODO: Needs refactoring to match current architecture
+pub mod populate_sentiment_cache_job;
 pub mod populate_optimization_cache_job;
 pub mod market_regime_update_job;
 pub mod hmm_training_job;

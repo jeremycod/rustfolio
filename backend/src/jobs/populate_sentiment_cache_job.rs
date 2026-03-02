@@ -31,12 +31,10 @@
 //! - Processes tickers sequentially to avoid overwhelming external services
 
 use crate::errors::AppError;
-use crate::external::price_provider::PriceProvider;
-use crate::services::failure_cache::FailureCache;
 use crate::services::job_scheduler_service::{JobContext, JobResult};
-use crate::services::rate_limiter::RateLimiter;
 use crate::services::sentiment_service;
-use chrono::Utc;
+use crate::services::news_service::NewsService;
+use crate::services::llm_service::LlmService;
 use std::sync::Arc;
 use tracing::{error, info};
 
@@ -95,9 +93,8 @@ pub async fn populate_all_sentiment_caches(ctx: JobContext) -> Result<JobResult,
         // Fetch and cache sentiment for this ticker
         match fetch_and_cache_sentiment(
             ctx.pool.clone(),
-            ctx.price_provider.clone(),
-            ctx.failure_cache.clone(),
-            ctx.rate_limiter.clone(),
+            ctx.news_service.clone(),
+            ctx.llm_service.clone(),
             ticker,
         )
         .await
@@ -149,6 +146,8 @@ async fn get_active_portfolio_tickers(pool: &sqlx::PgPool) -> Result<Vec<String>
 
 /// Check if cache for a ticker is still fresh
 async fn is_cache_fresh(pool: &sqlx::PgPool, ticker: &str) -> Result<bool, AppError> {
+    use bigdecimal::ToPrimitive;
+
     let cache_age = sqlx::query!(
         r#"
         SELECT
@@ -163,81 +162,70 @@ async fn is_cache_fresh(pool: &sqlx::PgPool, ticker: &str) -> Result<bool, AppEr
     .await?;
 
     Ok(cache_age
-        .map(|r| r.age_hours.unwrap_or(999.0) < CACHE_EXPIRATION_HOURS as f64)
+        .and_then(|r| r.age_hours)
+        .and_then(|age| age.to_f64())
+        .map(|age| age < CACHE_EXPIRATION_HOURS as f64)
         .unwrap_or(false))
 }
 
 /// Fetch sentiment data and store in cache
 async fn fetch_and_cache_sentiment(
     pool: Arc<sqlx::PgPool>,
-    price_provider: Arc<dyn PriceProvider>,
-    failure_cache: Arc<FailureCache>,
-    rate_limiter: Arc<RateLimiter>,
+    news_service: Arc<NewsService>,
+    _llm_service: Arc<LlmService>, // Used by news_service.cluster_into_themes internally
     ticker: &str,
 ) -> Result<(), AppError> {
-    // Fetch sentiment signal using sentiment service
+    use uuid::Uuid;
+
+    // 1. Fetch news articles for the ticker
+    let articles = news_service.fetch_ticker_news(ticker, SENTIMENT_LOOKBACK_DAYS as i32).await?;
+
+    if articles.is_empty() {
+        return Err(AppError::Validation(
+            format!("No news data available for {}", ticker)
+        ));
+    }
+
+    info!("Fetched {} news articles for {}", articles.len(), ticker);
+
+    // 2. Cluster articles into themes using LLM
+    let demo_user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")
+        .map_err(|e| AppError::External(format!("Failed to parse demo user UUID: {}", e)))?;
+
+    let themes = news_service.cluster_into_themes(articles, demo_user_id).await?;
+
+    if themes.is_empty() {
+        return Err(AppError::Validation(
+            format!("Failed to extract themes from news for {}", ticker)
+        ));
+    }
+
+    info!("Extracted {} themes for {}", themes.len(), ticker);
+
+    // 3. Fetch price history for correlation analysis
+    let prices = crate::services::price_service::get_history(pool.as_ref(), ticker).await?;
+
+    if prices.is_empty() {
+        return Err(AppError::Validation(
+            format!("No price history available for {}", ticker)
+        ));
+    }
+
+    info!("Fetched {} price points for {}", prices.len(), ticker);
+
+    // 4. Generate sentiment signal
     let signal = sentiment_service::generate_sentiment_signal(
         pool.as_ref(),
         ticker,
-        SENTIMENT_LOOKBACK_DAYS,
-        price_provider.as_ref(),
-        &failure_cache,
-        &rate_limiter,
+        themes,
+        prices,
     )
     .await?;
 
-    // Calculate expiration time (4 hours from now)
-    let expires_at = Utc::now() + chrono::Duration::hours(CACHE_EXPIRATION_HOURS);
+    info!("Generated sentiment signal for {}: score={:.2}", ticker, signal.current_sentiment);
 
-    // Serialize historical data to JSON
-    let historical_json = serde_json::to_value(&signal.historical_sentiment)?;
-    let warnings_json = serde_json::to_value(&signal.warnings)?;
-
-    // Store in cache
-    sqlx::query!(
-        r#"
-        INSERT INTO sentiment_signal_cache (
-            ticker,
-            calculated_at,
-            expires_at,
-            current_sentiment,
-            sentiment_trend,
-            momentum_trend,
-            divergence,
-            sentiment_price_correlation,
-            correlation_lag_days,
-            historical_sentiment,
-            news_articles_analyzed,
-            warnings
-        )
-        VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        ON CONFLICT (ticker) DO UPDATE SET
-            calculated_at = NOW(),
-            expires_at = $2,
-            current_sentiment = $3,
-            sentiment_trend = $4,
-            momentum_trend = $5,
-            divergence = $6,
-            sentiment_price_correlation = $7,
-            correlation_lag_days = $8,
-            historical_sentiment = $9,
-            news_articles_analyzed = $10,
-            warnings = $11
-        "#,
-        ticker,
-        expires_at,
-        signal.current_sentiment,
-        format!("{:?}", signal.sentiment_trend),
-        format!("{:?}", signal.momentum_trend),
-        format!("{:?}", signal.divergence),
-        signal.sentiment_price_correlation,
-        signal.correlation_lag_days,
-        historical_json,
-        signal.news_articles_analyzed as i32,
-        warnings_json
-    )
-    .execute(pool.as_ref())
-    .await?;
+    // Note: The signal is already cached by generate_sentiment_signal() at sentiment_service.rs:341
+    // No need to cache again here
 
     Ok(())
 }

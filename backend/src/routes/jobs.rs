@@ -310,6 +310,8 @@ async fn trigger_job(
         price_provider: state.price_provider.clone(),
         failure_cache: Arc::new(state.failure_cache.clone()),
         rate_limiter: state.rate_limiter.clone(),
+        news_service: state.news_service.clone(),
+        llm_service: state.llm_service.clone(),
     };
 
     // Execute the appropriate job function
@@ -535,6 +537,8 @@ async fn trigger_all_jobs(
         price_provider: state.price_provider.clone(),
         failure_cache: Arc::new(state.failure_cache.clone()),
         rate_limiter: state.rate_limiter.clone(),
+        news_service: state.news_service.clone(),
+        llm_service: state.llm_service.clone(),
     };
 
     let mut job_results = Vec::new();

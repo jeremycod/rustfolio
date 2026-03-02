@@ -55,18 +55,13 @@ export function CorrelationHeatmap({ portfolioId: initialPortfolioId, onTickerNa
     staleTime: 1000 * 60 * 60, // 1 hour
     gcTime: 1000 * 60 * 60, // Keep in cache for 1 hour
     retry: (failureCount, error: any) => {
+      // Don't retry 503 errors - let the user trigger calculation instead
       if (error?.response?.status === 503) {
-        return failureCount < 3; // Retry 503 up to 3 times
+        return false;
       }
       return failureCount < 1; // Only retry once for other errors
     },
-    retryDelay: (attemptIndex, error: any) => {
-      if (error?.response?.status === 503) {
-        // For 503, wait progressively longer: 15s, 30s, 45s
-        return 15000 * (attemptIndex + 1);
-      }
-      return 1000; // Normal retry delay
-    },
+    retryDelay: 1000,
     enabled: !!selectedPortfolioId,
   });
 
@@ -116,31 +111,24 @@ export function CorrelationHeatmap({ portfolioId: initialPortfolioId, onTickerNa
     if (!selectedPortfolioId) return;
 
     setIsRefreshing(true);
-    setLoadingStep('Fetching fresh portfolio data...');
+    setLoadingStep('Computing correlations with fresh data...');
 
     try {
-      // Force fetch new correlation data
+      // Force fetch new correlation data with force=true
       const freshData = await getPortfolioCorrelations(selectedPortfolioId, days, true);
 
       // Update the cache with fresh data
       queryClient.setQueryData(['portfolio-correlations', selectedPortfolioId, days], freshData);
 
-      setSnackbarMessage('Correlation data refreshed successfully!');
+      setSnackbarMessage('Correlation data calculated successfully!');
       setSnackbarSeverity('success');
       setSnackbarOpen(true);
+
+      // Clear any error state
+      correlationQ.refetch();
     } catch (error: any) {
-      const status = error?.response?.status;
-
-      if (status === 503) {
-        const nextCalc = getNextCalculationTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        setSnackbarMessage(
-          `Correlation data is being calculated in the background. Please wait 30-60 seconds and try again. Next scheduled calculation: ${nextCalc}`
-        );
-      } else {
-        const errorMessage = error?.response?.data?.error || error.message || 'Unknown error';
-        setSnackbarMessage(`Failed to refresh: ${errorMessage}`);
-      }
-
+      const errorMessage = error?.response?.data?.error || error.message || 'Unknown error';
+      setSnackbarMessage(`Failed to calculate correlations: ${errorMessage}`);
       setSnackbarSeverity('error');
       setSnackbarOpen(true);
     } finally {
@@ -226,8 +214,7 @@ export function CorrelationHeatmap({ portfolioId: initialPortfolioId, onTickerNa
 
     if (status === 503) {
       alertSeverity = 'warning';
-      const nextCalc = getNextCalculationTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      displayMessage = `Correlation data is being calculated in the background. Please wait 30-60 seconds and try again. Next scheduled calculation: ${nextCalc}`;
+      displayMessage = `Correlation data is not available in cache. Click "Calculate Now" to compute fresh correlations for this portfolio. This will take 30-60 seconds.`;
     } else {
       displayMessage = `Failed to load correlation data: ${errorMessage}`;
     }
@@ -259,14 +246,26 @@ export function CorrelationHeatmap({ portfolioId: initialPortfolioId, onTickerNa
           {displayMessage}
         </Alert>
         {status === 503 && (
-          <Box display="flex" justifyContent="center" mt={2}>
+          <Box display="flex" justifyContent="center" gap={2} mt={2}>
             <Button
               variant="contained"
+              color="primary"
+              size="large"
               startIcon={<Refresh />}
-              onClick={() => correlationQ.refetch()}
+              onClick={handleRefresh}
+              disabled={isRefreshing}
             >
-              Try Again
+              {isRefreshing ? 'Calculating...' : 'Calculate Now'}
             </Button>
+            <Tooltip title="Calculation takes 30-60 seconds and uses fresh price data">
+              <Button
+                variant="outlined"
+                startIcon={<Schedule />}
+                onClick={() => correlationQ.refetch()}
+              >
+                Check Again
+              </Button>
+            </Tooltip>
           </Box>
         )}
       </Box>

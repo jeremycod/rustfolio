@@ -1,8 +1,10 @@
 use crate::errors::AppError;
 use crate::external::price_provider::PriceProvider;
-use crate::jobs::{portfolio_risk_job, portfolio_correlations_job, daily_risk_snapshots_job, market_regime_update_job, hmm_training_job, regime_forecast_job, populate_optimization_cache_job, rolling_beta_cache_job, downside_risk_cache_job, watchlist_monitoring_job};
+use crate::jobs::{portfolio_risk_job, portfolio_correlations_job, daily_risk_snapshots_job, market_regime_update_job, hmm_training_job, regime_forecast_job, populate_optimization_cache_job, rolling_beta_cache_job, downside_risk_cache_job, watchlist_monitoring_job, populate_sentiment_cache_job};
 use crate::services::failure_cache::FailureCache;
 use crate::services::rate_limiter::RateLimiter;
+use crate::services::llm_service::LlmService;
+use crate::services::news_service::NewsService;
 use sqlx::PgPool;
 use tokio_cron_scheduler::{JobScheduler, Job};
 use tracing::{info, error, warn};
@@ -16,6 +18,8 @@ pub struct JobContext {
     pub price_provider: Arc<dyn PriceProvider>,
     pub failure_cache: Arc<FailureCache>,
     pub rate_limiter: Arc<RateLimiter>,
+    pub news_service: Arc<NewsService>,
+    pub llm_service: Arc<LlmService>,
 }
 
 pub struct JobSchedulerService {
@@ -29,6 +33,8 @@ impl JobSchedulerService {
         price_provider: Arc<dyn PriceProvider>,
         failure_cache: Arc<FailureCache>,
         rate_limiter: Arc<RateLimiter>,
+        news_service: Arc<NewsService>,
+        llm_service: Arc<LlmService>,
     ) -> Result<Self, AppError> {
         let scheduler = JobScheduler::new()
             .await
@@ -39,6 +45,8 @@ impl JobSchedulerService {
             price_provider,
             failure_cache,
             rate_limiter,
+            news_service,
+            llm_service,
         };
 
         Ok(Self {
@@ -181,8 +189,13 @@ impl JobSchedulerService {
             downside_risk_cache_job::populate_downside_risk_caches
         ).await?;
 
-        // TODO: Re-enable sentiment cache job after refactoring
-        // Sentiment cache is currently populated on-demand via manual endpoint
+        // Sentiment cache - every 4 hours
+        self.schedule_job(
+            "0 0 */4 * * *",
+            "populate_sentiment_cache",
+            "Every 4 hours at :00",
+            populate_sentiment_cache_job::populate_all_sentiment_caches
+        ).await?;
 
         // Watchlist monitoring - every 30 minutes during market hours
         self.schedule_job(

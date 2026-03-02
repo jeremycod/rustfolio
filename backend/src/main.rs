@@ -145,6 +145,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         provider.clone(),
         Arc::new(state.failure_cache.clone()),
         rate_limiter.clone(),
+        state.news_service.clone(),
+        state.llm_service.clone(),
     ).await?;
 
     job_scheduler.start().await?;
