@@ -56,6 +56,11 @@ pub struct SurveyPersonalInfo {
     pub employment_status: Option<String>,
     pub dependents: Option<i32>,
     pub contact_email: Option<String>,
+    // Spouse fields
+    pub has_spouse: bool,
+    pub spouse_name: Option<String>,
+    pub spouse_birth_year: Option<i32>,
+    pub spouse_employment_status: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -68,6 +73,11 @@ pub struct UpsertPersonalInfoRequest {
     pub employment_status: Option<String>,
     pub dependents: Option<i32>,
     pub contact_email: Option<String>,
+    // Spouse fields
+    pub has_spouse: Option<bool>,
+    pub spouse_name: Option<String>,
+    pub spouse_birth_year: Option<i32>,
+    pub spouse_employment_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,6 +89,11 @@ pub struct PersonalInfoResponse {
     pub employment_status: Option<String>,
     pub dependents: Option<i32>,
     pub contact_email: Option<String>,
+    // Spouse fields
+    pub has_spouse: bool,
+    pub spouse_name: Option<String>,
+    pub spouse_birth_year: Option<i32>,
+    pub spouse_employment_status: Option<String>,
 }
 
 impl From<SurveyPersonalInfo> for PersonalInfoResponse {
@@ -91,6 +106,10 @@ impl From<SurveyPersonalInfo> for PersonalInfoResponse {
             employment_status: p.employment_status,
             dependents: p.dependents,
             contact_email: p.contact_email,
+            has_spouse: p.has_spouse,
+            spouse_name: p.spouse_name,
+            spouse_birth_year: p.spouse_birth_year,
+            spouse_employment_status: p.spouse_employment_status,
         }
     }
 }
@@ -112,6 +131,11 @@ pub struct SurveyIncomeInfo {
     pub retirement_income_needs_notes: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Spouse income fields
+    pub spouse_gross_annual_income: Option<BigDecimal>,
+    pub spouse_pay_frequency: Option<String>,
+    pub spouse_retirement_contribution_rate: Option<BigDecimal>,
+    pub spouse_employer_match_rate: Option<BigDecimal>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -127,6 +151,11 @@ pub struct UpsertIncomeInfoRequest {
     pub retirement_income_needs_notes: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Spouse income fields
+    pub spouse_gross_annual_income: Option<f64>,
+    pub spouse_pay_frequency: Option<String>,
+    pub spouse_retirement_contribution_rate: Option<f64>,
+    pub spouse_employer_match_rate: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,6 +170,11 @@ pub struct IncomeInfoResponse {
     pub retirement_income_needs_notes: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Spouse income fields
+    pub spouse_gross_annual_income: Option<f64>,
+    pub spouse_pay_frequency: Option<String>,
+    pub spouse_retirement_contribution_rate: Option<f64>,
+    pub spouse_employer_match_rate: Option<f64>,
 }
 
 impl From<SurveyIncomeInfo> for IncomeInfoResponse {
@@ -156,6 +190,10 @@ impl From<SurveyIncomeInfo> for IncomeInfoResponse {
             retirement_income_needs_notes: i.retirement_income_needs_notes,
             currency: i.currency,
             notes: i.notes,
+            spouse_gross_annual_income: i.spouse_gross_annual_income.as_ref().and_then(|v| v.to_string().parse().ok()),
+            spouse_pay_frequency: i.spouse_pay_frequency,
+            spouse_retirement_contribution_rate: i.spouse_retirement_contribution_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
+            spouse_employer_match_rate: i.spouse_employer_match_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
         }
     }
 }
@@ -173,6 +211,11 @@ pub struct SurveyAsset {
     pub current_value: BigDecimal,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Ownership fields
+    pub ownership: String,
+    pub joint_split_percentage: Option<BigDecimal>,
+    // Linked account (optional — for auto-refresh from portfolio)
+    pub linked_account_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -184,6 +227,11 @@ pub struct CreateAssetRequest {
     pub current_value: f64,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Ownership fields
+    pub ownership: Option<String>,
+    pub joint_split_percentage: Option<f64>,
+    // Optional link to portfolio account
+    pub linked_account_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -193,6 +241,11 @@ pub struct UpdateAssetRequest {
     pub current_value: Option<f64>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Ownership fields
+    pub ownership: Option<String>,
+    pub joint_split_percentage: Option<f64>,
+    // Optional link to portfolio account
+    pub linked_account_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -203,6 +256,12 @@ pub struct AssetResponse {
     pub current_value: f64,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Ownership fields
+    pub ownership: String,
+    pub joint_split_percentage: Option<f64>,
+    // Linked account info
+    pub linked_account_id: Option<Uuid>,
+    pub linked_account_nickname: Option<String>,
 }
 
 impl From<SurveyAsset> for AssetResponse {
@@ -214,6 +273,47 @@ impl From<SurveyAsset> for AssetResponse {
             current_value: a.current_value.to_string().parse().unwrap_or(0.0),
             currency: a.currency,
             notes: a.notes,
+            ownership: a.ownership,
+            joint_split_percentage: a.joint_split_percentage.as_ref().and_then(|v| v.to_string().parse().ok()),
+            linked_account_id: a.linked_account_id,
+            linked_account_nickname: None, // populated separately via batch lookup in route handlers
+        }
+    }
+}
+
+// ==============================================================================
+// Linkable Account (for listing portfolio accounts in the asset picker)
+// ==============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct LinkableAccount {
+    pub id: Uuid,
+    pub account_nickname: String,
+    pub account_number: String,
+    pub portfolio_name: String,
+    pub latest_value: Option<BigDecimal>,
+    pub latest_snapshot_date: Option<chrono::NaiveDate>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkableAccountResponse {
+    pub id: Uuid,
+    pub account_nickname: String,
+    pub account_number: String,
+    pub portfolio_name: String,
+    pub latest_value: Option<f64>,
+    pub latest_snapshot_date: Option<chrono::NaiveDate>,
+}
+
+impl From<LinkableAccount> for LinkableAccountResponse {
+    fn from(a: LinkableAccount) -> Self {
+        Self {
+            id: a.id,
+            account_nickname: a.account_nickname,
+            account_number: a.account_number,
+            portfolio_name: a.portfolio_name,
+            latest_value: a.latest_value.as_ref().and_then(|v| v.to_string().parse().ok()),
+            latest_snapshot_date: a.latest_snapshot_date,
         }
     }
 }
@@ -235,6 +335,9 @@ pub struct SurveyLiability {
     pub linked_asset_id: Option<Uuid>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Ownership fields
+    pub ownership: String,
+    pub joint_split_percentage: Option<BigDecimal>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -250,6 +353,9 @@ pub struct CreateLiabilityRequest {
     pub linked_asset_id: Option<Uuid>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Ownership fields
+    pub ownership: Option<String>,
+    pub joint_split_percentage: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -263,6 +369,9 @@ pub struct UpdateLiabilityRequest {
     pub linked_asset_id: Option<Uuid>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Ownership fields
+    pub ownership: Option<String>,
+    pub joint_split_percentage: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -277,6 +386,9 @@ pub struct LiabilityResponse {
     pub linked_asset_id: Option<Uuid>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    // Ownership fields
+    pub ownership: String,
+    pub joint_split_percentage: Option<f64>,
 }
 
 impl From<SurveyLiability> for LiabilityResponse {
@@ -292,6 +404,8 @@ impl From<SurveyLiability> for LiabilityResponse {
             linked_asset_id: l.linked_asset_id,
             currency: l.currency,
             notes: l.notes,
+            ownership: l.ownership,
+            joint_split_percentage: l.joint_split_percentage.as_ref().and_then(|v| v.to_string().parse().ok()),
         }
     }
 }
@@ -312,6 +426,7 @@ pub struct SurveyGoal {
     pub priority: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    pub owner: String, // 'mine', 'spouse', 'joint'
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -326,6 +441,7 @@ pub struct CreateGoalRequest {
     pub priority: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    pub owner: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -338,6 +454,7 @@ pub struct UpdateGoalRequest {
     pub priority: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    pub owner: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -351,6 +468,7 @@ pub struct GoalResponse {
     pub priority: Option<String>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    pub owner: String,
 }
 
 impl From<SurveyGoal> for GoalResponse {
@@ -365,6 +483,7 @@ impl From<SurveyGoal> for GoalResponse {
             priority: g.priority,
             currency: g.currency,
             notes: g.notes,
+            owner: g.owner,
         }
     }
 }
@@ -470,6 +589,7 @@ pub struct SurveyAdditionalIncome {
     pub is_recurring: Option<bool>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    pub owner: String, // 'mine' or 'spouse'
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -482,6 +602,7 @@ pub struct CreateAdditionalIncomeRequest {
     pub is_recurring: Option<bool>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    pub owner: Option<String>, // 'mine' or 'spouse', defaults to 'mine'
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -492,6 +613,7 @@ pub struct UpdateAdditionalIncomeRequest {
     pub is_recurring: Option<bool>,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    pub owner: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -503,6 +625,7 @@ pub struct AdditionalIncomeResponse {
     pub is_recurring: bool,
     pub currency: Option<String>,
     pub notes: Option<String>,
+    pub owner: String,
 }
 
 impl From<SurveyAdditionalIncome> for AdditionalIncomeResponse {
@@ -515,6 +638,7 @@ impl From<SurveyAdditionalIncome> for AdditionalIncomeResponse {
             is_recurring: i.is_recurring.unwrap_or(true),
             currency: i.currency,
             notes: i.notes,
+            owner: i.owner,
         }
     }
 }
@@ -583,6 +707,64 @@ impl From<SurveyExpense> for ExpenseResponse {
 }
 
 // ==============================================================================
+// Household Expense Models
+// ==============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SurveyHouseholdExpense {
+    pub id: Uuid,
+    pub survey_id: Uuid,
+    pub expense_category: String,
+    pub expense_type: String, // 'shared', 'mine', 'spouse'
+    pub monthly_amount: BigDecimal,
+    pub description: Option<String>,
+    pub currency: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateHouseholdExpenseRequest {
+    pub expense_category: String,
+    pub expense_type: String,
+    pub monthly_amount: f64,
+    pub description: Option<String>,
+    pub currency: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateHouseholdExpenseRequest {
+    pub expense_category: Option<String>,
+    pub expense_type: Option<String>,
+    pub monthly_amount: Option<f64>,
+    pub description: Option<String>,
+    pub currency: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HouseholdExpenseResponse {
+    pub id: Uuid,
+    pub expense_category: String,
+    pub expense_type: String,
+    pub monthly_amount: f64,
+    pub description: Option<String>,
+    pub currency: String,
+}
+
+impl From<SurveyHouseholdExpense> for HouseholdExpenseResponse {
+    fn from(e: SurveyHouseholdExpense) -> Self {
+        Self {
+            id: e.id,
+            expense_category: e.expense_category,
+            expense_type: e.expense_type,
+            monthly_amount: e.monthly_amount.to_string().parse().unwrap_or(0.0),
+            description: e.description,
+            currency: e.currency,
+        }
+    }
+}
+
+// ==============================================================================
 // Full Survey Detail Response (combines all sections)
 // ==============================================================================
 
@@ -595,6 +777,7 @@ pub struct SurveyDetailResponse {
     pub income_info: Option<IncomeInfoResponse>,
     pub additional_income: Vec<AdditionalIncomeResponse>,
     pub expenses: Vec<ExpenseResponse>,
+    pub household_expenses: Vec<HouseholdExpenseResponse>,
     pub assets: Vec<AssetResponse>,
     pub liabilities: Vec<LiabilityResponse>,
     pub goals: Vec<GoalResponse>,

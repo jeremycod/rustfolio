@@ -116,6 +116,13 @@ function GoalProgressItem({ goal }: { goal: GoalProgress }) {
                                 ? `${goal.months_remaining} months`
                                 : 'N/A'}
                     </Typography>
+                    {goal.monthly_contribution_needed != null && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                            {goal.contribution_uses_growth
+                                ? 'incl. 6% annual growth'
+                                : 'no growth assumed'}
+                        </Typography>
+                    )}
                 </Grid>
             </Grid>
         </Box>

@@ -22,15 +22,18 @@ import {
     MenuItem,
     InputAdornment,
     Chip,
+    ToggleButtonGroup,
+    ToggleButton,
+    Slider,
 } from '@mui/material';
-import { Add, Edit, Delete } from '@mui/icons-material';
+import { Add, Edit, Delete, Person, People } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     createSurveyLiability,
     updateSurveyLiability,
     deleteSurveyLiability,
 } from '../../../lib/endpoints';
-import type { SurveyLiability, LiabilityType, PaymentFrequency, CreateLiabilityRequest, UpdateLiabilityRequest } from '../../../types';
+import type { SurveyLiability, LiabilityType, Ownership, PaymentFrequency, CreateLiabilityRequest, UpdateLiabilityRequest } from '../../../types';
 
 const LIABILITY_TYPE_OPTIONS: { value: LiabilityType; label: string }[] = [
     { value: 'mortgage', label: 'Mortgage' },
@@ -65,9 +68,11 @@ function formatCurrency(value: number): string {
 interface Step4LiabilitiesProps {
     surveyId: string;
     liabilities: SurveyLiability[];
+    hasSpouse?: boolean;
+    spouseName?: string | null;
 }
 
-export function Step4Liabilities({ surveyId, liabilities }: Step4LiabilitiesProps) {
+export function Step4Liabilities({ surveyId, liabilities, hasSpouse = false, spouseName }: Step4LiabilitiesProps) {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingLiability, setEditingLiability] = useState<SurveyLiability | null>(null);
     const queryClient = useQueryClient();
@@ -152,6 +157,7 @@ export function Step4Liabilities({ surveyId, liabilities }: Step4LiabilitiesProp
                             <TableRow>
                                 <TableCell>Type</TableCell>
                                 <TableCell>Description</TableCell>
+                                {hasSpouse && <TableCell>Owner</TableCell>}
                                 <TableCell align="right">Balance</TableCell>
                                 <TableCell align="right">Rate</TableCell>
                                 <TableCell align="right">Payment</TableCell>
@@ -170,6 +176,21 @@ export function Step4Liabilities({ surveyId, liabilities }: Step4LiabilitiesProp
                                         />
                                     </TableCell>
                                     <TableCell>{liability.description || '-'}</TableCell>
+                                    {hasSpouse && (
+                                        <TableCell>
+                                            <Chip
+                                                label={liability.ownership === 'joint'
+                                                    ? `Joint (${liability.joint_split_percentage ?? 50}%)`
+                                                    : liability.ownership === 'spouse'
+                                                    ? (spouseName ?? 'Spouse')
+                                                    : 'Mine'}
+                                                size="small"
+                                                color={liability.ownership === 'joint' ? 'warning' : liability.ownership === 'spouse' ? 'secondary' : 'success'}
+                                                icon={liability.ownership === 'joint' ? <People /> : <Person />}
+                                                variant="outlined"
+                                            />
+                                        </TableCell>
+                                    )}
                                     <TableCell align="right">{formatCurrency(liability.balance)}</TableCell>
                                     <TableCell align="right">
                                         {liability.interest_rate != null ? `${liability.interest_rate}%` : '-'}
@@ -202,7 +223,7 @@ export function Step4Liabilities({ surveyId, liabilities }: Step4LiabilitiesProp
                                 </TableRow>
                             ))}
                             <TableRow>
-                                <TableCell colSpan={2}>
+                                <TableCell colSpan={hasSpouse ? 3 : 2}>
                                     <Typography variant="subtitle2" fontWeight="bold">Total</Typography>
                                 </TableCell>
                                 <TableCell align="right">
@@ -237,6 +258,8 @@ export function Step4Liabilities({ surveyId, liabilities }: Step4LiabilitiesProp
                 onClose={() => { setDialogOpen(false); setEditingLiability(null); }}
                 onSubmit={handleSubmit}
                 editLiability={editingLiability}
+                hasSpouse={hasSpouse}
+                spouseName={spouseName}
                 isSaving={createMutation.isPending || updateMutation.isPending}
             />
         </Box>
@@ -248,12 +271,16 @@ function LiabilityFormDialog({
     onClose,
     onSubmit,
     editLiability,
+    hasSpouse,
+    spouseName,
     isSaving,
 }: {
     open: boolean;
     onClose: () => void;
     onSubmit: (data: CreateLiabilityRequest) => void;
     editLiability: SurveyLiability | null;
+    hasSpouse: boolean;
+    spouseName?: string | null;
     isSaving: boolean;
 }) {
     const [liabilityType, setLiabilityType] = useState<LiabilityType>(editLiability?.liability_type || 'mortgage');
@@ -263,6 +290,8 @@ function LiabilityFormDialog({
     const [monthlyPayment, setMonthlyPayment] = useState(editLiability?.monthly_payment?.toString() || '');
     const [paymentFrequency, setPaymentFrequency] = useState<PaymentFrequency>(editLiability?.payment_frequency || 'monthly');
     const [notes, setNotes] = useState(editLiability?.notes || '');
+    const [ownership, setOwnership] = useState<Ownership>(editLiability?.ownership ?? 'mine');
+    const [splitPct, setSplitPct] = useState(editLiability?.joint_split_percentage ?? 50);
 
     // Update form when dialog opens with edit data
     useEffect(() => {
@@ -274,6 +303,8 @@ function LiabilityFormDialog({
             setMonthlyPayment(editLiability?.monthly_payment?.toString() || '');
             setPaymentFrequency(editLiability?.payment_frequency || 'monthly');
             setNotes(editLiability?.notes || '');
+            setOwnership(editLiability?.ownership ?? 'mine');
+            setSplitPct(editLiability?.joint_split_percentage ?? 50);
         }
     }, [open, editLiability]);
 
@@ -286,6 +317,8 @@ function LiabilityFormDialog({
             monthly_payment: monthlyPayment ? parseFloat(monthlyPayment) : undefined,
             payment_frequency: monthlyPayment ? paymentFrequency : undefined,
             notes: notes || undefined,
+            ownership: hasSpouse ? ownership : 'mine',
+            joint_split_percentage: hasSpouse && ownership === 'joint' ? splitPct : undefined,
         });
     };
 
@@ -358,6 +391,45 @@ function LiabilityFormDialog({
                             ))}
                         </Select>
                     </FormControl>
+                    {hasSpouse && (
+                        <Box>
+                            <Typography variant="body2" color="text.secondary" gutterBottom>
+                                Ownership
+                            </Typography>
+                            <ToggleButtonGroup
+                                value={ownership}
+                                exclusive
+                                onChange={(_, val) => val && setOwnership(val)}
+                                fullWidth
+                                size="small"
+                            >
+                                <ToggleButton value="mine" color="success">
+                                    <Person sx={{ mr: 0.5 }} fontSize="small" /> Mine
+                                </ToggleButton>
+                                <ToggleButton value="spouse" color="secondary">
+                                    <Person sx={{ mr: 0.5 }} fontSize="small" /> {spouseName ?? 'Spouse'}
+                                </ToggleButton>
+                                <ToggleButton value="joint" color="warning">
+                                    <People sx={{ mr: 0.5 }} fontSize="small" /> Joint
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                            {ownership === 'joint' && (
+                                <Box mt={1.5}>
+                                    <Typography variant="body2" gutterBottom>
+                                        My share: <strong>{splitPct}%</strong> &nbsp;/&nbsp; {spouseName ?? 'Spouse'}: <strong>{100 - splitPct}%</strong>
+                                    </Typography>
+                                    <Slider
+                                        value={splitPct}
+                                        min={1}
+                                        max={99}
+                                        onChange={(_, val) => setSplitPct(val as number)}
+                                        valueLabelDisplay="auto"
+                                        valueLabelFormat={(v) => `${v}%`}
+                                    />
+                                </Box>
+                            )}
+                        </Box>
+                    )}
                     <TextField
                         fullWidth
                         label="Notes"

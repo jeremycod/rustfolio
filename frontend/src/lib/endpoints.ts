@@ -91,6 +91,8 @@ import type {
     SurveyLiability,
     SurveyGoal,
     SurveyRiskProfile,
+    SurveyHouseholdExpense,
+    LinkableAccount,
     UpdatePersonalInfoRequest,
     UpdateIncomeInfoRequest,
     CreateAssetRequest,
@@ -101,6 +103,8 @@ import type {
     UpdateGoalRequest,
     UpdateRiskProfileRequest,
     FinancialSnapshot,
+    CreateHouseholdExpenseRequest,
+    UpdateHouseholdExpenseRequest,
 } from "../types";
 
 export async function listPortfolios(): Promise<Portfolio[]> {
@@ -1321,5 +1325,79 @@ export async function getFinancialSnapshot(surveyId: string): Promise<FinancialS
 
 export async function regenerateFinancialSnapshot(surveyId: string): Promise<FinancialSnapshot> {
     const res = await api.post(`/api/financial-planning/surveys/${surveyId}/snapshot/regenerate`);
+    return res.data;
+}
+
+// Spouse Info
+export async function deleteSpouseInfo(surveyId: string): Promise<void> {
+    await api.delete(`/api/financial-planning/surveys/${surveyId}/spouse-info`);
+}
+
+// Household Expenses CRUD
+export async function getHouseholdExpenses(
+    surveyId: string
+): Promise<SurveyHouseholdExpense[]> {
+    const res = await api.get(`/api/financial-planning/surveys/${surveyId}/household-expenses`);
+    return res.data;
+}
+
+export async function createHouseholdExpense(
+    surveyId: string,
+    data: CreateHouseholdExpenseRequest
+): Promise<SurveyHouseholdExpense> {
+    const res = await api.post(`/api/financial-planning/surveys/${surveyId}/household-expenses`, data);
+    return res.data;
+}
+
+export async function updateHouseholdExpense(
+    surveyId: string,
+    expenseId: string,
+    data: UpdateHouseholdExpenseRequest
+): Promise<SurveyHouseholdExpense> {
+    const res = await api.put(
+        `/api/financial-planning/surveys/${surveyId}/household-expenses/${expenseId}`,
+        data
+    );
+    return res.data;
+}
+
+export async function deleteHouseholdExpense(
+    surveyId: string,
+    expenseId: string
+): Promise<void> {
+    await api.delete(`/api/financial-planning/surveys/${surveyId}/household-expenses/${expenseId}`);
+}
+
+// Household Snapshot
+export async function getHouseholdSnapshot(surveyId: string): Promise<any> {
+    const res = await api.get(`/api/financial-planning/surveys/${surveyId}/snapshot/household`);
+    return res.data;
+}
+
+// Linkable Accounts — portfolio accounts available for linking to survey assets
+export async function getLinkableAccounts(): Promise<LinkableAccount[]> {
+    const res = await api.get('/api/financial-planning/linkable-accounts');
+    return res.data;
+}
+
+// Refresh a linked asset's value from its portfolio account
+export async function refreshLinkedAsset(
+    surveyId: string,
+    assetId: string
+): Promise<SurveyAsset> {
+    const res = await api.post(
+        `/api/financial-planning/surveys/${surveyId}/assets/${assetId}/refresh`
+    );
+    return res.data;
+}
+
+// Remove the portfolio account link from an asset (value becomes manual)
+export async function unlinkAssetAccount(
+    surveyId: string,
+    assetId: string
+): Promise<SurveyAsset> {
+    const res = await api.post(
+        `/api/financial-planning/surveys/${surveyId}/assets/${assetId}/unlink`
+    );
     return res.data;
 }

@@ -4,7 +4,7 @@ import {
     Paper,
     Stepper,
     Step,
-    StepLabel,
+    StepButton,
     Button,
     CircularProgress,
     Alert,
@@ -24,17 +24,20 @@ import type {
     UpdateRiskProfileRequest,
 } from '../../types';
 import { Step1PersonalDetails } from './steps/Step1PersonalDetails';
+import { Step1_5SpouseInfo } from './steps/Step1_5SpouseInfo';
 import { Step2IncomeRetirement } from './steps/Step2IncomeRetirement';
 import { Step2_5Expenses } from './steps/Step2_5Expenses';
 import { Step3Assets } from './steps/Step3Assets';
 import { Step4Liabilities } from './steps/Step4Liabilities';
+import { Step4_5HouseholdExpenses } from './steps/Step4_5HouseholdExpenses';
 import { Step5Goals } from './steps/Step5Goals';
 import { Step6RiskProfile } from './steps/Step6RiskProfile';
 
 const STEPS = [
     'Personal Details',
+    'Spouse / Partner',
     'Income & Retirement',
-    'Monthly Expenses',
+    'Expenses',
     'Assets',
     'Liabilities',
     'Goals',
@@ -133,6 +136,9 @@ export function SurveyWizard({ surveyId, onComplete, onBack }: SurveyWizardProps
     const survey = surveyQ.data;
     if (!survey) return null;
 
+    const hasSpouse = survey.personal_info?.has_spouse ?? false;
+    const spouseName = survey.personal_info?.spouse_name ?? null;
+
     const renderStepContent = () => {
         switch (activeStep) {
             case 0:
@@ -145,41 +151,64 @@ export function SurveyWizard({ surveyId, onComplete, onBack }: SurveyWizardProps
                 );
             case 1:
                 return (
+                    <Step1_5SpouseInfo
+                        data={survey.personal_info}
+                        onSave={handleSavePersonalInfo}
+                        isSaving={personalInfoMutation.isPending}
+                    />
+                );
+            case 2:
+                return (
                     <Step2IncomeRetirement
                         surveyId={surveyId}
                         data={survey.income_info}
                         onSave={handleSaveIncomeInfo}
                         isSaving={incomeInfoMutation.isPending}
+                        hasSpouse={hasSpouse}
+                        spouseName={spouseName}
                     />
                 );
-            case 2:
-                return (
+            case 3:
+                // When a spouse is configured, household expenses replace individual expenses —
+                // they cover the same ground but with shared/mine/spouse attribution.
+                return hasSpouse ? (
+                    <Step4_5HouseholdExpenses
+                        surveyId={surveyId}
+                        spouseName={spouseName}
+                    />
+                ) : (
                     <Step2_5Expenses
                         surveyId={surveyId}
                     />
                 );
-            case 3:
+            case 4:
                 return (
                     <Step3Assets
                         surveyId={surveyId}
                         assets={survey.assets}
-                    />
-                );
-            case 4:
-                return (
-                    <Step4Liabilities
-                        surveyId={surveyId}
-                        liabilities={survey.liabilities}
+                        hasSpouse={hasSpouse}
+                        spouseName={spouseName}
                     />
                 );
             case 5:
                 return (
-                    <Step5Goals
+                    <Step4Liabilities
                         surveyId={surveyId}
-                        goals={survey.goals}
+                        liabilities={survey.liabilities}
+                        hasSpouse={hasSpouse}
+                        spouseName={spouseName}
                     />
                 );
             case 6:
+                return (
+                    <Step5Goals
+                        surveyId={surveyId}
+                        goals={survey.goals}
+                        hasSpouse={hasSpouse}
+                        spouseName={spouseName}
+                    />
+                );
+            case 7:
                 return (
                     <Step6RiskProfile
                         data={survey.risk_profile}
@@ -194,10 +223,12 @@ export function SurveyWizard({ surveyId, onComplete, onBack }: SurveyWizardProps
 
     return (
         <Paper sx={{ p: 3 }}>
-            <Stepper activeStep={activeStep} sx={{ mb: 4 }} alternativeLabel>
-                {STEPS.map((label) => (
+            <Stepper activeStep={activeStep} nonLinear sx={{ mb: 4 }} alternativeLabel>
+                {STEPS.map((label, index) => (
                     <Step key={label}>
-                        <StepLabel>{label}</StepLabel>
+                        <StepButton onClick={() => setActiveStep(index)}>
+                            {label}
+                        </StepButton>
                     </Step>
                 ))}
             </Stepper>

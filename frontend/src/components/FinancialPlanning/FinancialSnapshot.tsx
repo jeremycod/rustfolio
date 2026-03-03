@@ -98,6 +98,9 @@ export function FinancialSnapshotView({ surveyId, onEdit }: FinancialSnapshotVie
         0
     );
 
+    // Extract retirement goal savings target (if set) for cross-referencing in the projection
+    const retirementGoalTarget = snapshotData.goal_progress.find(g => g.goal_type === 'retirement')?.target_amount ?? null;
+
     return (
         <Box>
             {/* Header */}
@@ -237,8 +240,9 @@ export function FinancialSnapshotView({ surveyId, onEdit }: FinancialSnapshotVie
                         <RetirementProjectionChart
                             projection={snapshotData.retirement}
                             currentAge={currentAge}
-                            additionalMonthlySavings={totalMonthlyNeeded}
+                            goalBasedMonthlySavings={totalMonthlyNeeded}
                             desiredAnnualRetirementIncome={survey?.income_info?.desired_annual_retirement_income || null}
+                            retirementGoalTarget={retirementGoalTarget}
                         />
                     </Grid>
                 )}

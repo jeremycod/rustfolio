@@ -1531,6 +1531,8 @@ export type FactorPortfolio = {
 export type SurveyStatus = 'draft' | 'completed';
 export type MaritalStatus = 'single' | 'married' | 'divorced' | 'widowed' | 'other';
 export type EmploymentStatus = 'employed' | 'self_employed' | 'retired' | 'unemployed' | 'student' | 'other';
+export type Ownership = 'mine' | 'spouse' | 'joint';
+export type HouseholdExpenseType = 'shared' | 'mine' | 'spouse';
 export type PayFrequency = 'annual' | 'monthly' | 'bi_weekly' | 'weekly';
 export type PaymentFrequency = 'monthly' | 'bi_weekly' | 'weekly';
 export type AssetType = 'liquid' | 'investment' | 'retirement' | 'real_estate' | 'tfsa' | 'rrsp' | 'lira' | 'resp' | 'rrif' | 'fhsa' | 'other';
@@ -1559,6 +1561,11 @@ export type SurveyPersonalInfo = {
     employment_status: EmploymentStatus | null;
     dependents: number;
     contact_email: string | null;
+    // Spouse fields
+    has_spouse: boolean;
+    spouse_name: string | null;
+    spouse_birth_year: number | null;
+    spouse_employment_status: string | null;
     created_at: string;
 };
 
@@ -1574,6 +1581,11 @@ export type SurveyIncomeInfo = {
     retirement_income_needs_notes: string | null;
     currency: string;
     notes: string | null;
+    // Spouse income fields
+    spouse_gross_annual_income: number | null;
+    spouse_pay_frequency: PayFrequency | null;
+    spouse_retirement_contribution_rate: number | null;
+    spouse_employer_match_rate: number | null;
     created_at: string;
 };
 
@@ -1585,7 +1597,20 @@ export type SurveyAsset = {
     current_value: number;
     currency: string;
     notes: string | null;
+    ownership: Ownership;
+    joint_split_percentage: number | null;
+    linked_account_id: string | null;
+    linked_account_nickname: string | null;
     created_at: string;
+};
+
+export type LinkableAccount = {
+    id: string;
+    account_nickname: string;
+    account_number: string;
+    portfolio_name: string;
+    latest_value: number | null;
+    latest_snapshot_date: string | null;
 };
 
 export type SurveyLiability = {
@@ -1600,8 +1625,12 @@ export type SurveyLiability = {
     linked_asset_id: string | null;
     currency: string;
     notes: string | null;
+    ownership: Ownership;
+    joint_split_percentage: number | null;
     created_at: string;
 };
+
+export type GoalOwner = 'mine' | 'spouse' | 'joint';
 
 export type SurveyGoal = {
     id: string;
@@ -1614,6 +1643,7 @@ export type SurveyGoal = {
     priority: GoalPriority | null;
     currency: string;
     notes: string | null;
+    owner: GoalOwner;
     created_at: string;
 };
 
@@ -1626,12 +1656,38 @@ export type SurveyRiskProfile = {
     created_at: string;
 };
 
+export type SurveyHouseholdExpense = {
+    id: string;
+    expense_category: string;
+    expense_type: HouseholdExpenseType;
+    monthly_amount: number;
+    description: string | null;
+    currency: string;
+};
+
+export type CreateHouseholdExpenseRequest = {
+    expense_category: string;
+    expense_type: HouseholdExpenseType;
+    monthly_amount: number;
+    description?: string;
+    currency?: string;
+};
+
+export type UpdateHouseholdExpenseRequest = {
+    expense_category?: string;
+    expense_type?: HouseholdExpenseType;
+    monthly_amount?: number;
+    description?: string;
+    currency?: string;
+};
+
 // Survey with all nested sections
 export type FinancialSurveyFull = FinancialSurvey & {
     personal_info: SurveyPersonalInfo | null;
     income_info: SurveyIncomeInfo | null;
     additional_income: SurveyAdditionalIncome[];
     expenses: SurveyExpense[];
+    household_expenses: SurveyHouseholdExpense[];
     assets: SurveyAsset[];
     liabilities: SurveyLiability[];
     goals: SurveyGoal[];
@@ -1646,6 +1702,11 @@ export type UpdatePersonalInfoRequest = {
     employment_status?: EmploymentStatus;
     dependents?: number;
     contact_email?: string;
+    // Spouse fields
+    has_spouse?: boolean;
+    spouse_name?: string;
+    spouse_birth_year?: number;
+    spouse_employment_status?: string;
 };
 
 export type UpdateIncomeInfoRequest = {
@@ -1658,6 +1719,11 @@ export type UpdateIncomeInfoRequest = {
     retirement_income_needs_notes?: string;
     currency?: string;
     notes?: string;
+    // Spouse income fields
+    spouse_gross_annual_income?: number;
+    spouse_pay_frequency?: PayFrequency;
+    spouse_retirement_contribution_rate?: number;
+    spouse_employer_match_rate?: number;
 };
 
 // Additional Income types
@@ -1673,6 +1739,8 @@ export type AdditionalIncomeType =
     | 'alimony'
     | 'other';
 
+export type IncomeOwner = 'mine' | 'spouse';
+
 export type SurveyAdditionalIncome = {
     id: string;
     income_type: AdditionalIncomeType;
@@ -1681,6 +1749,7 @@ export type SurveyAdditionalIncome = {
     is_recurring: boolean;
     currency: string | null;
     notes: string | null;
+    owner: IncomeOwner;
 };
 
 export type CreateAdditionalIncomeRequest = {
@@ -1690,6 +1759,7 @@ export type CreateAdditionalIncomeRequest = {
     is_recurring?: boolean;
     currency?: string;
     notes?: string;
+    owner?: IncomeOwner;
 };
 
 export type UpdateAdditionalIncomeRequest = {
@@ -1699,6 +1769,7 @@ export type UpdateAdditionalIncomeRequest = {
     is_recurring?: boolean;
     currency?: string;
     notes?: string;
+    owner?: IncomeOwner;
 };
 
 // Expense types
@@ -1757,6 +1828,9 @@ export type CreateAssetRequest = {
     current_value: number;
     currency?: string;
     notes?: string;
+    ownership?: Ownership;
+    joint_split_percentage?: number;
+    linked_account_id?: string;
 };
 
 export type UpdateAssetRequest = {
@@ -1765,6 +1839,9 @@ export type UpdateAssetRequest = {
     current_value?: number;
     currency?: string;
     notes?: string;
+    ownership?: Ownership;
+    joint_split_percentage?: number;
+    linked_account_id?: string;
 };
 
 export type CreateLiabilityRequest = {
@@ -1777,6 +1854,8 @@ export type CreateLiabilityRequest = {
     linked_asset_id?: string;
     currency?: string;
     notes?: string;
+    ownership?: Ownership;
+    joint_split_percentage?: number;
 };
 
 export type UpdateLiabilityRequest = {
@@ -1789,6 +1868,8 @@ export type UpdateLiabilityRequest = {
     linked_asset_id?: string;
     currency?: string;
     notes?: string;
+    ownership?: Ownership;
+    joint_split_percentage?: number;
 };
 
 export type CreateGoalRequest = {
@@ -1800,6 +1881,7 @@ export type CreateGoalRequest = {
     priority?: GoalPriority;
     currency?: string;
     notes?: string;
+    owner?: GoalOwner;
 };
 
 export type UpdateGoalRequest = {
@@ -1811,6 +1893,7 @@ export type UpdateGoalRequest = {
     priority?: GoalPriority;
     currency?: string;
     notes?: string;
+    owner?: GoalOwner;
 };
 
 export type UpdateRiskProfileRequest = {
@@ -1829,6 +1912,7 @@ export type GoalProgress = {
     progress_percentage: number;
     months_remaining: number | null;
     monthly_contribution_needed: number | null;
+    contribution_uses_growth: boolean;
     status: 'on_track' | 'behind' | 'at_risk' | 'completed';
 };
 

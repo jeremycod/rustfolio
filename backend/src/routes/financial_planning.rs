@@ -20,6 +20,8 @@ use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        // Linkable accounts (for asset picker)
+        .route("/linkable-accounts", get(get_linkable_accounts))
         // Survey management
         .route("/surveys", post(create_survey))
         .route("/surveys", get(list_surveys))
@@ -29,6 +31,8 @@ pub fn router() -> Router<AppState> {
         // Personal info
         .route("/surveys/:id/personal-info", put(upsert_personal_info))
         .route("/surveys/:id/personal-info", get(get_personal_info))
+        // Spouse info
+        .route("/surveys/:id/spouse-info", delete(delete_spouse_info))
         // Income info
         .route("/surveys/:id/income-info", put(upsert_income_info))
         .route("/surveys/:id/income-info", get(get_income_info))
@@ -42,11 +46,18 @@ pub fn router() -> Router<AppState> {
         .route("/surveys/:id/expenses", get(get_expenses_list))
         .route("/surveys/:survey_id/expenses/:expense_id", put(update_expense))
         .route("/surveys/:survey_id/expenses/:expense_id", delete(delete_expense))
+        // Household expenses
+        .route("/surveys/:id/household-expenses", post(create_household_expense))
+        .route("/surveys/:id/household-expenses", get(get_household_expenses_list))
+        .route("/surveys/:survey_id/household-expenses/:expense_id", put(update_household_expense))
+        .route("/surveys/:survey_id/household-expenses/:expense_id", delete(delete_household_expense))
         // Assets
         .route("/surveys/:id/assets", post(create_asset))
         .route("/surveys/:id/assets", get(get_assets))
         .route("/surveys/:survey_id/assets/:asset_id", put(update_asset))
         .route("/surveys/:survey_id/assets/:asset_id", delete(delete_asset))
+        .route("/surveys/:survey_id/assets/:asset_id/refresh", post(refresh_asset))
+        .route("/surveys/:survey_id/assets/:asset_id/unlink", post(unlink_asset))
         // Liabilities
         .route("/surveys/:id/liabilities", post(create_liability))
         .route("/surveys/:id/liabilities", get(get_liabilities))
@@ -63,6 +74,7 @@ pub fn router() -> Router<AppState> {
         // Snapshot
         .route("/surveys/:id/snapshot", get(get_snapshot))
         .route("/surveys/:id/snapshot/regenerate", post(regenerate_snapshot))
+        .route("/surveys/:id/snapshot/household", get(get_household_snapshot))
 }
 
 // ==============================================================================
@@ -147,12 +159,32 @@ async fn get_survey(
         .map(ExpenseResponse::from)
         .collect();
 
-    let assets: Vec<AssetResponse> = financial_planning_queries::get_assets(pool, id)
+    let household_expenses: Vec<HouseholdExpenseResponse> = financial_planning_queries::get_household_expenses(pool, id)
         .await
         .unwrap_or_default()
         .into_iter()
-        .map(AssetResponse::from)
+        .map(HouseholdExpenseResponse::from)
         .collect();
+
+    let raw_assets = financial_planning_queries::get_assets(pool, id)
+        .await
+        .unwrap_or_default();
+
+    // Batch-fetch account nicknames for any linked assets
+    let linked_ids: Vec<uuid::Uuid> = raw_assets.iter()
+        .filter_map(|a| a.linked_account_id)
+        .collect();
+    let nickname_map = financial_planning_queries::get_account_nicknames(pool, &linked_ids)
+        .await
+        .unwrap_or_default();
+
+    let assets: Vec<AssetResponse> = raw_assets.into_iter().map(|a| {
+        let mut resp = AssetResponse::from(a);
+        if let Some(aid) = resp.linked_account_id {
+            resp.linked_account_nickname = nickname_map.get(&aid).cloned();
+        }
+        resp
+    }).collect();
 
     let liabilities: Vec<LiabilityResponse> = financial_planning_queries::get_liabilities(pool, id)
         .await
@@ -186,6 +218,7 @@ async fn get_survey(
         income_info,
         additional_income,
         expenses,
+        household_expenses,
         assets,
         liabilities,
         goals,
@@ -262,6 +295,25 @@ async fn get_personal_info(
         Some(i) => Ok(Json(serde_json::to_value(PersonalInfoResponse::from(i)).unwrap())),
         None => Ok(Json(serde_json::Value::Null)),
     }
+}
+
+// ==============================================================================
+// Spouse Info Handlers
+// ==============================================================================
+
+async fn delete_spouse_info(
+    State(state): State<AppState>,
+    Path(survey_id): Path<Uuid>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    info!("Removing spouse info for survey {}", survey_id);
+
+    financial_planning_queries::delete_spouse_info(pool, survey_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ==============================================================================
@@ -417,6 +469,65 @@ async fn delete_expense(
 }
 
 // ==============================================================================
+// Household Expense Handlers
+// ==============================================================================
+
+async fn create_household_expense(
+    State(state): State<AppState>,
+    Path(survey_id): Path<Uuid>,
+    Json(req): Json<CreateHouseholdExpenseRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let expense = financial_planning_queries::create_household_expense(pool, survey_id, &req)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok((StatusCode::CREATED, Json(HouseholdExpenseResponse::from(expense))))
+}
+
+async fn get_household_expenses_list(
+    State(state): State<AppState>,
+    Path(survey_id): Path<Uuid>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let expenses = financial_planning_queries::get_household_expenses(pool, survey_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let responses: Vec<HouseholdExpenseResponse> = expenses.into_iter().map(HouseholdExpenseResponse::from).collect();
+    Ok(Json(responses))
+}
+
+async fn update_household_expense(
+    State(state): State<AppState>,
+    Path((_survey_id, expense_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<UpdateHouseholdExpenseRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let expense = financial_planning_queries::update_household_expense(pool, expense_id, &req)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(HouseholdExpenseResponse::from(expense)))
+}
+
+async fn delete_household_expense(
+    State(state): State<AppState>,
+    Path((_survey_id, expense_id)): Path<(Uuid, Uuid)>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    financial_planning_queries::delete_household_expense(pool, expense_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ==============================================================================
 // Asset Handlers
 // ==============================================================================
 
@@ -473,6 +584,59 @@ async fn delete_asset(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn refresh_asset(
+    State(state): State<AppState>,
+    Path((_survey_id, asset_id)): Path<(Uuid, Uuid)>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let asset = financial_planning_queries::refresh_asset_value(pool, asset_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Fetch nickname for the response if linked
+    let mut resp = AssetResponse::from(asset);
+    if let Some(account_id) = resp.linked_account_id {
+        let nickname_map = financial_planning_queries::get_account_nicknames(pool, &[account_id])
+            .await
+            .unwrap_or_default();
+        resp.linked_account_nickname = nickname_map.get(&account_id).cloned();
+    }
+
+    Ok(Json(resp))
+}
+
+async fn unlink_asset(
+    State(state): State<AppState>,
+    Path((_survey_id, asset_id)): Path<(Uuid, Uuid)>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let asset = financial_planning_queries::unlink_asset_account(pool, asset_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(AssetResponse::from(asset)))
+}
+
+async fn get_linkable_accounts(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+    let user_id = get_default_user_id(pool).await?;
+
+    let accounts = financial_planning_queries::get_linkable_accounts(pool, user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let responses: Vec<LinkableAccountResponse> = accounts
+        .into_iter()
+        .map(LinkableAccountResponse::from)
+        .collect();
+
+    Ok(Json(responses))
 }
 
 // ==============================================================================
@@ -637,7 +801,6 @@ async fn get_snapshot(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
 
-    // Check if a snapshot already exists
     let snapshot = financial_planning_queries::get_latest_snapshot(pool, survey_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -645,7 +808,6 @@ async fn get_snapshot(
     match snapshot {
         Some(s) => Ok(Json(serde_json::to_value(SnapshotResponse::from(s)).unwrap())),
         None => {
-            // No snapshot exists, generate one automatically
             info!("No snapshot found for survey {}, generating new one", survey_id);
             let new_snapshot = financial_snapshot_service::generate_snapshot(pool, survey_id)
                 .await
@@ -668,4 +830,17 @@ async fn regenerate_snapshot(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     Ok((StatusCode::CREATED, Json(SnapshotResponse::from(snapshot))))
+}
+
+async fn get_household_snapshot(
+    State(state): State<AppState>,
+    Path(survey_id): Path<Uuid>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = &state.pool;
+
+    let household = financial_snapshot_service::generate_household_snapshot(pool, survey_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    Ok(Json(household))
 }

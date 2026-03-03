@@ -218,16 +218,26 @@ export function FinancialPlanningPage() {
                                             Completed {new Date(survey.completed_at).toLocaleDateString()}
                                         </Typography>
                                     )}
-                                    <Box display="flex" gap={1} mt={2}>
+                                    <Box display="flex" gap={1} mt={2} flexWrap="wrap">
                                         {survey.status === 'completed' ? (
-                                            <Button
-                                                size="small"
-                                                variant="outlined"
-                                                startIcon={<Visibility />}
-                                                onClick={() => handleViewSnapshot(survey.id)}
-                                            >
-                                                View Snapshot
-                                            </Button>
+                                            <>
+                                                <Button
+                                                    size="small"
+                                                    variant="outlined"
+                                                    startIcon={<Visibility />}
+                                                    onClick={() => handleViewSnapshot(survey.id)}
+                                                >
+                                                    View Snapshot
+                                                </Button>
+                                                <Button
+                                                    size="small"
+                                                    variant="outlined"
+                                                    startIcon={<Edit />}
+                                                    onClick={() => handleEditSurvey(survey.id)}
+                                                >
+                                                    Edit
+                                                </Button>
+                                            </>
                                         ) : (
                                             <Button
                                                 size="small"

@@ -27,6 +27,7 @@ pub struct SnapshotDetail {
     pub retirement: Option<RetirementProjection>,
     pub goal_progress: Vec<GoalProgress>,
     pub recommendations: Vec<String>,
+    pub household: Option<HouseholdCalculations>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,7 +75,44 @@ pub struct GoalProgress {
     pub progress_percentage: f64,
     pub months_remaining: Option<i64>,
     pub monthly_contribution_needed: Option<f64>,
+    /// Whether monthly_contribution_needed was calculated with compound growth.
+    /// true → uses ASSUMED_RETURN_RATE (retirement), false → linear (all other goals).
+    pub contribution_uses_growth: bool,
     pub status: String,
+}
+
+// ==============================================================================
+// Household calculation structs
+// ==============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HouseholdCalculations {
+    // Individual - Primary
+    pub primary_net_worth: f64,
+    pub primary_total_assets: f64,
+    pub primary_total_liabilities: f64,
+    pub primary_monthly_income: f64,
+    pub primary_monthly_expenses: f64,
+    pub primary_monthly_cash_flow: f64,
+    // Individual - Spouse
+    pub spouse_net_worth: f64,
+    pub spouse_total_assets: f64,
+    pub spouse_total_liabilities: f64,
+    pub spouse_monthly_income: f64,
+    pub spouse_monthly_expenses: f64,
+    pub spouse_monthly_cash_flow: f64,
+    // Combined Household
+    pub household_net_worth: f64,
+    pub household_total_assets: f64,
+    pub household_total_liabilities: f64,
+    pub household_monthly_income: f64,
+    pub household_monthly_expenses: f64,
+    pub household_monthly_cash_flow: f64,
+    pub household_annual_income: f64,
+    // Expense breakdown
+    pub shared_monthly_expenses: f64,
+    pub primary_individual_expenses: f64,
+    pub spouse_individual_expenses: f64,
 }
 
 // ==============================================================================
@@ -106,6 +144,10 @@ pub async fn generate_snapshot(
         .await
         .map_err(|e| format!("Failed to fetch expenses: {}", e))?;
 
+    let household_expenses = financial_planning_queries::get_household_expenses(pool, survey_id)
+        .await
+        .map_err(|e| format!("Failed to fetch household expenses: {}", e))?;
+
     let personal_info = financial_planning_queries::get_personal_info(pool, survey_id)
         .await
         .map_err(|e| format!("Failed to fetch personal info: {}", e))?;
@@ -114,17 +156,21 @@ pub async fn generate_snapshot(
         .await
         .map_err(|e| format!("Failed to fetch goals: {}", e))?;
 
-    // Calculate net worth
+    // Determine if household mode is active
+    let has_spouse = personal_info.as_ref().map(|p| p.has_spouse).unwrap_or(false);
+
+    // Calculate individual net worth (uses all assets/liabilities regardless of ownership for the primary person snapshot)
     let net_worth_breakdown = calculate_net_worth(&assets, &liabilities);
 
-    // Calculate cash flow
-    let cash_flow = estimate_monthly_cash_flow(&income_info, &additional_income, &expenses, &liabilities);
+    // Calculate primary individual cash flow
+    let cash_flow = estimate_monthly_cash_flow(&income_info, &additional_income, &expenses, &household_expenses, &liabilities);
 
     // Calculate retirement projection
     let retirement = project_retirement_income(
         &personal_info,
         &income_info,
         &assets,
+        &goals,
     );
 
     // Calculate goal progress
@@ -133,12 +179,26 @@ pub async fn generate_snapshot(
         .map(|g| calculate_goal_progress(g))
         .collect();
 
+    // Calculate household data if spouse is present
+    let household = if has_spouse {
+        Some(calculate_household(
+            &assets,
+            &liabilities,
+            &income_info,
+            &additional_income,
+            &household_expenses,
+        ))
+    } else {
+        None
+    };
+
     // Generate recommendations
     let recommendations = generate_recommendations(
         &net_worth_breakdown,
         &cash_flow,
         &retirement,
         &goal_progress,
+        household.as_ref(),
     );
 
     let detail = SnapshotDetail {
@@ -147,6 +207,7 @@ pub async fn generate_snapshot(
         retirement: retirement.clone(),
         goal_progress,
         recommendations,
+        household,
     };
 
     let snapshot_data = serde_json::to_value(&detail)
@@ -173,8 +234,207 @@ pub async fn generate_snapshot(
     .map_err(|e| format!("Failed to save snapshot: {}", e))
 }
 
+/// Generate and return just the household calculations (for the household endpoint).
+/// Always re-computes from current data without persisting.
+pub async fn generate_household_snapshot(
+    pool: &PgPool,
+    survey_id: Uuid,
+) -> Result<serde_json::Value, String> {
+    let personal_info = financial_planning_queries::get_personal_info(pool, survey_id)
+        .await
+        .map_err(|e| format!("Failed to fetch personal info: {}", e))?;
+
+    let has_spouse = personal_info.as_ref().map(|p| p.has_spouse).unwrap_or(false);
+
+    if !has_spouse {
+        return Ok(serde_json::json!({
+            "has_spouse": false,
+            "message": "No spouse configured for this survey"
+        }));
+    }
+
+    let assets = financial_planning_queries::get_assets(pool, survey_id)
+        .await
+        .map_err(|e| format!("Failed to fetch assets: {}", e))?;
+
+    let liabilities = financial_planning_queries::get_liabilities(pool, survey_id)
+        .await
+        .map_err(|e| format!("Failed to fetch liabilities: {}", e))?;
+
+    let income_info = financial_planning_queries::get_income_info(pool, survey_id)
+        .await
+        .map_err(|e| format!("Failed to fetch income info: {}", e))?;
+
+    let household_expenses = financial_planning_queries::get_household_expenses(pool, survey_id)
+        .await
+        .map_err(|e| format!("Failed to fetch household expenses: {}", e))?;
+
+    let additional_income = financial_planning_queries::get_additional_income(pool, survey_id)
+        .await
+        .map_err(|e| format!("Failed to fetch additional income: {}", e))?;
+
+    let household = calculate_household(&assets, &liabilities, &income_info, &additional_income, &household_expenses);
+
+    serde_json::to_value(&household)
+        .map_err(|e| format!("Failed to serialize household snapshot: {}", e))
+}
+
 // ==============================================================================
-// Calculation functions
+// Household calculation functions
+// ==============================================================================
+
+fn calculate_household(
+    assets: &[SurveyAsset],
+    liabilities: &[SurveyLiability],
+    income_info: &Option<SurveyIncomeInfo>,
+    additional_income: &[SurveyAdditionalIncome],
+    household_expenses: &[SurveyHouseholdExpense],
+) -> HouseholdCalculations {
+    // Attribute assets
+    let (primary_assets, spouse_assets) = attribute_assets(assets);
+    let (primary_liabilities, spouse_liabilities) = attribute_liabilities(liabilities);
+
+    // Compute net worths
+    let primary_net_worth = primary_assets - primary_liabilities;
+    let spouse_net_worth = spouse_assets - spouse_liabilities;
+    let household_net_worth = primary_net_worth + spouse_net_worth;
+
+    // Income attribution — employment income
+    let primary_employment = income_info.as_ref()
+        .and_then(|i| i.gross_annual_income.as_ref())
+        .and_then(|v| v.to_string().parse::<f64>().ok())
+        .map(|annual| annual / 12.0)
+        .unwrap_or(0.0);
+
+    let spouse_employment = income_info.as_ref()
+        .and_then(|i| i.spouse_gross_annual_income.as_ref())
+        .and_then(|v| v.to_string().parse::<f64>().ok())
+        .map(|annual| annual / 12.0)
+        .unwrap_or(0.0);
+
+    // Additional income attribution
+    let primary_additional: f64 = additional_income.iter()
+        .filter(|i| i.is_recurring.unwrap_or(true) && i.owner == "mine")
+        .filter_map(|i| i.monthly_amount.to_string().parse::<f64>().ok())
+        .sum();
+
+    let spouse_additional: f64 = additional_income.iter()
+        .filter(|i| i.is_recurring.unwrap_or(true) && i.owner == "spouse")
+        .filter_map(|i| i.monthly_amount.to_string().parse::<f64>().ok())
+        .sum();
+
+    let primary_monthly_income = primary_employment + primary_additional;
+    let spouse_monthly_income = spouse_employment + spouse_additional;
+
+    let household_monthly_income = primary_monthly_income + spouse_monthly_income;
+
+    // Expense attribution
+    let mut shared_expenses = 0.0_f64;
+    let mut primary_individual = 0.0_f64;
+    let mut spouse_individual = 0.0_f64;
+
+    for expense in household_expenses {
+        let amount = expense.monthly_amount.to_string().parse::<f64>().unwrap_or(0.0);
+        match expense.expense_type.as_str() {
+            "shared" => shared_expenses += amount,
+            "mine" => primary_individual += amount,
+            "spouse" => spouse_individual += amount,
+            _ => shared_expenses += amount,
+        }
+    }
+
+    let primary_share_of_shared = shared_expenses / 2.0;
+    let spouse_share_of_shared = shared_expenses / 2.0;
+
+    let primary_monthly_expenses = primary_individual + primary_share_of_shared;
+    let spouse_monthly_expenses = spouse_individual + spouse_share_of_shared;
+    let household_monthly_expenses = shared_expenses + primary_individual + spouse_individual;
+
+    let primary_monthly_cash_flow = primary_monthly_income - primary_monthly_expenses;
+    let spouse_monthly_cash_flow = spouse_monthly_income - spouse_monthly_expenses;
+    let household_monthly_cash_flow = household_monthly_income - household_monthly_expenses;
+
+    HouseholdCalculations {
+        primary_net_worth,
+        primary_total_assets: primary_assets,
+        primary_total_liabilities: primary_liabilities,
+        primary_monthly_income,
+        primary_monthly_expenses,
+        primary_monthly_cash_flow,
+        spouse_net_worth,
+        spouse_total_assets: spouse_assets,
+        spouse_total_liabilities: spouse_liabilities,
+        spouse_monthly_income,
+        spouse_monthly_expenses,
+        spouse_monthly_cash_flow,
+        household_net_worth,
+        household_total_assets: primary_assets + spouse_assets,
+        household_total_liabilities: primary_liabilities + spouse_liabilities,
+        household_monthly_income,
+        household_monthly_expenses,
+        household_monthly_cash_flow,
+        household_annual_income: household_monthly_income * 12.0,
+        shared_monthly_expenses: shared_expenses,
+        primary_individual_expenses: primary_individual,
+        spouse_individual_expenses: spouse_individual,
+    }
+}
+
+
+/// Returns (primary_total, spouse_total) attributed asset values.
+fn attribute_assets(assets: &[SurveyAsset]) -> (f64, f64) {
+    let mut primary = 0.0_f64;
+    let mut spouse = 0.0_f64;
+
+    for asset in assets {
+        let value = asset.current_value.to_string().parse::<f64>().unwrap_or(0.0);
+        match asset.ownership.as_str() {
+            "mine" => primary += value,
+            "spouse" => spouse += value,
+            "joint" => {
+                let split = asset.joint_split_percentage
+                    .as_ref()
+                    .and_then(|v| v.to_string().parse::<f64>().ok())
+                    .unwrap_or(50.0);
+                let primary_share = value * split / 100.0;
+                primary += primary_share;
+                spouse += value - primary_share;
+            }
+            _ => primary += value,
+        }
+    }
+
+    (primary, spouse)
+}
+
+/// Returns (primary_total, spouse_total) attributed liability values.
+fn attribute_liabilities(liabilities: &[SurveyLiability]) -> (f64, f64) {
+    let mut primary = 0.0_f64;
+    let mut spouse = 0.0_f64;
+
+    for liability in liabilities {
+        let value = liability.balance.to_string().parse::<f64>().unwrap_or(0.0);
+        match liability.ownership.as_str() {
+            "mine" => primary += value,
+            "spouse" => spouse += value,
+            "joint" => {
+                let split = liability.joint_split_percentage
+                    .as_ref()
+                    .and_then(|v| v.to_string().parse::<f64>().ok())
+                    .unwrap_or(50.0);
+                let primary_share = value * split / 100.0;
+                primary += primary_share;
+                spouse += value - primary_share;
+            }
+            _ => primary += value,
+        }
+    }
+
+    (primary, spouse)
+}
+
+// ==============================================================================
+// Individual calculation functions
 // ==============================================================================
 
 fn calculate_net_worth(
@@ -224,6 +484,7 @@ fn estimate_monthly_cash_flow(
     income_info: &Option<SurveyIncomeInfo>,
     additional_income: &[SurveyAdditionalIncome],
     expenses: &[SurveyExpense],
+    household_expenses: &[SurveyHouseholdExpense],
     liabilities: &[SurveyLiability],
 ) -> CashFlowProjection {
     let income = match income_info {
@@ -240,7 +501,6 @@ fn estimate_monthly_cash_flow(
     };
 
     // gross_annual_income is ALWAYS annual, so divide by 12
-    // pay_frequency just indicates how often they get paid, not the value's frequency
     let gross_annual = income.gross_annual_income
         .as_ref()
         .and_then(|v| v.to_string().parse::<f64>().ok())
@@ -248,10 +508,11 @@ fn estimate_monthly_cash_flow(
 
     let employment_income_monthly = gross_annual / 12.0;
 
-    // Add recurring additional income sources (dividends, rental, etc.)
+    // Add recurring additional income for the primary person only
     let additional_income_monthly: f64 = additional_income
         .iter()
         .filter(|i| i.is_recurring.unwrap_or(true))
+        .filter(|i| i.owner == "mine")
         .filter_map(|i| i.monthly_amount.to_string().parse::<f64>().ok())
         .sum();
 
@@ -282,17 +543,36 @@ fn estimate_monthly_cash_flow(
         })
         .sum();
 
-    // Calculate actual expenses from survey if available, otherwise use 70% estimate
-    let total_actual_expenses: f64 = expenses
-        .iter()
-        .filter(|e| e.is_recurring.unwrap_or(true))
-        .filter_map(|e| e.monthly_amount.to_string().parse::<f64>().ok())
-        .sum();
+    // Use survey_expenses if entered; if the user is in household mode they will have
+    // filled household_expenses instead, so derive the primary person's share from those.
+    // Fall back to a 70% gross estimate only if neither is available.
+    let total_actual_expenses: f64 = if !expenses.is_empty() {
+        expenses
+            .iter()
+            .filter(|e| e.is_recurring.unwrap_or(true))
+            .filter_map(|e| e.monthly_amount.to_string().parse::<f64>().ok())
+            .sum()
+    } else if !household_expenses.is_empty() {
+        // Primary person's share = their individual expenses + half of shared
+        household_expenses
+            .iter()
+            .map(|e| {
+                let amount = e.monthly_amount.to_string().parse::<f64>().unwrap_or(0.0);
+                match e.expense_type.as_str() {
+                    "mine" => amount,
+                    "shared" => amount / 2.0,
+                    _ => 0.0, // "spouse" expenses don't count for primary
+                }
+            })
+            .sum()
+    } else {
+        0.0
+    };
 
     let monthly_expenses = if total_actual_expenses > 0.0 {
         total_actual_expenses
     } else {
-        monthly_gross * EXPENSE_RATIO  // Fall back to 70% estimate if no expenses entered
+        monthly_gross * EXPENSE_RATIO // Fall back to 70% estimate if no expenses entered
     };
 
     let monthly_cash_flow = monthly_gross - monthly_expenses - monthly_debt_payments;
@@ -315,6 +595,7 @@ fn project_retirement_income(
     personal_info: &Option<SurveyPersonalInfo>,
     income_info: &Option<SurveyIncomeInfo>,
     assets: &[SurveyAsset],
+    goals: &[SurveyGoal],
 ) -> Option<RetirementProjection> {
     let income = income_info.as_ref()?;
     let personal = personal_info.as_ref()?;
@@ -347,17 +628,27 @@ fn project_retirement_income(
 
     let annual_contribution = gross_annual * (contribution_rate + employer_match);
 
-    // Sum retirement-type assets (including Canadian registered accounts)
-    let current_retirement_savings: f64 = assets
-        .iter()
-        .filter(|a| {
-            matches!(
-                a.asset_type.as_str(),
-                "retirement" | "rrsp" | "lira" | "rrif" | "tfsa"
-            )
-        })
-        .map(|a| a.current_value.to_string().parse::<f64>().unwrap_or(0.0))
-        .sum();
+    // Prefer the retirement goal's current_savings if explicitly set by the user,
+    // because that represents what the user considers their retirement savings.
+    // Fall back to summing retirement-type assets if no goal is set.
+    let retirement_goal_savings = goals.iter()
+        .find(|g| g.goal_type == "retirement")
+        .and_then(|g| g.current_savings.as_ref())
+        .and_then(|v| v.to_string().parse::<f64>().ok())
+        .filter(|&v| v > 0.0);
+
+    let current_retirement_savings: f64 = retirement_goal_savings.unwrap_or_else(|| {
+        assets
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.asset_type.as_str(),
+                    "retirement" | "rrsp" | "lira" | "rrif" | "tfsa"
+                )
+            })
+            .map(|a| a.current_value.to_string().parse::<f64>().unwrap_or(0.0))
+            .sum()
+    });
 
     // Future value of current savings: FV = PV * (1 + r)^n
     let fv_current = current_retirement_savings
@@ -411,10 +702,29 @@ fn calculate_goal_progress(goal: &SurveyGoal) -> GoalProgress {
     });
 
     let monthly_contribution_needed = months_remaining.and_then(|months| {
-        if months > 0 && target > current {
-            Some((target - current) / months as f64)
+        if months <= 0 || target <= current {
+            return None;
+        }
+        let n = months as f64;
+
+        if goal.goal_type == "retirement" {
+            // Use compound-growth PMT formula — same assumption as the retirement projection
+            // (6% annual = 0.5% monthly), so the two numbers stay consistent.
+            let r = ASSUMED_RETURN_RATE / 12.0;
+            // How much does current savings grow to by the target date?
+            let fv_current = current * (1.0 + r).powf(n);
+            let fv_still_needed = target - fv_current;
+            if fv_still_needed <= 0.0 {
+                // Existing savings + growth already reach the target — no contribution needed
+                Some(0.0)
+            } else {
+                // PMT = FV_needed × r / ((1 + r)^n − 1)
+                Some(fv_still_needed * r / ((1.0 + r).powf(n) - 1.0))
+            }
         } else {
-            None
+            // For non-retirement goals the money is typically in cash/savings —
+            // use a conservative linear estimate (no growth assumed).
+            Some((target - current) / n)
         }
     });
 
@@ -429,6 +739,7 @@ fn calculate_goal_progress(goal: &SurveyGoal) -> GoalProgress {
         progress_percentage,
         months_remaining,
         monthly_contribution_needed,
+        contribution_uses_growth: goal.goal_type == "retirement",
         status,
     }
 }
@@ -466,6 +777,7 @@ fn generate_recommendations(
     cash_flow: &CashFlowProjection,
     retirement: &Option<RetirementProjection>,
     goals: &[GoalProgress],
+    household: Option<&HouseholdCalculations>,
 ) -> Vec<String> {
     let mut recommendations = Vec::new();
 
@@ -523,6 +835,27 @@ fn generate_recommendations(
         recommendations.push(
             "Your liquid assets may not cover 3 months of expenses. Consider building an emergency fund.".to_string()
         );
+    }
+
+    // Household-specific recommendations
+    if let Some(hh) = household {
+        if hh.spouse_monthly_income > 0.0 && hh.household_monthly_cash_flow < 0.0 {
+            recommendations.push(
+                "Your combined household is spending more than it earns. Review shared and individual expenses to find savings opportunities.".to_string()
+            );
+        }
+
+        let housing_pct = if hh.household_monthly_income > 0.0 {
+            hh.shared_monthly_expenses / hh.household_monthly_income * 100.0
+        } else {
+            0.0
+        };
+        if housing_pct > 50.0 {
+            recommendations.push(format!(
+                "Shared household expenses represent {:.0}% of combined income. Consider ways to reduce joint costs.",
+                housing_pct
+            ));
+        }
     }
 
     if recommendations.is_empty() {

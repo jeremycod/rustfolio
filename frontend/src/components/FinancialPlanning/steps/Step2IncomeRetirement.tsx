@@ -25,8 +25,10 @@ import {
     DialogActions,
     Chip,
     Divider,
+    ToggleButtonGroup,
+    ToggleButton,
 } from '@mui/material';
-import { Add, Edit, Delete } from '@mui/icons-material';
+import { Add, Edit, Delete, Person } from '@mui/icons-material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     createAdditionalIncome,
@@ -40,6 +42,7 @@ import type {
     PayFrequency,
     SurveyAdditionalIncome,
     AdditionalIncomeType,
+    IncomeOwner,
     CreateAdditionalIncomeRequest,
     UpdateAdditionalIncomeRequest,
 } from '../../../types';
@@ -90,9 +93,11 @@ interface Step2IncomeRetirementProps {
     data: SurveyIncomeInfo | null;
     onSave: (data: UpdateIncomeInfoRequest) => void;
     isSaving: boolean;
+    hasSpouse?: boolean;
+    spouseName?: string | null;
 }
 
-export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving }: Step2IncomeRetirementProps) {
+export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving, hasSpouse = false, spouseName }: Step2IncomeRetirementProps) {
     const [grossIncome, setGrossIncome] = useState<string>(data?.gross_annual_income?.toString() || '');
     const [payFrequency, setPayFrequency] = useState<PayFrequency | ''>(data?.pay_frequency || '');
     const [retirementRate, setRetirementRate] = useState<number>(data?.retirement_contribution_rate || 0);
@@ -101,6 +106,11 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving }: Step
     const [desiredRetirementIncome, setDesiredRetirementIncome] = useState<string>(data?.desired_annual_retirement_income?.toString() || '');
     const [retirementIncomeNotes, setRetirementIncomeNotes] = useState(data?.retirement_income_needs_notes || '');
     const [notes, setNotes] = useState(data?.notes || '');
+    // Spouse income fields
+    const [spouseGrossIncome, setSpouseGrossIncome] = useState<string>(data?.spouse_gross_annual_income?.toString() || '');
+    const [spousePayFrequency, setSpousePayFrequency] = useState<PayFrequency | ''>(data?.spouse_pay_frequency || '');
+    const [spouseRetirementRate, setSpouseRetirementRate] = useState<number>(data?.spouse_retirement_contribution_rate || 0);
+    const [spouseEmployerMatch, setSpouseEmployerMatch] = useState<string>(data?.spouse_employer_match_rate?.toString() || '');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingIncome, setEditingIncome] = useState<SurveyAdditionalIncome | null>(null);
 
@@ -151,6 +161,10 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving }: Step
             setDesiredRetirementIncome(data.desired_annual_retirement_income?.toString() || '');
             setRetirementIncomeNotes(data.retirement_income_needs_notes || '');
             setNotes(data.notes || '');
+            setSpouseGrossIncome(data.spouse_gross_annual_income?.toString() || '');
+            setSpousePayFrequency(data.spouse_pay_frequency || '');
+            setSpouseRetirementRate(data.spouse_retirement_contribution_rate || 0);
+            setSpouseEmployerMatch(data.spouse_employer_match_rate?.toString() || '');
         }
     }, [data]);
 
@@ -164,8 +178,13 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving }: Step
         if (desiredRetirementIncome) req.desired_annual_retirement_income = parseFloat(desiredRetirementIncome);
         if (retirementIncomeNotes) req.retirement_income_needs_notes = retirementIncomeNotes;
         if (notes) req.notes = notes;
+        // Spouse income
+        if (hasSpouse && spouseGrossIncome) req.spouse_gross_annual_income = parseFloat(spouseGrossIncome);
+        if (hasSpouse && spousePayFrequency) req.spouse_pay_frequency = spousePayFrequency;
+        if (hasSpouse) req.spouse_retirement_contribution_rate = spouseRetirementRate;
+        if (hasSpouse && spouseEmployerMatch) req.spouse_employer_match_rate = parseFloat(spouseEmployerMatch);
         onSave(req);
-    }, [grossIncome, payFrequency, retirementRate, employerMatch, retirementAge, desiredRetirementIncome, retirementIncomeNotes, notes, onSave]);
+    }, [grossIncome, payFrequency, retirementRate, employerMatch, retirementAge, desiredRetirementIncome, retirementIncomeNotes, notes, hasSpouse, spouseGrossIncome, spousePayFrequency, spouseRetirementRate, spouseEmployerMatch, onSave]);
 
     useEffect(() => {
         const timer = setTimeout(saveData, 1000);
@@ -250,6 +269,82 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving }: Step
                 </Grid>
             </Grid>
 
+            {hasSpouse && (
+                <>
+                    <Divider sx={{ my: 3 }} />
+                    <Box display="flex" alignItems="center" gap={1} mb={2}>
+                        <Person color="secondary" />
+                        <Typography variant="subtitle1" fontWeight="bold">
+                            {spouseName ?? 'Spouse'} Income
+                        </Typography>
+                    </Box>
+                    <Grid container spacing={3} mb={2}>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                fullWidth
+                                label="Gross Annual Income"
+                                type="number"
+                                value={spouseGrossIncome}
+                                onChange={(e) => setSpouseGrossIncome(e.target.value)}
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                                }}
+                                helperText="Spouse total annual income before taxes"
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth>
+                                <InputLabel>Pay Frequency</InputLabel>
+                                <Select
+                                    value={spousePayFrequency}
+                                    label="Pay Frequency"
+                                    onChange={(e) => setSpousePayFrequency(e.target.value as PayFrequency)}
+                                >
+                                    {PAY_FREQUENCY_OPTIONS.map((opt) => (
+                                        <MenuItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        </Grid>
+                        <Grid item xs={12}>
+                            <Typography variant="subtitle2" gutterBottom>
+                                Retirement Contribution Rate: {spouseRetirementRate}%
+                            </Typography>
+                            <Slider
+                                value={spouseRetirementRate}
+                                onChange={(_, v) => setSpouseRetirementRate(v as number)}
+                                min={0}
+                                max={50}
+                                step={0.5}
+                                marks={[
+                                    { value: 0, label: '0%' },
+                                    { value: 10, label: '10%' },
+                                    { value: 20, label: '20%' },
+                                    { value: 50, label: '50%' },
+                                ]}
+                                valueLabelDisplay="auto"
+                                valueLabelFormat={(v) => `${v}%`}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                fullWidth
+                                label="Employer Match Rate"
+                                type="number"
+                                value={spouseEmployerMatch}
+                                onChange={(e) => setSpouseEmployerMatch(e.target.value)}
+                                InputProps={{
+                                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                                }}
+                                inputProps={{ min: 0, max: 100, step: 0.5 }}
+                            />
+                        </Grid>
+                    </Grid>
+                </>
+            )}
+
             <Divider sx={{ my: 3 }} />
 
             {/* Additional Income Section */}
@@ -274,6 +369,7 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving }: Step
                             <TableRow>
                                 <TableCell>Type</TableCell>
                                 <TableCell>Description</TableCell>
+                                {hasSpouse && <TableCell>Who</TableCell>}
                                 <TableCell align="right">Monthly Amount</TableCell>
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>
@@ -293,6 +389,17 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving }: Step
                                         />
                                     </TableCell>
                                     <TableCell>{income.description || '-'}</TableCell>
+                                    {hasSpouse && (
+                                        <TableCell>
+                                            <Chip
+                                                label={income.owner === 'spouse' ? (spouseName ?? 'Spouse') : 'Mine'}
+                                                size="small"
+                                                color={income.owner === 'spouse' ? 'secondary' : 'success'}
+                                                icon={<Person />}
+                                                variant="outlined"
+                                            />
+                                        </TableCell>
+                                    )}
                                     <TableCell align="right">
                                         {formatCurrency(income.monthly_amount)}
                                         {!income.is_recurring && (
@@ -317,7 +424,7 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving }: Step
                                 </TableRow>
                             ))}
                             <TableRow>
-                                <TableCell colSpan={2}>
+                                <TableCell colSpan={hasSpouse ? 3 : 2}>
                                     <Typography variant="subtitle2" fontWeight="bold">
                                         Total Monthly Additional Income
                                     </Typography>
@@ -456,6 +563,8 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving }: Step
                 }}
                 onSubmit={handleSubmitIncome}
                 editIncome={editingIncome}
+                hasSpouse={hasSpouse}
+                spouseName={spouseName}
                 isSaving={createMutation.isPending || updateMutation.isPending}
             />
         </Box>
@@ -467,12 +576,16 @@ function AdditionalIncomeFormDialog({
     onClose,
     onSubmit,
     editIncome,
+    hasSpouse,
+    spouseName,
     isSaving,
 }: {
     open: boolean;
     onClose: () => void;
     onSubmit: (data: CreateAdditionalIncomeRequest) => void;
     editIncome: SurveyAdditionalIncome | null;
+    hasSpouse: boolean;
+    spouseName?: string | null;
     isSaving: boolean;
 }) {
     const [incomeType, setIncomeType] = useState<AdditionalIncomeType>(editIncome?.income_type || 'dividends');
@@ -480,6 +593,7 @@ function AdditionalIncomeFormDialog({
     const [monthlyAmount, setMonthlyAmount] = useState(editIncome?.monthly_amount?.toString() || '');
     const [isRecurring, setIsRecurring] = useState(editIncome?.is_recurring ?? true);
     const [notes, setNotes] = useState(editIncome?.notes || '');
+    const [owner, setOwner] = useState<IncomeOwner>(editIncome?.owner ?? 'mine');
 
     useEffect(() => {
         if (open) {
@@ -488,6 +602,7 @@ function AdditionalIncomeFormDialog({
             setMonthlyAmount(editIncome?.monthly_amount?.toString() || '');
             setIsRecurring(editIncome?.is_recurring ?? true);
             setNotes(editIncome?.notes || '');
+            setOwner(editIncome?.owner ?? 'mine');
         }
     }, [open, editIncome]);
 
@@ -498,6 +613,7 @@ function AdditionalIncomeFormDialog({
             monthly_amount: parseFloat(monthlyAmount) || 0,
             is_recurring: isRecurring,
             notes: notes || undefined,
+            owner,
         });
     };
 
@@ -539,6 +655,27 @@ function AdditionalIncomeFormDialog({
                         required
                         helperText="Enter as monthly amount"
                     />
+                    {hasSpouse && (
+                        <Box>
+                            <Typography variant="body2" color="text.secondary" gutterBottom>
+                                Whose income is this?
+                            </Typography>
+                            <ToggleButtonGroup
+                                value={owner}
+                                exclusive
+                                onChange={(_, val) => val && setOwner(val)}
+                                fullWidth
+                                size="small"
+                            >
+                                <ToggleButton value="mine" color="success">
+                                    <Person sx={{ mr: 0.5 }} fontSize="small" /> Mine
+                                </ToggleButton>
+                                <ToggleButton value="spouse" color="secondary">
+                                    <Person sx={{ mr: 0.5 }} fontSize="small" /> {spouseName ?? 'Spouse'}
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        </Box>
+                    )}
                     <FormControl fullWidth>
                         <InputLabel>Frequency</InputLabel>
                         <Select

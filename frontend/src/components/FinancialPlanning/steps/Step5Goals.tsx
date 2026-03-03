@@ -3,12 +3,6 @@ import {
     Box,
     Typography,
     Button,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
     Paper,
     IconButton,
     Dialog,
@@ -23,15 +17,17 @@ import {
     InputAdornment,
     Chip,
     LinearProgress,
+    ToggleButtonGroup,
+    ToggleButton,
 } from '@mui/material';
-import { Add, Edit, Delete } from '@mui/icons-material';
+import { Add, Edit, Delete, Person, People } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     createSurveyGoal,
     updateSurveyGoal,
     deleteSurveyGoal,
 } from '../../../lib/endpoints';
-import type { SurveyGoal, GoalType, GoalPriority, CreateGoalRequest, UpdateGoalRequest } from '../../../types';
+import type { SurveyGoal, GoalType, GoalPriority, GoalOwner, CreateGoalRequest, UpdateGoalRequest } from '../../../types';
 
 const GOAL_TYPE_OPTIONS: { value: GoalType; label: string }[] = [
     { value: 'retirement', label: 'Retirement' },
@@ -54,6 +50,12 @@ const PRIORITY_COLORS: Record<string, 'error' | 'warning' | 'info'> = {
     low: 'info',
 };
 
+const OWNER_COLORS: Record<GoalOwner, 'success' | 'secondary' | 'warning'> = {
+    mine: 'success',
+    spouse: 'secondary',
+    joint: 'warning',
+};
+
 function formatCurrency(value: number): string {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -65,9 +67,11 @@ function formatCurrency(value: number): string {
 interface Step5GoalsProps {
     surveyId: string;
     goals: SurveyGoal[];
+    hasSpouse?: boolean;
+    spouseName?: string | null;
 }
 
-export function Step5Goals({ surveyId, goals }: Step5GoalsProps) {
+export function Step5Goals({ surveyId, goals, hasSpouse = false, spouseName }: Step5GoalsProps) {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingGoal, setEditingGoal] = useState<SurveyGoal | null>(null);
     const queryClient = useQueryClient();
@@ -107,10 +111,6 @@ export function Step5Goals({ surveyId, goals }: Step5GoalsProps) {
         setDialogOpen(true);
     };
 
-    const handleDelete = (goalId: string) => {
-        deleteMutation.mutate(goalId);
-    };
-
     const handleSubmit = (data: CreateGoalRequest) => {
         if (editingGoal) {
             updateMutation.mutate({ goalId: editingGoal.id, data });
@@ -119,13 +119,20 @@ export function Step5Goals({ surveyId, goals }: Step5GoalsProps) {
         }
     };
 
+    const ownerLabel = (owner: GoalOwner) => {
+        if (owner === 'spouse') return spouseName ?? 'Spouse';
+        if (owner === 'joint') return 'Joint';
+        return 'Mine';
+    };
+
     return (
         <Box>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                 <Box>
                     <Typography variant="h6">Financial Goals</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Define your financial goals and track progress toward them.
+                        Define your financial goals and track progress.
+                        {hasSpouse && ' Tag each goal as yours, your partner\'s, or a shared household goal.'}
                     </Typography>
                 </Box>
                 <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
@@ -145,7 +152,7 @@ export function Step5Goals({ surveyId, goals }: Step5GoalsProps) {
                         return (
                             <Paper key={goal.id} variant="outlined" sx={{ p: 2 }}>
                                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
-                                    <Box display="flex" alignItems="center" gap={1}>
+                                    <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
                                         <Typography variant="subtitle1" fontWeight="bold">
                                             {goal.description || GOAL_TYPE_OPTIONS.find(t => t.value === goal.goal_type)?.label || goal.goal_type}
                                         </Typography>
@@ -157,6 +164,15 @@ export function Step5Goals({ surveyId, goals }: Step5GoalsProps) {
                                                 variant="outlined"
                                             />
                                         )}
+                                        {hasSpouse && (
+                                            <Chip
+                                                label={ownerLabel(goal.owner)}
+                                                size="small"
+                                                color={OWNER_COLORS[goal.owner] ?? 'default'}
+                                                icon={goal.owner === 'joint' ? <People /> : <Person />}
+                                                variant="outlined"
+                                            />
+                                        )}
                                     </Box>
                                     <Box>
                                         <IconButton size="small" onClick={() => handleEdit(goal)}>
@@ -165,7 +181,7 @@ export function Step5Goals({ surveyId, goals }: Step5GoalsProps) {
                                         <IconButton
                                             size="small"
                                             color="error"
-                                            onClick={() => handleDelete(goal.id)}
+                                            onClick={() => deleteMutation.mutate(goal.id)}
                                             disabled={deleteMutation.isPending}
                                         >
                                             <Delete fontSize="small" />
@@ -208,6 +224,8 @@ export function Step5Goals({ surveyId, goals }: Step5GoalsProps) {
                 onClose={() => { setDialogOpen(false); setEditingGoal(null); }}
                 onSubmit={handleSubmit}
                 editGoal={editingGoal}
+                hasSpouse={hasSpouse}
+                spouseName={spouseName}
                 isSaving={createMutation.isPending || updateMutation.isPending}
             />
         </Box>
@@ -219,12 +237,16 @@ function GoalFormDialog({
     onClose,
     onSubmit,
     editGoal,
+    hasSpouse,
+    spouseName,
     isSaving,
 }: {
     open: boolean;
     onClose: () => void;
     onSubmit: (data: CreateGoalRequest) => void;
     editGoal: SurveyGoal | null;
+    hasSpouse: boolean;
+    spouseName?: string | null;
     isSaving: boolean;
 }) {
     const [goalType, setGoalType] = useState<GoalType>(editGoal?.goal_type || 'retirement');
@@ -234,8 +256,8 @@ function GoalFormDialog({
     const [targetDate, setTargetDate] = useState(editGoal?.target_date || '');
     const [priority, setPriority] = useState<GoalPriority>(editGoal?.priority || 'medium');
     const [notes, setNotes] = useState(editGoal?.notes || '');
+    const [owner, setOwner] = useState<GoalOwner>(editGoal?.owner ?? 'mine');
 
-    // Update form fields when dialog opens with edit data
     useEffect(() => {
         if (open) {
             setGoalType(editGoal?.goal_type || 'retirement');
@@ -245,6 +267,7 @@ function GoalFormDialog({
             setTargetDate(editGoal?.target_date || '');
             setPriority(editGoal?.priority || 'medium');
             setNotes(editGoal?.notes || '');
+            setOwner(editGoal?.owner ?? 'mine');
         }
     }, [open, editGoal]);
 
@@ -257,6 +280,7 @@ function GoalFormDialog({
             target_date: targetDate || undefined,
             priority,
             notes: notes || undefined,
+            owner,
         });
     };
 
@@ -303,6 +327,7 @@ function GoalFormDialog({
                         InputProps={{
                             startAdornment: <InputAdornment position="start">$</InputAdornment>,
                         }}
+                        helperText={goalType === 'retirement' ? 'Used as your current retirement savings in the retirement projection' : undefined}
                     />
                     <TextField
                         fullWidth
@@ -324,6 +349,30 @@ function GoalFormDialog({
                             ))}
                         </Select>
                     </FormControl>
+                    {hasSpouse && (
+                        <Box>
+                            <Typography variant="body2" color="text.secondary" gutterBottom>
+                                Who is this goal for?
+                            </Typography>
+                            <ToggleButtonGroup
+                                value={owner}
+                                exclusive
+                                onChange={(_, val) => val && setOwner(val)}
+                                fullWidth
+                                size="small"
+                            >
+                                <ToggleButton value="mine" color="success">
+                                    <Person sx={{ mr: 0.5 }} fontSize="small" /> Mine
+                                </ToggleButton>
+                                <ToggleButton value="spouse" color="secondary">
+                                    <Person sx={{ mr: 0.5 }} fontSize="small" /> {spouseName ?? 'Spouse'}
+                                </ToggleButton>
+                                <ToggleButton value="joint" color="warning">
+                                    <People sx={{ mr: 0.5 }} fontSize="small" /> Joint
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        </Box>
+                    )}
                     <TextField
                         fullWidth
                         label="Notes"
