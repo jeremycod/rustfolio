@@ -136,6 +136,15 @@ pub struct SurveyIncomeInfo {
     pub spouse_pay_frequency: Option<String>,
     pub spouse_retirement_contribution_rate: Option<BigDecimal>,
     pub spouse_employer_match_rate: Option<BigDecimal>,
+    // Tax rates (effective, not marginal)
+    pub effective_tax_rate: Option<BigDecimal>,
+    pub spouse_effective_tax_rate: Option<BigDecimal>,
+    // Separate rate for dividends/interest (taxed preferentially in Canada etc.)
+    pub investment_income_tax_rate: Option<BigDecimal>,
+    pub spouse_investment_income_tax_rate: Option<BigDecimal>,
+    // Payroll deductions beyond income tax (CPP, EI, benefit premiums etc.) — monthly amounts
+    pub monthly_deductions: Option<BigDecimal>,
+    pub spouse_monthly_deductions: Option<BigDecimal>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -156,6 +165,13 @@ pub struct UpsertIncomeInfoRequest {
     pub spouse_pay_frequency: Option<String>,
     pub spouse_retirement_contribution_rate: Option<f64>,
     pub spouse_employer_match_rate: Option<f64>,
+    // Tax rates
+    pub effective_tax_rate: Option<f64>,
+    pub spouse_effective_tax_rate: Option<f64>,
+    pub investment_income_tax_rate: Option<f64>,
+    pub spouse_investment_income_tax_rate: Option<f64>,
+    pub monthly_deductions: Option<f64>,
+    pub spouse_monthly_deductions: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,6 +191,13 @@ pub struct IncomeInfoResponse {
     pub spouse_pay_frequency: Option<String>,
     pub spouse_retirement_contribution_rate: Option<f64>,
     pub spouse_employer_match_rate: Option<f64>,
+    // Tax rates
+    pub effective_tax_rate: Option<f64>,
+    pub spouse_effective_tax_rate: Option<f64>,
+    pub investment_income_tax_rate: Option<f64>,
+    pub spouse_investment_income_tax_rate: Option<f64>,
+    pub monthly_deductions: Option<f64>,
+    pub spouse_monthly_deductions: Option<f64>,
 }
 
 impl From<SurveyIncomeInfo> for IncomeInfoResponse {
@@ -194,6 +217,12 @@ impl From<SurveyIncomeInfo> for IncomeInfoResponse {
             spouse_pay_frequency: i.spouse_pay_frequency,
             spouse_retirement_contribution_rate: i.spouse_retirement_contribution_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
             spouse_employer_match_rate: i.spouse_employer_match_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
+            effective_tax_rate: i.effective_tax_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
+            spouse_effective_tax_rate: i.spouse_effective_tax_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
+            investment_income_tax_rate: i.investment_income_tax_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
+            spouse_investment_income_tax_rate: i.spouse_investment_income_tax_rate.as_ref().and_then(|v| v.to_string().parse().ok()),
+            monthly_deductions: i.monthly_deductions.as_ref().and_then(|v| v.to_string().parse().ok()),
+            spouse_monthly_deductions: i.spouse_monthly_deductions.as_ref().and_then(|v| v.to_string().parse().ok()),
         }
     }
 }

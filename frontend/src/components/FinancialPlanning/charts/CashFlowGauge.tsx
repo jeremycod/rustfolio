@@ -1,4 +1,6 @@
-import { Box, Typography, Paper, Grid } from '@mui/material';
+import { useState } from 'react';
+import { Box, Typography, Paper, Grid, Collapse, IconButton } from '@mui/material';
+import { ExpandMore, ExpandLess } from '@mui/icons-material';
 import {
     RadialBarChart,
     RadialBar,
@@ -19,8 +21,14 @@ interface CashFlowGaugeProps {
     savingsRate: number;
     grossAnnualIncome: number | null;
     monthlyGrossIncome?: number;
+    monthlyTaxes?: number;
+    monthlyPayrollDeductions?: number;
+    monthlyNetIncome?: number;
     estimatedMonthlyExpenses?: number;
+    expensesByCategory?: Array<{ category: string; amount: number }>;
     usingActualExpenses?: boolean;
+    housingExcludedFromExpenses?: boolean;
+    isHousehold?: boolean;
 }
 
 export function CashFlowGauge({
@@ -28,9 +36,16 @@ export function CashFlowGauge({
     savingsRate,
     grossAnnualIncome,
     monthlyGrossIncome,
+    monthlyTaxes = 0,
+    monthlyPayrollDeductions = 0,
+    monthlyNetIncome,
     estimatedMonthlyExpenses,
+    expensesByCategory = [],
     usingActualExpenses = false,
+    housingExcludedFromExpenses = false,
+    isHousehold = false,
 }: CashFlowGaugeProps) {
+    const [showExpenseBreakdown, setShowExpenseBreakdown] = useState(false);
     // Clamp savings rate between 0 and 100 for gauge display
     const displayRate = Math.max(0, Math.min(100, savingsRate));
 
@@ -42,13 +57,17 @@ export function CashFlowGauge({
 
     const data = [{ name: 'Savings Rate', value: displayRate, fill: gaugeColor }];
 
-    // Use provided values or calculate from annual income
-    const displayMonthlyIncome = monthlyGrossIncome ?? (grossAnnualIncome ? grossAnnualIncome / 12 : null);
-    const displayMonthlyExpenses = estimatedMonthlyExpenses ?? (displayMonthlyIncome ? displayMonthlyIncome - monthlyCashFlow : null);
 
-    // Calculate debt payments from the difference
-    const debtPayments = displayMonthlyIncome && displayMonthlyExpenses
-        ? displayMonthlyIncome - displayMonthlyExpenses - monthlyCashFlow
+    const displayMonthlyGross = monthlyGrossIncome ?? (grossAnnualIncome ? grossAnnualIncome / 12 : null);
+    const hasTax = monthlyTaxes > 0;
+    const hasDeductions = monthlyPayrollDeductions > 0;
+    // Net income after tax and payroll deductions
+    const displayMonthlyNet = monthlyNetIncome ?? (displayMonthlyGross != null ? displayMonthlyGross - monthlyTaxes - monthlyPayrollDeductions : null);
+    const displayMonthlyExpenses = estimatedMonthlyExpenses ?? (displayMonthlyNet != null ? displayMonthlyNet - monthlyCashFlow : null);
+
+    // Debt payments = net - expenses - cash flow
+    const debtPayments = displayMonthlyNet != null && displayMonthlyExpenses != null
+        ? Math.max(0, displayMonthlyNet - displayMonthlyExpenses - monthlyCashFlow)
         : 0;
 
     return (
@@ -100,19 +119,81 @@ export function CashFlowGauge({
                         <Typography variant="subtitle2" color="text.secondary" mb={1}>
                             Monthly Breakdown:
                         </Typography>
-                        {displayMonthlyIncome != null && (
+                        {displayMonthlyGross != null && (
                             <StatRow
-                                label="Gross Income"
-                                value={formatCurrency(displayMonthlyIncome)}
+                                label={isHousehold ? 'Household Gross Income' : 'Gross Income'}
+                                value={formatCurrency(displayMonthlyGross)}
+                                color="primary.main"
+                            />
+                        )}
+                        {hasTax && (
+                            <StatRow
+                                label="− Income Tax"
+                                value={formatCurrency(monthlyTaxes)}
+                                color="warning.main"
+                            />
+                        )}
+                        {hasDeductions && (
+                            <StatRow
+                                label="− Payroll Deductions (CPP, EI…)"
+                                value={formatCurrency(monthlyPayrollDeductions)}
+                                color="warning.main"
+                            />
+                        )}
+                        {(hasTax || hasDeductions) && displayMonthlyNet != null && (
+                            <StatRow
+                                label="= Net Income"
+                                value={formatCurrency(displayMonthlyNet)}
                                 color="primary.main"
                             />
                         )}
                         {displayMonthlyExpenses != null && (
-                            <StatRow
-                                label={usingActualExpenses ? "− Living Expenses (actual)" : "− Living Expenses (est. 70%)"}
-                                value={formatCurrency(displayMonthlyExpenses)}
-                                color="text.secondary"
-                            />
+                            <>
+                                <Box
+                                    display="flex"
+                                    justifyContent="space-between"
+                                    alignItems="center"
+                                    py={0.75}
+                                    borderBottom="1px solid"
+                                    borderColor="divider"
+                                    sx={{ cursor: expensesByCategory.length > 0 ? 'pointer' : 'default' }}
+                                    onClick={() => expensesByCategory.length > 0 && setShowExpenseBreakdown(v => !v)}
+                                >
+                                    <Box display="flex" alignItems="center" gap={0.5}>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {usingActualExpenses
+                                                ? housingExcludedFromExpenses
+                                                    ? '− Living Expenses (actual, excl. mortgage)'
+                                                    : '− Living Expenses (actual)'
+                                                : '− Living Expenses (est. 70%)'}
+                                        </Typography>
+                                        {expensesByCategory.length > 0 && (
+                                            <IconButton size="small" sx={{ p: 0 }}>
+                                                {showExpenseBreakdown ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                                            </IconButton>
+                                        )}
+                                    </Box>
+                                    <Typography variant="body2" fontWeight="bold" color="text.secondary">
+                                        {formatCurrency(displayMonthlyExpenses)}
+                                    </Typography>
+                                </Box>
+                                {expensesByCategory.length > 0 && (
+                                    <Collapse in={showExpenseBreakdown}>
+                                        <Box pl={2} py={0.5} bgcolor="action.hover" borderRadius={1} mt={0.5} mb={0.5}>
+                                            {expensesByCategory.map(({ category, amount }) => (
+                                                <Box key={category} display="flex" justifyContent="space-between" py={0.25}>
+                                                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                                                        {category.replace(/_/g, ' ')}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {formatCurrency(amount)}
+                                                    </Typography>
+                                                </Box>
+                                            ))}
+                                        </Box>
+                                    </Collapse>
+                                )}
+                            </>
                         )}
                         {debtPayments > 0 && (
                             <StatRow
@@ -142,16 +223,21 @@ export function CashFlowGauge({
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block">
                     {usingActualExpenses
-                        ? 'Monthly Income − Actual Living Expenses − Debt Payments = Available Cash Flow'
-                        : 'Monthly Income − Living Expenses (estimated at 70% of income) − Debt Payments = Available Cash Flow'
+                        ? 'Net Income − Living Expenses (from survey) − Debt Payments = Available Cash Flow'
+                        : 'Net Income − Living Expenses (estimated at 70% of income) − Debt Payments = Available Cash Flow'
                     }
                 </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-                    <strong>Tip:</strong> {usingActualExpenses
-                        ? 'You are using actual expense data for accurate cash flow calculations.'
-                        : 'Add your actual expenses in the survey for more accurate cash flow calculations.'
-                    }
-                </Typography>
+                {housingExcludedFromExpenses && (
+                    <Typography variant="caption" color="warning.main" display="block" mt={0.5}>
+                        ⚠ Your mortgage payment appears in both Liabilities and the Housing expense category.
+                        Housing has been excluded from Living Expenses to avoid double-counting — your mortgage is counted under Debt Payments only.
+                    </Typography>
+                )}
+                {!usingActualExpenses && (
+                    <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                        <strong>Tip:</strong> Add your actual expenses in the survey Expenses step for an accurate breakdown.
+                    </Typography>
+                )}
             </Box>
         </Paper>
     );

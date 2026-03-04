@@ -58,6 +58,7 @@ interface RetirementProjectionProps {
     projection: RetirementProjectionType;
     currentAge: number | null;
     goalBasedMonthlySavings?: number; // auto-computed from goal monthly needed
+    monthlyCashFlowSurplus?: number;  // available cash flow — what if it's all invested?
     desiredAnnualRetirementIncome?: number | null;
     retirementGoalTarget?: number | null;
 }
@@ -66,6 +67,7 @@ export function RetirementProjectionChart({
     projection,
     currentAge,
     goalBasedMonthlySavings = 0,
+    monthlyCashFlowSurplus,
     desiredAnnualRetirementIncome = null,
     retirementGoalTarget = null,
 }: RetirementProjectionProps) {
@@ -77,14 +79,16 @@ export function RetirementProjectionChart({
     const retirementAge = currentAge ? currentAge + years : null;
 
     const showGoalLine = goalBasedMonthlySavings > 0;
+    const showSavingsLine = monthlyCashFlowSurplus != null && monthlyCashFlowSurplus > 0;
 
-    // Build chart data — base line + optional goal-based line + user-defined scenarios
+    // Build chart data — base line + optional goal/savings lines + user-defined scenarios
     const chartData = useMemo(() => {
         if (!currentAge) return [];
 
         const data = [];
         let base = projection.current_retirement_savings;
         let goal = projection.current_retirement_savings;
+        let savings = projection.current_retirement_savings;
         const scenarioBalances = scenarios.map(() => projection.current_retirement_savings);
 
         for (let year = 0; year <= years; year++) {
@@ -96,6 +100,9 @@ export function RetirementProjectionChart({
             if (showGoalLine) {
                 point.goal_based = Math.round(goal);
             }
+            if (showSavingsLine) {
+                point.savings_potential = Math.round(savings);
+            }
             scenarios.forEach((s, i) => {
                 point[`scenario_${i}`] = Math.round(scenarioBalances[i]);
             });
@@ -103,17 +110,19 @@ export function RetirementProjectionChart({
 
             base = base * (1 + rate) + annualContribution;
             goal = goal * (1 + rate) + annualContribution + goalBasedMonthlySavings * 12;
+            savings = savings * (1 + rate) + annualContribution + (monthlyCashFlowSurplus ?? 0) * 12;
             scenarios.forEach((s, i) => {
                 scenarioBalances[i] =
                     scenarioBalances[i] * (1 + rate) + annualContribution + s.monthlyExtra * 12;
             });
         }
         return data;
-    }, [projection, currentAge, scenarios, years, rate, annualContribution, goalBasedMonthlySavings, showGoalLine]);
+    }, [projection, currentAge, scenarios, years, rate, annualContribution, goalBasedMonthlySavings, showGoalLine, monthlyCashFlowSurplus, showSavingsLine]);
 
     // Final balances for each row
     const finalBase = chartData.length > 0 ? chartData[chartData.length - 1].base : projection.projected_total_at_retirement;
     const finalGoal = chartData.length > 0 ? (chartData[chartData.length - 1].goal_based ?? 0) : 0;
+    const finalSavings = chartData.length > 0 ? (chartData[chartData.length - 1].savings_potential ?? 0) : 0;
     const scenarioFinals = scenarios.map((_, i) =>
         chartData.length > 0 ? chartData[chartData.length - 1][`scenario_${i}`] : 0
     );
@@ -345,6 +354,17 @@ export function RetirementProjectionChart({
                                 name={`Monthly Needed (+${formatCurrency(goalBasedMonthlySavings)}/mo)`}
                             />
                         )}
+                        {showSavingsLine && (
+                            <Line
+                                type="monotone"
+                                dataKey="savings_potential"
+                                stroke="#ff6f00"
+                                strokeWidth={2}
+                                strokeDasharray="3 3"
+                                dot={false}
+                                name={`If Surplus Invested (+${formatCurrency(monthlyCashFlowSurplus!)}/mo)`}
+                            />
+                        )}
                         {scenarios.map((s, i) => (
                             <Line
                                 key={i}
@@ -425,7 +445,7 @@ export function RetirementProjectionChart({
             </Box>
 
             {/* ── Scenario comparison table ── */}
-            {(showGoalLine || scenarios.length > 0) && (
+            {(showGoalLine || showSavingsLine || scenarios.length > 0) && (
                 <Box mt={3}>
                     <Typography variant="subtitle2" gutterBottom fontWeight="bold">
                         Scenario Comparison at Retirement (age {retirementAge ?? '—'})
@@ -493,6 +513,39 @@ export function RetirementProjectionChart({
                                             {finalGoal >= retirementGoalTarget
                                                 ? `+${formatCompact(finalGoal - retirementGoalTarget)}`
                                                 : `-${formatCompact(retirementGoalTarget - finalGoal)}`}
+                                        </TableCell>
+                                    )}
+                                </TableRow>
+                            )}
+                            {/* Annual savings potential row */}
+                            {showSavingsLine && (
+                                <TableRow sx={{ bgcolor: '#ff6f0010' }}>
+                                    <TableCell>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#ff6f00', flexShrink: 0 }} />
+                                            If Surplus Invested
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                                        +{formatCurrency(monthlyCashFlowSurplus!)}/mo
+                                        <Typography variant="caption" display="block" color="text.secondary">
+                                            {formatCurrency((monthlyCashFlowSurplus ?? 0) * 12)}/yr
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                                        {formatCurrency(finalSavings)}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ color: 'success.main', fontWeight: 'bold' }}>
+                                        {formatCurrency(monthlyIncome(finalSavings))}
+                                    </TableCell>
+                                    {retirementGoalTarget != null && retirementGoalTarget > 0 && (
+                                        <TableCell
+                                            align="right"
+                                            sx={{ color: finalSavings >= retirementGoalTarget ? 'success.main' : 'error.main', fontWeight: 'bold' }}
+                                        >
+                                            {finalSavings >= retirementGoalTarget
+                                                ? `+${formatCompact(finalSavings - retirementGoalTarget)}`
+                                                : `-${formatCompact(retirementGoalTarget - finalSavings)}`}
                                         </TableCell>
                                     )}
                                 </TableRow>

@@ -226,6 +226,18 @@ pub async fn upsert_income_info(
         .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
     let spouse_employer_match_rate = req.spouse_employer_match_rate
         .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
+    let effective_tax_rate = req.effective_tax_rate
+        .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
+    let spouse_effective_tax_rate = req.spouse_effective_tax_rate
+        .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
+    let investment_income_tax_rate = req.investment_income_tax_rate
+        .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
+    let spouse_investment_income_tax_rate = req.spouse_investment_income_tax_rate
+        .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
+    let monthly_deductions = req.monthly_deductions
+        .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
+    let spouse_monthly_deductions = req.spouse_monthly_deductions
+        .map(|v| BigDecimal::from_str(&v.to_string()).unwrap_or_else(|_| BigDecimal::from(0)));
 
     sqlx::query_as::<_, SurveyIncomeInfo>(
         r#"
@@ -235,9 +247,12 @@ pub async fn upsert_income_info(
             planned_retirement_age, desired_annual_retirement_income,
             retirement_income_needs_notes, currency, notes,
             spouse_gross_annual_income, spouse_pay_frequency,
-            spouse_retirement_contribution_rate, spouse_employer_match_rate
+            spouse_retirement_contribution_rate, spouse_employer_match_rate,
+            effective_tax_rate, spouse_effective_tax_rate,
+            investment_income_tax_rate, spouse_investment_income_tax_rate,
+            monthly_deductions, spouse_monthly_deductions
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
         ON CONFLICT (survey_id)
         DO UPDATE SET
             gross_annual_income = COALESCE($2, survey_income_info.gross_annual_income),
@@ -253,6 +268,12 @@ pub async fn upsert_income_info(
             spouse_pay_frequency = COALESCE($12, survey_income_info.spouse_pay_frequency),
             spouse_retirement_contribution_rate = COALESCE($13, survey_income_info.spouse_retirement_contribution_rate),
             spouse_employer_match_rate = COALESCE($14, survey_income_info.spouse_employer_match_rate),
+            effective_tax_rate = COALESCE($15, survey_income_info.effective_tax_rate),
+            spouse_effective_tax_rate = COALESCE($16, survey_income_info.spouse_effective_tax_rate),
+            investment_income_tax_rate = COALESCE($17, survey_income_info.investment_income_tax_rate),
+            spouse_investment_income_tax_rate = COALESCE($18, survey_income_info.spouse_investment_income_tax_rate),
+            monthly_deductions = COALESCE($19, survey_income_info.monthly_deductions),
+            spouse_monthly_deductions = COALESCE($20, survey_income_info.spouse_monthly_deductions),
             updated_at = NOW()
         RETURNING *
         "#,
@@ -271,6 +292,12 @@ pub async fn upsert_income_info(
     .bind(&req.spouse_pay_frequency)
     .bind(spouse_retirement_contribution_rate)
     .bind(spouse_employer_match_rate)
+    .bind(effective_tax_rate)
+    .bind(spouse_effective_tax_rate)
+    .bind(investment_income_tax_rate)
+    .bind(spouse_investment_income_tax_rate)
+    .bind(monthly_deductions)
+    .bind(spouse_monthly_deductions)
     .fetch_one(pool)
     .await
 }

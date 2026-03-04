@@ -1586,6 +1586,14 @@ export type SurveyIncomeInfo = {
     spouse_pay_frequency: PayFrequency | null;
     spouse_retirement_contribution_rate: number | null;
     spouse_employer_match_rate: number | null;
+    // Tax rates (effective rate, not marginal)
+    effective_tax_rate: number | null;
+    spouse_effective_tax_rate: number | null;
+    // Separate rate for dividends/interest (taxed at preferential rate)
+    investment_income_tax_rate: number | null;
+    spouse_investment_income_tax_rate: number | null;
+    monthly_deductions: number | null;
+    spouse_monthly_deductions: number | null;
     created_at: string;
 };
 
@@ -1724,6 +1732,13 @@ export type UpdateIncomeInfoRequest = {
     spouse_pay_frequency?: PayFrequency;
     spouse_retirement_contribution_rate?: number;
     spouse_employer_match_rate?: number;
+    // Tax rates
+    effective_tax_rate?: number;
+    spouse_effective_tax_rate?: number;
+    investment_income_tax_rate?: number;
+    spouse_investment_income_tax_rate?: number;
+    monthly_deductions?: number;
+    spouse_monthly_deductions?: number;
 };
 
 // Additional Income types
@@ -1791,6 +1806,14 @@ export type ExpenseCategory =
     | 'pet_care'
     | 'home_maintenance'
     | 'savings_investments'
+    | 'shopping'
+    | 'travel'
+    | 'sports_fitness'
+    | 'electronics_software'
+    | 'fees'
+    | 'business_services'
+    | 'credit_card_payment'
+    | 'transfer'
     | 'miscellaneous'
     | 'other';
 
@@ -1948,10 +1971,16 @@ export type SnapshotData = {
     };
     cash_flow: {
         monthly_gross_income: number;
+        monthly_taxes: number;
+        monthly_payroll_deductions: number;
+        monthly_net_income: number;
         estimated_monthly_expenses: number;
+        expenses_by_category: Array<{ category: string; amount: number }>;
         monthly_cash_flow: number;
         annual_cash_flow: number;
         savings_rate: number;
+        using_actual_expenses: boolean;
+        housing_excluded_from_expenses: boolean;
     };
     retirement: RetirementProjection | null;
     goal_progress: GoalProgress[];

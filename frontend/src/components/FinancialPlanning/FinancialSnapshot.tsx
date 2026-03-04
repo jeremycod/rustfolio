@@ -89,8 +89,16 @@ export function FinancialSnapshotView({ surveyId, onEdit }: FinancialSnapshotVie
     const currentAge = birthYear ? new Date().getFullYear() - birthYear : null;
     const grossAnnualIncome = survey?.income_info?.gross_annual_income || null;
 
-    // Check if user has entered actual expenses
-    const hasActualExpenses = (survey?.expenses?.length || 0) > 0;
+    // Detect stale snapshot: generated before the household income / tax fields migration.
+    // The absence of monthly_payroll_deductions in the JSON is the reliable indicator.
+    const isStaleSnapshot = snapshotData?.cash_flow?.monthly_payroll_deductions === undefined;
+
+    // Use the backend's own flag — it knows whether actual expenses were used
+    // (falls back to checking survey data for stale snapshots that lack the flag)
+    const hasActualExpenses =
+        snapshotData?.cash_flow?.using_actual_expenses ??
+        ((survey?.expenses?.length || 0) > 0 || (survey?.household_expenses?.length || 0) > 0);
+    const housingExcluded = snapshotData?.cash_flow?.housing_excluded_from_expenses ?? false;
 
     // Calculate total monthly contribution needed for all goals
     const totalMonthlyNeeded = snapshotData.goal_progress.reduce(
@@ -103,6 +111,28 @@ export function FinancialSnapshotView({ surveyId, onEdit }: FinancialSnapshotVie
 
     return (
         <Box>
+            {/* Stale snapshot banner */}
+            {isStaleSnapshot && (
+                <Alert
+                    severity="warning"
+                    sx={{ mb: 2 }}
+                    action={
+                        <Button
+                            color="warning"
+                            variant="contained"
+                            size="small"
+                            startIcon={<Refresh />}
+                            onClick={() => regenerateMutation.mutate()}
+                            disabled={regenerateMutation.isPending}
+                        >
+                            {regenerateMutation.isPending ? 'Regenerating…' : 'Regenerate Now'}
+                        </Button>
+                    }
+                >
+                    <strong>Snapshot is outdated.</strong> It was generated before the latest updates (household income, tax deductions). Click Regenerate to recalculate with current data.
+                </Alert>
+            )}
+
             {/* Header */}
             <Paper sx={{ p: 3, mb: 3 }}>
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start">
@@ -224,8 +254,14 @@ export function FinancialSnapshotView({ surveyId, onEdit }: FinancialSnapshotVie
                         savingsRate={snapshotData.cash_flow.savings_rate}
                         grossAnnualIncome={grossAnnualIncome}
                         monthlyGrossIncome={snapshotData.cash_flow.monthly_gross_income}
+                        monthlyTaxes={snapshotData.cash_flow.monthly_taxes ?? 0}
+                        monthlyPayrollDeductions={snapshotData.cash_flow.monthly_payroll_deductions ?? 0}
+                        monthlyNetIncome={snapshotData.cash_flow.monthly_net_income}
                         estimatedMonthlyExpenses={snapshotData.cash_flow.estimated_monthly_expenses}
+                        expensesByCategory={snapshotData.cash_flow.expenses_by_category ?? []}
                         usingActualExpenses={hasActualExpenses}
+                        housingExcludedFromExpenses={housingExcluded}
+                        isHousehold={survey?.personal_info?.has_spouse ?? false}
                     />
                 </Grid>
 
@@ -241,6 +277,11 @@ export function FinancialSnapshotView({ surveyId, onEdit }: FinancialSnapshotVie
                             projection={snapshotData.retirement}
                             currentAge={currentAge}
                             goalBasedMonthlySavings={totalMonthlyNeeded}
+                            monthlyCashFlowSurplus={
+                                snapshotData.cash_flow.monthly_cash_flow > 0
+                                    ? snapshotData.cash_flow.monthly_cash_flow
+                                    : undefined
+                            }
                             desiredAnnualRetirementIncome={survey?.income_info?.desired_annual_retirement_income || null}
                             retirementGoalTarget={retirementGoalTarget}
                         />

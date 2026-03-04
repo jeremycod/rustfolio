@@ -107,10 +107,16 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving, hasSpo
     const [retirementIncomeNotes, setRetirementIncomeNotes] = useState(data?.retirement_income_needs_notes || '');
     const [notes, setNotes] = useState(data?.notes || '');
     // Spouse income fields
+    const [effectiveTaxRate, setEffectiveTaxRate] = useState<string>(data?.effective_tax_rate?.toString() || '');
+    const [investmentTaxRate, setInvestmentTaxRate] = useState<string>(data?.investment_income_tax_rate?.toString() || '');
+    const [monthlyDeductions, setMonthlyDeductions] = useState<string>(data?.monthly_deductions?.toString() || '');
     const [spouseGrossIncome, setSpouseGrossIncome] = useState<string>(data?.spouse_gross_annual_income?.toString() || '');
     const [spousePayFrequency, setSpousePayFrequency] = useState<PayFrequency | ''>(data?.spouse_pay_frequency || '');
     const [spouseRetirementRate, setSpouseRetirementRate] = useState<number>(data?.spouse_retirement_contribution_rate || 0);
     const [spouseEmployerMatch, setSpouseEmployerMatch] = useState<string>(data?.spouse_employer_match_rate?.toString() || '');
+    const [spouseEffectiveTaxRate, setSpouseEffectiveTaxRate] = useState<string>(data?.spouse_effective_tax_rate?.toString() || '');
+    const [spouseInvestmentTaxRate, setSpouseInvestmentTaxRate] = useState<string>(data?.spouse_investment_income_tax_rate?.toString() || '');
+    const [spouseMonthlyDeductions, setSpouseMonthlyDeductions] = useState<string>(data?.spouse_monthly_deductions?.toString() || '');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingIncome, setEditingIncome] = useState<SurveyAdditionalIncome | null>(null);
 
@@ -161,10 +167,16 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving, hasSpo
             setDesiredRetirementIncome(data.desired_annual_retirement_income?.toString() || '');
             setRetirementIncomeNotes(data.retirement_income_needs_notes || '');
             setNotes(data.notes || '');
+            setEffectiveTaxRate(data.effective_tax_rate?.toString() || '');
+            setInvestmentTaxRate(data.investment_income_tax_rate?.toString() || '');
+            setMonthlyDeductions(data.monthly_deductions?.toString() || '');
             setSpouseGrossIncome(data.spouse_gross_annual_income?.toString() || '');
             setSpousePayFrequency(data.spouse_pay_frequency || '');
             setSpouseRetirementRate(data.spouse_retirement_contribution_rate || 0);
             setSpouseEmployerMatch(data.spouse_employer_match_rate?.toString() || '');
+            setSpouseEffectiveTaxRate(data.spouse_effective_tax_rate?.toString() || '');
+            setSpouseInvestmentTaxRate(data.spouse_investment_income_tax_rate?.toString() || '');
+            setSpouseMonthlyDeductions(data.spouse_monthly_deductions?.toString() || '');
         }
     }, [data]);
 
@@ -179,12 +191,18 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving, hasSpo
         if (retirementIncomeNotes) req.retirement_income_needs_notes = retirementIncomeNotes;
         if (notes) req.notes = notes;
         // Spouse income
+        if (effectiveTaxRate) req.effective_tax_rate = parseFloat(effectiveTaxRate);
+        if (investmentTaxRate) req.investment_income_tax_rate = parseFloat(investmentTaxRate);
+        if (monthlyDeductions) req.monthly_deductions = parseFloat(monthlyDeductions);
         if (hasSpouse && spouseGrossIncome) req.spouse_gross_annual_income = parseFloat(spouseGrossIncome);
         if (hasSpouse && spousePayFrequency) req.spouse_pay_frequency = spousePayFrequency;
         if (hasSpouse) req.spouse_retirement_contribution_rate = spouseRetirementRate;
         if (hasSpouse && spouseEmployerMatch) req.spouse_employer_match_rate = parseFloat(spouseEmployerMatch);
+        if (hasSpouse && spouseEffectiveTaxRate) req.spouse_effective_tax_rate = parseFloat(spouseEffectiveTaxRate);
+        if (hasSpouse && spouseInvestmentTaxRate) req.spouse_investment_income_tax_rate = parseFloat(spouseInvestmentTaxRate);
+        if (hasSpouse && spouseMonthlyDeductions) req.spouse_monthly_deductions = parseFloat(spouseMonthlyDeductions);
         onSave(req);
-    }, [grossIncome, payFrequency, retirementRate, employerMatch, retirementAge, desiredRetirementIncome, retirementIncomeNotes, notes, hasSpouse, spouseGrossIncome, spousePayFrequency, spouseRetirementRate, spouseEmployerMatch, onSave]);
+    }, [grossIncome, payFrequency, effectiveTaxRate, investmentTaxRate, monthlyDeductions, retirementRate, employerMatch, retirementAge, desiredRetirementIncome, retirementIncomeNotes, notes, hasSpouse, spouseGrossIncome, spousePayFrequency, spouseRetirementRate, spouseEmployerMatch, spouseEffectiveTaxRate, spouseInvestmentTaxRate, spouseMonthlyDeductions, onSave]);
 
     useEffect(() => {
         const timer = setTimeout(saveData, 1000);
@@ -267,6 +285,49 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving, hasSpo
                         </Select>
                     </FormControl>
                 </Grid>
+                <Grid item xs={12} sm={6}>
+                    <TextField
+                        fullWidth
+                        label="Salary Tax Rate (effective)"
+                        type="number"
+                        value={effectiveTaxRate}
+                        onChange={(e) => setEffectiveTaxRate(e.target.value)}
+                        InputProps={{
+                            endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                        }}
+                        inputProps={{ min: 0, max: 70, step: 0.5 }}
+                        helperText="Effective (average) rate on employment income. Leave blank to skip."
+                    />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                    <TextField
+                        fullWidth
+                        label="Investment Income Tax Rate"
+                        type="number"
+                        value={investmentTaxRate}
+                        onChange={(e) => setInvestmentTaxRate(e.target.value)}
+                        InputProps={{
+                            endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                        }}
+                        inputProps={{ min: 0, max: 70, step: 0.5 }}
+                        helperText="Rate applied to dividends & interest. Often lower than salary rate (e.g. ~18% in Canada for eligible dividends)."
+                    />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                    <TextField
+                        fullWidth
+                        label="Monthly Payroll Deductions"
+                        type="number"
+                        value={monthlyDeductions}
+                        onChange={(e) => setMonthlyDeductions(e.target.value)}
+                        InputProps={{
+                            startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                            endAdornment: <InputAdornment position="end">/mo</InputAdornment>,
+                        }}
+                        inputProps={{ min: 0 }}
+                        helperText="CPP, EI, benefit premiums, union dues etc. (e.g. CPP ~$322/mo + EI ~$87/mo in Canada)"
+                    />
+                </Grid>
             </Grid>
 
             {hasSpouse && (
@@ -308,37 +369,47 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving, hasSpo
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12}>
-                            <Typography variant="subtitle2" gutterBottom>
-                                Retirement Contribution Rate: {spouseRetirementRate}%
-                            </Typography>
-                            <Slider
-                                value={spouseRetirementRate}
-                                onChange={(_, v) => setSpouseRetirementRate(v as number)}
-                                min={0}
-                                max={50}
-                                step={0.5}
-                                marks={[
-                                    { value: 0, label: '0%' },
-                                    { value: 10, label: '10%' },
-                                    { value: 20, label: '20%' },
-                                    { value: 50, label: '50%' },
-                                ]}
-                                valueLabelDisplay="auto"
-                                valueLabelFormat={(v) => `${v}%`}
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                fullWidth
+                                label="Salary Tax Rate (effective)"
+                                type="number"
+                                value={spouseEffectiveTaxRate}
+                                onChange={(e) => setSpouseEffectiveTaxRate(e.target.value)}
+                                InputProps={{
+                                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                                }}
+                                inputProps={{ min: 0, max: 70, step: 0.5 }}
+                                helperText="Leave blank to skip"
                             />
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <TextField
                                 fullWidth
-                                label="Employer Match Rate"
+                                label="Investment Income Tax Rate"
                                 type="number"
-                                value={spouseEmployerMatch}
-                                onChange={(e) => setSpouseEmployerMatch(e.target.value)}
+                                value={spouseInvestmentTaxRate}
+                                onChange={(e) => setSpouseInvestmentTaxRate(e.target.value)}
                                 InputProps={{
                                     endAdornment: <InputAdornment position="end">%</InputAdornment>,
                                 }}
-                                inputProps={{ min: 0, max: 100, step: 0.5 }}
+                                inputProps={{ min: 0, max: 70, step: 0.5 }}
+                                helperText="For dividends & interest. Leave blank to skip"
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                fullWidth
+                                label="Monthly Payroll Deductions"
+                                type="number"
+                                value={spouseMonthlyDeductions}
+                                onChange={(e) => setSpouseMonthlyDeductions(e.target.value)}
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                                    endAdornment: <InputAdornment position="end">/mo</InputAdornment>,
+                                }}
+                                inputProps={{ min: 0 }}
+                                helperText="CPP, EI, benefit premiums etc."
                             />
                         </Grid>
                     </Grid>
@@ -548,6 +619,55 @@ export function Step2IncomeRetirement({ surveyId, data, onSave, isSaving, hasSpo
                         helperText="Any additional notes about your income or retirement plans"
                     />
                 </Grid>
+
+                {/* Spouse retirement savings — only shown when spouse is configured */}
+                {hasSpouse && (
+                    <>
+                        <Grid item xs={12}>
+                            <Divider />
+                            <Box display="flex" alignItems="center" gap={1} mt={2}>
+                                <Person color="secondary" fontSize="small" />
+                                <Typography variant="subtitle2" fontWeight="bold">
+                                    {spouseName ?? 'Spouse'} Retirement Savings
+                                </Typography>
+                            </Box>
+                        </Grid>
+                        <Grid item xs={12}>
+                            <Typography variant="subtitle2" gutterBottom>
+                                Retirement Contribution Rate: {spouseRetirementRate}%
+                            </Typography>
+                            <Slider
+                                value={spouseRetirementRate}
+                                onChange={(_, v) => setSpouseRetirementRate(v as number)}
+                                min={0}
+                                max={50}
+                                step={0.5}
+                                marks={[
+                                    { value: 0, label: '0%' },
+                                    { value: 10, label: '10%' },
+                                    { value: 20, label: '20%' },
+                                    { value: 50, label: '50%' },
+                                ]}
+                                valueLabelDisplay="auto"
+                                valueLabelFormat={(v) => `${v}%`}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                fullWidth
+                                label="Employer Match Rate"
+                                type="number"
+                                value={spouseEmployerMatch}
+                                onChange={(e) => setSpouseEmployerMatch(e.target.value)}
+                                InputProps={{
+                                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                                }}
+                                inputProps={{ min: 0, max: 100, step: 0.5 }}
+                                helperText="Percentage of spouse's salary matched by their employer"
+                            />
+                        </Grid>
+                    </>
+                )}
             </Grid>
             {isSaving && (
                 <Typography variant="caption" color="text.secondary" mt={2} display="block">

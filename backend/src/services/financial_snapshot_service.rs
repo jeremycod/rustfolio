@@ -48,10 +48,19 @@ pub struct CategoryAmount {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CashFlowProjection {
     pub monthly_gross_income: f64,
+    pub monthly_taxes: f64,
+    pub monthly_payroll_deductions: f64, // CPP, EI, benefit premiums etc.
+    pub monthly_net_income: f64,
     pub estimated_monthly_expenses: f64,
+    pub expenses_by_category: Vec<CategoryAmount>, // per-category breakdown
     pub monthly_cash_flow: f64,
     pub annual_cash_flow: f64,
     pub savings_rate: f64,
+    /// true  = expenses come from actual survey entries
+    /// false = 70% gross estimate was used
+    pub using_actual_expenses: bool,
+    /// true = housing excluded because mortgage is already in debt payments
+    pub housing_excluded_from_expenses: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,11 +168,37 @@ pub async fn generate_snapshot(
     // Determine if household mode is active
     let has_spouse = personal_info.as_ref().map(|p| p.has_spouse).unwrap_or(false);
 
+    tracing::info!(
+        survey_id = %survey_id,
+        has_spouse = has_spouse,
+        primary_salary = ?income_info.as_ref().and_then(|i| i.gross_annual_income.as_ref()).map(|v| v.to_string()),
+        spouse_salary = ?income_info.as_ref().and_then(|i| i.spouse_gross_annual_income.as_ref()).map(|v| v.to_string()),
+        additional_income_count = additional_income.len(),
+        "snapshot: income inputs"
+    );
+    for ai in &additional_income {
+        tracing::info!(
+            income_type = %ai.income_type,
+            owner = %ai.owner,
+            monthly = %ai.monthly_amount,
+            "snapshot: additional income item"
+        );
+    }
+
     // Calculate individual net worth (uses all assets/liabilities regardless of ownership for the primary person snapshot)
     let net_worth_breakdown = calculate_net_worth(&assets, &liabilities);
 
-    // Calculate primary individual cash flow
-    let cash_flow = estimate_monthly_cash_flow(&income_info, &additional_income, &expenses, &household_expenses, &liabilities);
+    // Calculate cash flow — household-combined when spouse is configured
+    let cash_flow = estimate_monthly_cash_flow(&income_info, &additional_income, &expenses, &household_expenses, &liabilities, has_spouse);
+
+    tracing::info!(
+        monthly_gross = cash_flow.monthly_gross_income,
+        monthly_taxes = cash_flow.monthly_taxes,
+        monthly_payroll_deductions = cash_flow.monthly_payroll_deductions,
+        monthly_net = cash_flow.monthly_net_income,
+        monthly_cash_flow = cash_flow.monthly_cash_flow,
+        "snapshot: cash flow result"
+    );
 
     // Calculate retirement projection
     let retirement = project_retirement_income(
@@ -480,43 +515,107 @@ fn calculate_net_worth(
     }
 }
 
+fn parse_rate(bd: &Option<bigdecimal::BigDecimal>) -> f64 {
+    bd.as_ref()
+        .and_then(|v| v.to_string().parse::<f64>().ok())
+        .unwrap_or(0.0) / 100.0
+}
+
+/// Returns true if the income type is taxed as investment income (dividends, interest).
+fn is_investment_income(income_type: &str) -> bool {
+    matches!(income_type, "dividends" | "interest")
+}
+
 fn estimate_monthly_cash_flow(
     income_info: &Option<SurveyIncomeInfo>,
     additional_income: &[SurveyAdditionalIncome],
     expenses: &[SurveyExpense],
     household_expenses: &[SurveyHouseholdExpense],
     liabilities: &[SurveyLiability],
+    has_spouse: bool,
 ) -> CashFlowProjection {
     let income = match income_info {
         Some(info) => info,
         None => {
             return CashFlowProjection {
                 monthly_gross_income: 0.0,
+                monthly_taxes: 0.0,
+                monthly_payroll_deductions: 0.0,
+                monthly_net_income: 0.0,
                 estimated_monthly_expenses: 0.0,
+                expenses_by_category: vec![],
                 monthly_cash_flow: 0.0,
                 annual_cash_flow: 0.0,
                 savings_rate: 0.0,
+                using_actual_expenses: false,
+                housing_excluded_from_expenses: false,
             };
         }
     };
 
-    // gross_annual_income is ALWAYS annual, so divide by 12
-    let gross_annual = income.gross_annual_income
+    // Tax rates per person and per income type
+    let primary_salary_rate   = parse_rate(&income.effective_tax_rate);
+    let primary_invest_rate   = parse_rate(&income.investment_income_tax_rate);
+    let spouse_salary_rate    = parse_rate(&income.spouse_effective_tax_rate);
+    let spouse_invest_rate    = parse_rate(&income.spouse_investment_income_tax_rate);
+
+    // Primary salary (always annual)
+    let primary_salary = income.gross_annual_income
+        .as_ref()
+        .and_then(|v| v.to_string().parse::<f64>().ok())
+        .map(|a| a / 12.0)
+        .unwrap_or(0.0);
+
+    // Spouse salary (only when has_spouse)
+    let spouse_salary = if has_spouse {
+        income.spouse_gross_annual_income
+            .as_ref()
+            .and_then(|v| v.to_string().parse::<f64>().ok())
+            .map(|a| a / 12.0)
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
+
+    // Additional income: include both owners when household mode, mine-only otherwise.
+    // Apply investment_income_tax_rate to dividends/interest, salary rate to everything else.
+    let (additional_gross, additional_taxes) = additional_income
+        .iter()
+        .filter(|i| {
+            i.is_recurring.unwrap_or(true) &&
+            (i.owner == "mine" || (has_spouse && i.owner == "spouse"))
+        })
+        .fold((0.0_f64, 0.0_f64), |(gross_acc, tax_acc), i| {
+            let amount = i.monthly_amount.to_string().parse::<f64>().unwrap_or(0.0);
+            let rate = if i.owner == "spouse" {
+                if is_investment_income(&i.income_type) { spouse_invest_rate } else { spouse_salary_rate }
+            } else {
+                if is_investment_income(&i.income_type) { primary_invest_rate } else { primary_salary_rate }
+            };
+            (gross_acc + amount, tax_acc + amount * rate)
+        });
+
+    let primary_salary_taxes = primary_salary * primary_salary_rate;
+    let spouse_salary_taxes  = spouse_salary  * spouse_salary_rate;
+
+    // Payroll deductions (CPP, EI, benefit premiums etc.) — monthly dollar amounts
+    let primary_deductions = income.monthly_deductions
         .as_ref()
         .and_then(|v| v.to_string().parse::<f64>().ok())
         .unwrap_or(0.0);
+    let spouse_deductions = if has_spouse {
+        income.spouse_monthly_deductions
+            .as_ref()
+            .and_then(|v| v.to_string().parse::<f64>().ok())
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
 
-    let employment_income_monthly = gross_annual / 12.0;
-
-    // Add recurring additional income for the primary person only
-    let additional_income_monthly: f64 = additional_income
-        .iter()
-        .filter(|i| i.is_recurring.unwrap_or(true))
-        .filter(|i| i.owner == "mine")
-        .filter_map(|i| i.monthly_amount.to_string().parse::<f64>().ok())
-        .sum();
-
-    let monthly_gross = employment_income_monthly + additional_income_monthly;
+    let monthly_gross              = primary_salary + spouse_salary + additional_gross;
+    let monthly_taxes              = primary_salary_taxes + spouse_salary_taxes + additional_taxes;
+    let monthly_payroll_deductions = primary_deductions + spouse_deductions;
+    let monthly_net                = monthly_gross - monthly_taxes - monthly_payroll_deductions;
 
     // Calculate total monthly debt payments from all liabilities
     let monthly_debt_payments: f64 = liabilities
@@ -543,51 +642,84 @@ fn estimate_monthly_cash_flow(
         })
         .sum();
 
-    // Use survey_expenses if entered; if the user is in household mode they will have
-    // filled household_expenses instead, so derive the primary person's share from those.
-    // Fall back to a 70% gross estimate only if neither is available.
-    let total_actual_expenses: f64 = if !expenses.is_empty() {
-        expenses
-            .iter()
-            .filter(|e| e.is_recurring.unwrap_or(true))
-            .filter_map(|e| e.monthly_amount.to_string().parse::<f64>().ok())
-            .sum()
+    // Detect mortgage liabilities that have a monthly payment already captured in
+    // the debt-payments line. When such a liability exists, exclude the 'housing'
+    // expense category from living expenses to prevent double-counting.
+    let has_mortgage_payment = liabilities.iter().any(|l| {
+        l.liability_type == "mortgage" &&
+        l.monthly_payment
+            .as_ref()
+            .and_then(|v| v.to_string().parse::<f64>().ok())
+            .unwrap_or(0.0) > 0.0
+    });
+
+    // Build expense total and per-category breakdown.
+    // When has_spouse=true, income is household-combined, so expenses must also be
+    // the full household total (not just primary's half). Housing is excluded when
+    // a mortgage liability with a monthly payment already covers it in debt payments.
+    let mut expense_map: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+
+    if !expenses.is_empty() {
+        for e in expenses.iter().filter(|e| e.is_recurring.unwrap_or(true)) {
+            if has_mortgage_payment && e.expense_category == "housing" { continue; }
+            let amount = e.monthly_amount.to_string().parse::<f64>().unwrap_or(0.0);
+            *expense_map.entry(e.expense_category.clone()).or_insert(0.0) += amount;
+        }
     } else if !household_expenses.is_empty() {
-        // Primary person's share = their individual expenses + half of shared
-        household_expenses
-            .iter()
-            .map(|e| {
-                let amount = e.monthly_amount.to_string().parse::<f64>().unwrap_or(0.0);
+        for e in household_expenses.iter() {
+            if has_mortgage_payment && e.expense_category == "housing" { continue; }
+            let amount = e.monthly_amount.to_string().parse::<f64>().unwrap_or(0.0);
+            // When household mode: use full amounts (income is already household-combined).
+            // When individual mode: primary's share only (mine + half shared).
+            let counted = if has_spouse {
+                amount
+            } else {
                 match e.expense_type.as_str() {
                     "mine" => amount,
                     "shared" => amount / 2.0,
-                    _ => 0.0, // "spouse" expenses don't count for primary
+                    _ => 0.0,
                 }
-            })
-            .sum()
-    } else {
-        0.0
-    };
+            };
+            if counted > 0.0 {
+                *expense_map.entry(e.expense_category.clone()).or_insert(0.0) += counted;
+            }
+        }
+    }
 
-    let monthly_expenses = if total_actual_expenses > 0.0 {
+    let total_actual_expenses: f64 = expense_map.values().sum();
+    let mut expenses_by_category: Vec<CategoryAmount> = expense_map
+        .into_iter()
+        .map(|(category, amount)| CategoryAmount { category, amount })
+        .collect();
+    expenses_by_category.sort_by(|a, b| b.amount.partial_cmp(&a.amount).unwrap_or(std::cmp::Ordering::Equal));
+
+    let using_actual = total_actual_expenses > 0.0;
+    let monthly_expenses = if using_actual {
         total_actual_expenses
     } else {
         monthly_gross * EXPENSE_RATIO // Fall back to 70% estimate if no expenses entered
     };
 
-    let monthly_cash_flow = monthly_gross - monthly_expenses - monthly_debt_payments;
-    let savings_rate = if monthly_gross > 0.0 {
-        (monthly_cash_flow / monthly_gross) * 100.0
+    // Cash flow is computed from net (post-tax) income
+    let monthly_cash_flow = monthly_net - monthly_expenses - monthly_debt_payments;
+    let savings_rate = if monthly_net > 0.0 {
+        (monthly_cash_flow / monthly_net) * 100.0
     } else {
         0.0
     };
 
     CashFlowProjection {
         monthly_gross_income: monthly_gross,
+        monthly_taxes,
+        monthly_payroll_deductions,
+        monthly_net_income: monthly_net,
         estimated_monthly_expenses: monthly_expenses,
+        expenses_by_category,
         monthly_cash_flow,
         annual_cash_flow: monthly_cash_flow * 12.0,
         savings_rate,
+        using_actual_expenses: using_actual,
+        housing_excluded_from_expenses: has_mortgage_payment && using_actual,
     }
 }
 
