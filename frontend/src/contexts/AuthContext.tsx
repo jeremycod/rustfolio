@@ -1,11 +1,21 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getMe, login as apiLogin, logout as apiLogout, register as apiRegister, AuthUser } from '../lib/endpoints';
+import {
+    getMe,
+    login as apiLogin,
+    logout as apiLogout,
+    register as apiRegister,
+    updateProfile as apiUpdateProfile,
+    changePassword as apiChangePassword,
+    AuthUser,
+} from '../lib/endpoints';
 
 interface AuthContextType {
     user: AuthUser | null;
     login: (email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
     register: (email: string, password: string, name?: string) => Promise<void>;
+    updateProfile: (data: { email: string; name?: string }) => Promise<void>;
+    changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
     isLoading: boolean;
 }
 
@@ -36,8 +46,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await apiRegister(email, password, name);
     };
 
+    const updateProfile = async (data: { email: string; name?: string }) => {
+        const updated = await apiUpdateProfile(data);
+        setUser(updated);
+    };
+
+    const changePassword = async (currentPassword: string, newPassword: string) => {
+        await apiChangePassword(currentPassword, newPassword);
+    };
+
     return (
-        <AuthContext.Provider value={{ user, login, logout, register, isLoading }}>
+        <AuthContext.Provider value={{ user, login, logout, register, updateProfile, changePassword, isLoading }}>
             {children}
         </AuthContext.Provider>
     );

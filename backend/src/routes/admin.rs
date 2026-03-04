@@ -235,7 +235,7 @@ pub async fn get_cache_health(
     }
 
     // Query portfolio_news_cache
-    match query_cache_table_health(&state.pool, "portfolio_news_cache").await {
+    match query_simple_cache_health(&state.pool, "portfolio_news_cache", "fetched_at").await {
         Ok(health) => {
             info!("portfolio_news_cache: {} total entries", health.total_entries);
             tables.push(health);
@@ -280,7 +280,7 @@ pub async fn get_cache_health(
     }
 
     // Query sentiment_forecast_cache
-    match query_simple_cache_health(&state.pool, "sentiment_forecast_cache", "calculated_at").await {
+    match query_simple_cache_health(&state.pool, "sentiment_forecast_cache", "generated_at").await {
         Ok(health) => {
             info!("sentiment_forecast_cache: {} total entries", health.total_entries);
             tables.push(health);

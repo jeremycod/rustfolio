@@ -35,6 +35,7 @@ import { LongTermGuidancePage } from "./components/LongTermGuidancePage";
 import { FactorPortfolioPage } from "./components/FactorPortfolioPage";
 // Financial Planning
 import { FinancialPlanningPage } from "./components/FinancialPlanning/FinancialPlanningPage";
+import { ProfilePage } from "./components/ProfilePage";
 
 export default function App() {
     const { user, isLoading } = useAuth();
@@ -186,6 +187,8 @@ export default function App() {
                 return <LongTermGuidancePage />;
             case 'factor-portfolio':
                 return <FactorPortfolioPage />;
+            case 'profile':
+                return <ProfilePage />;
             default:
                 return (
                     <Dashboard

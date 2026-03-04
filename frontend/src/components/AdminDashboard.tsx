@@ -219,17 +219,24 @@ export function AdminDashboard() {
 
   const handleTriggerAllJobs = () => {
     if (window.confirm(
-      'This will run all cache population jobs sequentially.\n\n' +
+      'This will run all 16 scheduled jobs sequentially.\n\n' +
       'Jobs included:\n' +
       '• Refresh Prices\n' +
+      '• Fetch News\n' +
+      '• Analyze SEC Filings\n' +
+      '• Check Thresholds\n' +
+      '• Generate Forecasts\n' +
       '• Calculate Portfolio Risks\n' +
       '• Downside Risk Cache\n' +
       '• Portfolio Correlations\n' +
       '• Rolling Beta Cache\n' +
-      '• Market Regime Update\n' +
-      '• Regime Forecasts\n' +
+      '• Update Market Regime\n' +
+      '• Train HMM Model\n' +
       '• Optimization Cache\n' +
-      '• Daily Risk Snapshots\n\n' +
+      '• Daily Risk Snapshots\n' +
+      '• Warm Caches\n' +
+      '• Cleanup Cache\n' +
+      '• Archive Snapshots\n\n' +
       'This may take several minutes. Continue?'
     )) {
       triggerAllJobsMutation.mutate();

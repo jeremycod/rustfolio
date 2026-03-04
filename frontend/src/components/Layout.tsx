@@ -11,9 +11,14 @@ import {
   ListItemIcon,
   ListItemText,
   Badge,
+  IconButton,
+  Tooltip,
+  Menu,
+  MenuItem,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { getUnreadNotificationCount } from '../lib/endpoints';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Dashboard as DashboardIcon,
   AccountBalance,
@@ -37,6 +42,7 @@ import {
   Visibility,
   Savings,
   Category,
+  AccountCircle,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -81,6 +87,9 @@ interface LayoutProps {
 }
 
 export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
+  const { user, logout } = useAuth();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
   // Fetch unread notification count with auto-refresh
   const { data: notificationCount } = useQuery({
     queryKey: ['notificationCount'],
@@ -90,6 +99,19 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
 
   const unreadCount = notificationCount?.unread || 0;
 
+  const handleMenuOpen = (e: React.MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+
+  const handleProfile = () => {
+    handleMenuClose();
+    onPageChange('profile');
+  };
+
+  const handleLogout = async () => {
+    handleMenuClose();
+    await logout();
+  };
+
   return (
     <Box sx={{ display: 'flex' }}>
       <AppBar
@@ -97,12 +119,30 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
         sx={{ width: `calc(100% - ${drawerWidth}px)`, ml: `${drawerWidth}px` }}
       >
         <Toolbar>
-          <Typography variant="h6" noWrap component="div">
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Rustfolio
           </Typography>
+          <Typography variant="body2" sx={{ mr: 1, opacity: 0.85 }}>
+            {user?.name || user?.email}
+          </Typography>
+          <Tooltip title="Account">
+            <IconButton color="inherit" onClick={handleMenuOpen} size="small">
+              <AccountCircle />
+            </IconButton>
+          </Tooltip>
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={handleMenuClose}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem onClick={handleProfile}>Profile</MenuItem>
+            <MenuItem onClick={handleLogout}>Sign Out</MenuItem>
+          </Menu>
         </Toolbar>
       </AppBar>
-      
+
       <Drawer
         sx={{
           width: drawerWidth,
@@ -138,7 +178,7 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
           ))}
         </List>
       </Drawer>
-      
+
       <Box
         component="main"
         sx={{ flexGrow: 1, bgcolor: 'background.default', p: 3 }}

@@ -132,6 +132,30 @@ export async function getMe(): Promise<AuthUser> {
     return data;
 }
 
+export async function updateProfile(data: { email: string; name?: string }): Promise<AuthUser> {
+    const { data: user } = await api.put<AuthUser>('/api/auth/profile', data);
+    return user;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await api.put('/api/auth/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword,
+    });
+}
+
+export async function requestPasswordReset(email: string): Promise<{ reset_token: string; message: string }> {
+    const { data } = await api.post<{ reset_token: string; message: string }>(
+        '/api/auth/request-password-reset',
+        { email }
+    );
+    return data;
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+    await api.post('/api/auth/reset-password', { token, new_password: newPassword });
+}
+
 export async function listPortfolios(): Promise<Portfolio[]> {
     const res = await api.get("/api/portfolios");
     return res.data;

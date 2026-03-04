@@ -2,7 +2,7 @@ use axum::{
     extract::State,
     http::{header, StatusCode},
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,10 @@ pub fn router() -> Router<AppState> {
         .route("/login", post(login))
         .route("/logout", post(logout))
         .route("/me", get(me))
+        .route("/profile", put(update_profile))
+        .route("/change-password", put(change_password))
+        .route("/request-password-reset", post(request_password_reset))
+        .route("/reset-password", post(reset_password))
 }
 
 // ==============================================================================
@@ -38,11 +42,40 @@ struct LoginRequest {
     password: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct UpdateProfileRequest {
+    email: String,
+    name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChangePasswordRequest {
+    current_password: String,
+    new_password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ForgotPasswordRequest {
+    email: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResetPasswordRequest {
+    token: String,
+    new_password: String,
+}
+
 #[derive(Debug, Serialize)]
 struct UserResponse {
     id: uuid::Uuid,
     email: String,
     name: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ResetTokenResponse {
+    reset_token: String,
+    message: String,
 }
 
 // ==============================================================================
@@ -180,4 +213,115 @@ async fn me(
     };
 
     Ok(Json(response))
+}
+
+async fn update_profile(
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Json(req): Json<UpdateProfileRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let email = req.email.trim().to_lowercase();
+
+    if email.is_empty() {
+        return Err(AppError::Validation("Email is required".into()));
+    }
+
+    // Check if the new email is already taken by a different user
+    if let Some(existing) = auth_queries::get_user_by_email(&state.pool, &email).await? {
+        if existing.id != user_id {
+            return Err(AppError::Validation("Email already in use".into()));
+        }
+    }
+
+    let name = req.name.as_deref().map(|n| {
+        let trimmed = n.trim();
+        if trimmed.is_empty() { None } else { Some(trimmed) }
+    }).flatten();
+
+    let user = auth_queries::update_user_profile(&state.pool, user_id, &email, name).await?;
+
+    Ok(Json(UserResponse {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+    }))
+}
+
+async fn change_password(
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Json(req): Json<ChangePasswordRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    if req.new_password.len() < 8 {
+        return Err(AppError::Validation(
+            "New password must be at least 8 characters".into(),
+        ));
+    }
+
+    let user = auth_queries::get_user(&state.pool, user_id).await?;
+    let hash = user.password_hash.as_deref().ok_or(AppError::Unauthorized)?;
+
+    let valid = auth::verify_password(hash, &req.current_password)
+        .map_err(|e| AppError::External(format!("Password verification error: {}", e)))?;
+
+    if !valid {
+        return Err(AppError::Validation("Current password is incorrect".into()));
+    }
+
+    let new_hash = auth::hash_password(&req.new_password)
+        .map_err(|e| AppError::External(format!("Password hashing failed: {}", e)))?;
+
+    auth_queries::update_user_password(&state.pool, user_id, &new_hash).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn request_password_reset(
+    State(state): State<AppState>,
+    Json(req): Json<ForgotPasswordRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let email = req.email.trim().to_lowercase();
+
+    // Look up the user — return a generic response regardless to prevent email enumeration
+    let user = match auth_queries::get_user_by_email(&state.pool, &email).await? {
+        Some(u) if u.password_hash.is_some() => u,
+        _ => {
+            return Ok(Json(ResetTokenResponse {
+                reset_token: String::new(),
+                message: "If this email is registered, a reset token has been generated.".into(),
+            }));
+        }
+    };
+
+    let token = uuid::Uuid::new_v4().to_string();
+    auth_queries::create_password_reset_token(&state.pool, user.id, &token).await?;
+
+    tracing::info!("Password reset token for {}: {}", email, token);
+
+    Ok(Json(ResetTokenResponse {
+        reset_token: token,
+        message: "Reset token generated. Use it within 1 hour.".into(),
+    }))
+}
+
+async fn reset_password(
+    State(state): State<AppState>,
+    Json(req): Json<ResetPasswordRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    if req.new_password.len() < 8 {
+        return Err(AppError::Validation(
+            "Password must be at least 8 characters".into(),
+        ));
+    }
+
+    let user_id = auth_queries::consume_password_reset_token(&state.pool, &req.token)
+        .await?
+        .ok_or_else(|| AppError::Validation("Invalid or expired reset token".into()))?;
+
+    let new_hash = auth::hash_password(&req.new_password)
+        .map_err(|e| AppError::External(format!("Password hashing failed: {}", e)))?;
+
+    auth_queries::update_user_password(&state.pool, user_id, &new_hash).await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }

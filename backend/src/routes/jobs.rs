@@ -516,17 +516,24 @@ async fn trigger_all_jobs(
     info!("🚀 Manual trigger requested for ALL jobs");
     let overall_start = chrono::Utc::now();
 
-    // Define critical jobs to run in sequence (order matters for dependencies)
+    // Define all jobs to run in sequence (order matters for dependencies)
     let jobs_to_run = vec![
         "refresh_prices",                    // Get latest prices first
-        "calculate_portfolio_risks",         // Calculate risk metrics
-        "populate_downside_risk_cache",      // Downside risk analysis
-        "calculate_portfolio_correlations",  // Correlation analysis
-        "populate_rolling_beta_cache",       // Beta calculations
-        "update_market_regime",              // Market regime detection
-        "generate_regime_forecasts",         // Regime forecasts (requires trained HMM)
-        "populate_optimization_cache",       // Portfolio optimization
-        "create_daily_risk_snapshots",       // Risk snapshots
+        "fetch_news",                        // Fetch news
+        "analyze_sec_filings",              // Analyze SEC filings
+        "check_thresholds",                 // Check alert thresholds
+        "generate_forecasts",               // Generate price forecasts
+        "calculate_portfolio_risks",        // Calculate risk metrics
+        "populate_downside_risk_cache",     // Downside risk analysis
+        "calculate_portfolio_correlations", // Correlation analysis
+        "populate_rolling_beta_cache",      // Beta calculations
+        "update_market_regime",             // Market regime detection
+        "train_hmm_model",                  // Train HMM model
+        "populate_optimization_cache",      // Portfolio optimization
+        "create_daily_risk_snapshots",      // Risk snapshots
+        "warm_caches",                      // Warm popular caches
+        "cleanup_cache",                    // Clean expired caches
+        "archive_snapshots",                // Archive old snapshots
     ];
 
     info!("📋 Will execute {} jobs in sequence", jobs_to_run.len());
@@ -568,6 +575,18 @@ async fn trigger_all_jobs(
             "refresh_prices" => {
                 crate::services::job_scheduler_service::refresh_all_prices(job_context.clone()).await
             }
+            "fetch_news" => {
+                crate::services::job_scheduler_service::fetch_all_news(job_context.clone()).await
+            }
+            "analyze_sec_filings" => {
+                crate::services::job_scheduler_service::analyze_all_sec_filings(job_context.clone()).await
+            }
+            "check_thresholds" => {
+                crate::services::job_scheduler_service::check_all_thresholds(job_context.clone()).await
+            }
+            "generate_forecasts" => {
+                crate::services::job_scheduler_service::generate_all_forecasts(job_context.clone()).await
+            }
             "calculate_portfolio_risks" => {
                 crate::jobs::portfolio_risk_job::calculate_all_portfolio_risks(job_context.clone()).await
             }
@@ -583,14 +602,23 @@ async fn trigger_all_jobs(
             "update_market_regime" => {
                 crate::jobs::market_regime_update_job::update_market_regime(job_context.clone()).await
             }
-            "generate_regime_forecasts" => {
-                crate::jobs::regime_forecast_job::generate_all_regime_forecasts(job_context.clone()).await
+            "train_hmm_model" => {
+                crate::services::job_scheduler_service::train_hmm_wrapper(job_context.clone()).await
             }
             "populate_optimization_cache" => {
                 crate::jobs::populate_optimization_cache_job::populate_all_optimization_caches(job_context.clone()).await
             }
             "create_daily_risk_snapshots" => {
                 crate::jobs::daily_risk_snapshots_job::create_all_daily_risk_snapshots(job_context.clone()).await
+            }
+            "warm_caches" => {
+                crate::services::job_scheduler_service::warm_popular_caches(job_context.clone()).await
+            }
+            "cleanup_cache" => {
+                crate::services::job_scheduler_service::cleanup_expired_caches(job_context.clone()).await
+            }
+            "archive_snapshots" => {
+                crate::services::job_scheduler_service::archive_old_snapshots(job_context.clone()).await
             }
             _ => {
                 error!("Unknown job: {}", job_name);
