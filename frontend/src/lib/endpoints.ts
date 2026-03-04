@@ -144,12 +144,8 @@ export async function changePassword(currentPassword: string, newPassword: strin
     });
 }
 
-export async function requestPasswordReset(email: string): Promise<{ reset_token: string; message: string }> {
-    const { data } = await api.post<{ reset_token: string; message: string }>(
-        '/api/auth/request-password-reset',
-        { email }
-    );
-    return data;
+export async function requestPasswordReset(email: string): Promise<void> {
+    await api.post('/api/auth/request-password-reset', { email });
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {

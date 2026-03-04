@@ -143,12 +143,12 @@ export function PortfolioPerformance({ portfolioId }: PortfolioPerformanceProps)
       {/* Summary Cards */}
       <Card sx={{ mb: 3, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
         <CardContent>
-          <Grid container spacing={3}>
+          <Grid container spacing={2}>
             <Grid item xs={12} sm={6} md={2.4}>
               <Typography variant="body2" sx={{ opacity: 0.9 }}>
                 Current Value
               </Typography>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h6" fontWeight="bold">
                 {formatCurrency(portfolioTotals.totalCurrentValue)}
               </Typography>
             </Grid>
@@ -157,7 +157,7 @@ export function PortfolioPerformance({ portfolioId }: PortfolioPerformanceProps)
               <Typography variant="body2" sx={{ opacity: 0.9 }}>
                 Total Deposits
               </Typography>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h6" fontWeight="bold">
                 {formatCurrency(portfolioTotals.totalDeposits)}
               </Typography>
             </Grid>
@@ -166,7 +166,7 @@ export function PortfolioPerformance({ portfolioId }: PortfolioPerformanceProps)
               <Typography variant="body2" sx={{ opacity: 0.9 }}>
                 Total Withdrawals
               </Typography>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h6" fontWeight="bold">
                 {formatCurrency(portfolioTotals.totalWithdrawals)}
               </Typography>
             </Grid>
@@ -175,14 +175,14 @@ export function PortfolioPerformance({ portfolioId }: PortfolioPerformanceProps)
               <Typography variant="body2" sx={{ opacity: 0.9 }}>
                 True Gain/Loss
               </Typography>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Typography variant="h4" fontWeight="bold">
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <Typography variant="h6" fontWeight="bold">
                   {formatCurrency(portfolioTotals.totalGainLoss)}
                 </Typography>
                 {portfolioTotals.totalGainLoss >= 0 ? (
-                  <TrendingUp fontSize="large" />
+                  <TrendingUp fontSize="small" />
                 ) : (
-                  <TrendingDown fontSize="large" />
+                  <TrendingDown fontSize="small" />
                 )}
               </Box>
             </Grid>
@@ -192,7 +192,7 @@ export function PortfolioPerformance({ portfolioId }: PortfolioPerformanceProps)
                 True G/L (%)
               </Typography>
               <Typography
-                variant="h4"
+                variant="h6"
                 fontWeight="bold"
                 sx={{
                   color: portfolioTotals.gainLossPct >= 0

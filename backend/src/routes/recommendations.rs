@@ -12,6 +12,8 @@ use crate::models::long_term_guidance::{
 };
 use crate::models::{ExplanationQuery, NarrativeType, RecommendationExplanation};
 use crate::models::screening::{ScreeningRequest, ScreeningResponse};
+use crate::db::portfolio_queries;
+use crate::middleware::auth::AuthUser;
 use crate::services::factor_service;
 use crate::services::explanation_service;
 use crate::services::long_term_guidance_service::LongTermGuidanceService;
@@ -129,10 +131,14 @@ pub async fn screen_stocks(
 /// ```
 #[axum::debug_handler]
 pub async fn get_factor_recommendations(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<FactorQueryParams>,
     State(state): State<AppState>,
 ) -> Result<Json<FactorAnalysisResponse>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     let days = params.days.unwrap_or(252);
     let include_backtest = params.include_backtest.unwrap_or(true);
     let include_etfs = params.include_etfs.unwrap_or(true);
@@ -202,10 +208,14 @@ pub async fn get_factor_recommendations(
 /// ```
 #[axum::debug_handler]
 pub async fn get_long_term_guidance(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(query): Query<LongTermGuidanceQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<LongTermGuidanceResponse>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     // Parse and validate parameters
     let goal = if let Some(ref g) = query.goal {
         InvestmentGoal::from_str_opt(g).ok_or_else(|| {

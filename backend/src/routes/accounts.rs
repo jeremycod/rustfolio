@@ -4,8 +4,9 @@ use axum::routing::get;
 use tracing::{info, error};
 use uuid::Uuid;
 
-use crate::db::{account_queries, holding_snapshot_queries};
+use crate::db::{account_queries, holding_snapshot_queries, portfolio_queries};
 use crate::errors::AppError;
+use crate::middleware::auth::AuthUser;
 use crate::models::{Account, AccountValueHistory, LatestAccountHolding};
 use crate::state::AppState;
 
@@ -20,9 +21,14 @@ pub fn router() -> Router<AppState> {
 
 pub async fn list_accounts(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
 ) -> Result<Json<Vec<Account>>, AppError> {
     info!("GET /portfolios/{}/accounts - Fetching all accounts", portfolio_id);
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await
+        .map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     let accounts = account_queries::fetch_all(&state.pool, portfolio_id)
         .await
         .map_err(|e| {
@@ -34,9 +40,16 @@ pub async fn list_accounts(
 
 pub async fn get_account(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(account_id): Path<Uuid>,
 ) -> Result<Json<Account>, AppError> {
     info!("GET /accounts/{} - Fetching account", account_id);
+    if !account_queries::belongs_to_user(&state.pool, account_id, user_id)
+        .await
+        .map_err(AppError::Db)?
+    {
+        return Err(AppError::NotFound(format!("Account {} not found", account_id)));
+    }
     let account = account_queries::fetch_one(&state.pool, account_id)
         .await
         .map_err(|e| {
@@ -52,9 +65,16 @@ pub async fn get_account(
 
 pub async fn get_latest_holdings(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(account_id): Path<Uuid>,
 ) -> Result<Json<Vec<LatestAccountHolding>>, AppError> {
     info!("GET /accounts/{}/holdings - Fetching latest holdings", account_id);
+    if !account_queries::belongs_to_user(&state.pool, account_id, user_id)
+        .await
+        .map_err(AppError::Db)?
+    {
+        return Err(AppError::NotFound(format!("Account {} not found", account_id)));
+    }
     let holdings = holding_snapshot_queries::fetch_latest_holdings(&state.pool, account_id)
         .await
         .map_err(|e| {
@@ -66,9 +86,16 @@ pub async fn get_latest_holdings(
 
 pub async fn get_account_history(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(account_id): Path<Uuid>,
 ) -> Result<Json<Vec<AccountValueHistory>>, AppError> {
     info!("GET /accounts/{}/history - Fetching account value history", account_id);
+    if !account_queries::belongs_to_user(&state.pool, account_id, user_id)
+        .await
+        .map_err(AppError::Db)?
+    {
+        return Err(AppError::NotFound(format!("Account {} not found", account_id)));
+    }
     let history = holding_snapshot_queries::fetch_account_value_history(&state.pool, account_id)
         .await
         .map_err(|e| {
@@ -80,9 +107,14 @@ pub async fn get_account_history(
 
 pub async fn get_portfolio_history(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
 ) -> Result<Json<Vec<AccountValueHistory>>, AppError> {
     info!("GET /portfolios/{}/history - Fetching portfolio value history", portfolio_id);
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await
+        .map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     let history = holding_snapshot_queries::fetch_portfolio_value_history(&state.pool, portfolio_id)
         .await
         .map_err(|e| {

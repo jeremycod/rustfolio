@@ -319,6 +319,97 @@ pub async fn send_test_email(pool: &PgPool, user_id: Uuid) -> Result<(), Box<dyn
 }
 
 // ==============================================================================
+// Password Reset Email
+// ==============================================================================
+
+/// Send a password reset token to the user's email address.
+/// The token is never exposed through the HTTP API — only via this email.
+pub async fn send_password_reset_email(
+    to_email: &str,
+    token: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let smtp_enabled = env::var("SMTP_ENABLED")
+        .unwrap_or_else(|_| "false".to_string())
+        .to_lowercase()
+        == "true";
+
+    if !smtp_enabled {
+        return Err("SMTP is not enabled. Set SMTP_ENABLED=true in .env to use password reset.".into());
+    }
+
+    let smtp_host = env::var("SMTP_HOST")?;
+    let smtp_port = env::var("SMTP_PORT")?.parse::<u16>()?;
+    let smtp_username = env::var("SMTP_USERNAME")?;
+    let smtp_password = env::var("SMTP_PASSWORD")?;
+    let smtp_from_email = env::var("SMTP_FROM_EMAIL")?;
+    let smtp_from_name = env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Rustfolio".to_string());
+
+    let subject = "Rustfolio – Password Reset Request";
+
+    let text_body = format!(
+        "Password Reset Request\n\n\
+        Your password reset token is:\n\n\
+        {}\n\n\
+        This token expires in 1 hour.\n\n\
+        If you did not request a password reset, you can safely ignore this email — \
+        your password will not be changed.",
+        token
+    );
+
+    let html_body = format!(
+        r#"<div style="font-family:sans-serif;max-width:480px;margin:auto">
+          <h2>Password Reset Request</h2>
+          <p>Enter the token below in the Rustfolio reset form:</p>
+          <pre style="background:#f4f4f4;padding:14px;border-radius:6px;font-size:18px;letter-spacing:2px">{}</pre>
+          <p>This token expires in <strong>1 hour</strong>.</p>
+          <p style="color:#888;font-size:13px">
+            If you did not request a password reset, you can safely ignore this email.
+          </p>
+        </div>"#,
+        token
+    );
+
+    let from_address = format!("{} <{}>", smtp_from_name, smtp_from_email)
+        .parse()
+        .map_err(|e| format!("Invalid from address: {}", e))?;
+
+    let to_address = to_email
+        .parse()
+        .map_err(|e| format!("Invalid to address: {}", e))?;
+
+    let email = Message::builder()
+        .from(from_address)
+        .to(to_address)
+        .subject(subject)
+        .multipart(
+            MultiPart::alternative()
+                .singlepart(
+                    lettre::message::SinglePart::builder()
+                        .header(ContentType::TEXT_PLAIN)
+                        .body(text_body),
+                )
+                .singlepart(
+                    lettre::message::SinglePart::builder()
+                        .header(ContentType::TEXT_HTML)
+                        .body(html_body),
+                ),
+        )
+        .map_err(|e| format!("Failed to build email: {}", e))?;
+
+    let creds = Credentials::new(smtp_username, smtp_password);
+
+    let mailer = SmtpTransport::starttls_relay(&smtp_host)
+        .map_err(|e| format!("Failed to create SMTP transport: {}", e))?
+        .port(smtp_port)
+        .credentials(creds)
+        .build();
+
+    mailer.send(&email).map_err(|e| format!("SMTP send failed: {}", e))?;
+
+    Ok(())
+}
+
+// ==============================================================================
 // Webhook Notifications
 // ==============================================================================
 

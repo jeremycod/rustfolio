@@ -51,14 +51,9 @@ export function LoginPage() {
         setForgotSuccess('');
         setForgotLoading(true);
         try {
-            const result = await requestPasswordReset(forgotEmail);
-            if (result.reset_token) {
-                setResetToken(result.reset_token);
-                setForgotStep('reset');
-                setForgotSuccess('Reset token generated. Enter it below along with your new password.');
-            } else {
-                setForgotSuccess('If that email is registered, a reset token has been generated. Check the server logs or contact your administrator.');
-            }
+            await requestPasswordReset(forgotEmail);
+            setResetToken('');
+            setForgotStep('reset');
         } catch (err: unknown) {
             const axiosErr = err as { response?: { data?: string } };
             setForgotError(axiosErr.response?.data || 'Failed to request reset.');
@@ -177,14 +172,16 @@ export function LoginPage() {
                             flexDirection="column"
                             gap={2}
                         >
-                            {forgotSuccess && <Alert severity="success">{forgotSuccess}</Alert>}
+                            <Alert severity="info">
+                                A reset token has been sent to <strong>{forgotEmail}</strong>. Check your inbox and paste the token below.
+                            </Alert>
                             <TextField
                                 label="Reset Token"
                                 value={resetToken}
                                 onChange={e => setResetToken(e.target.value)}
                                 required
                                 fullWidth
-                                helperText="Token was pre-filled from the server response"
+                                autoFocus
                             />
                             <TextField
                                 label="New Password"

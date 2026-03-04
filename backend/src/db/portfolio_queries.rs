@@ -40,13 +40,14 @@ pub async fn insert(pool: &PgPool, input: Portfolio) -> Result<Portfolio, sqlx::
     .await
 }
 
-pub async fn update(pool: &PgPool, id: Uuid, input: UpdatePortfolio) -> Result<Option<Portfolio>, sqlx::Error> {
+pub async fn update(pool: &PgPool, id: Uuid, user_id: Uuid, input: UpdatePortfolio) -> Result<Option<Portfolio>, sqlx::Error> {
     sqlx::query_as::<_, Portfolio>(
-        "UPDATE portfolios SET name = $1 WHERE id = $2
+        "UPDATE portfolios SET name = $1 WHERE id = $2 AND user_id = $3
          RETURNING id, name, user_id, created_at",
     )
     .bind(input.name)
     .bind(id)
+    .bind(user_id)
     .fetch_optional(pool)
     .await
 }
@@ -61,9 +62,10 @@ pub async fn fetch_one_unchecked(pool: &PgPool, id: Uuid) -> Result<Option<Portf
     .await
 }
 
-pub async fn delete(pool: &PgPool, id: Uuid) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM portfolios WHERE id = $1")
+pub async fn delete(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM portfolios WHERE id = $1 AND user_id = $2")
         .bind(id)
+        .bind(user_id)
         .execute(pool)
         .await?;
     Ok(result.rows_affected())

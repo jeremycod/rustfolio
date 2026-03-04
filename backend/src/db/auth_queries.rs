@@ -76,13 +76,12 @@ pub async fn set_user_password(
     Ok(user)
 }
 
-/// Count real users (non-default, with a password hash set)
+/// Count real users (any user with a password hash set, including a claimed default account)
 pub async fn count_non_default_users(pool: &PgPool) -> Result<i64, sqlx::Error> {
     let count: (i64,) = sqlx::query_as(
         r#"
         SELECT COUNT(*) FROM users
-        WHERE id != '00000000-0000-0000-0000-000000000001'
-        AND password_hash IS NOT NULL
+        WHERE password_hash IS NOT NULL
         "#,
     )
     .fetch_one(pool)

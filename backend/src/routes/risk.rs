@@ -9,7 +9,9 @@ use uuid::Uuid;
 use sqlx::PgPool;
 use chrono::{Utc, Duration};
 
+use crate::db::portfolio_queries;
 use crate::errors::AppError;
+use crate::middleware::auth::AuthUser;
 use crate::models::{RiskAssessment, CorrelationMatrix, CorrelationPair, RiskSnapshot, RiskAlert, RiskHistoryParams, AlertQueryParams, PortfolioNarrative, GenerateNarrativeRequest};
 use crate::models::risk::{RiskThresholdSettings, UpdateRiskThresholds, PortfolioRiskWithViolations, ThresholdViolation, ViolationSeverity};
 use crate::services::{risk_service, risk_snapshot_service, narrative_service};
@@ -588,10 +590,14 @@ pub async fn get_volatility_forecast(
 ///
 /// Example: GET /api/risk/portfolios/{uuid}/downside?days=90&benchmark=SPY
 pub async fn get_portfolio_downside_risk(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<RiskQueryParams>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     info!(
         "🌐 [ENDPOINT] GET /api/risk/portfolios/{}/downside - days={}, benchmark={}, force={}",
         portfolio_id, params.days, params.benchmark, params.force
@@ -823,10 +829,14 @@ async fn get_cached_portfolio_risk_with_status(
 ///
 /// Example: GET /api/risk/portfolios/{uuid}?days=60
 pub async fn get_portfolio_risk(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<RiskQueryParams>,
     State(state): State<AppState>,
 ) -> Result<Json<PortfolioRiskWithViolations>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     use crate::db::holding_snapshot_queries;
     use crate::models::PositionRiskContribution;
     use std::collections::HashMap;
@@ -1223,9 +1233,13 @@ fn detect_violations(
 ///
 /// Returns default thresholds if none are configured yet.
 pub async fn get_thresholds(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<RiskThresholdSettings>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     info!("GET /api/risk/portfolios/{}/thresholds - Retrieving risk thresholds", portfolio_id);
 
     let settings = crate::db::risk_threshold_queries::get_thresholds(&state.pool, portfolio_id)
@@ -1244,10 +1258,14 @@ pub async fn get_thresholds(
 ///
 /// Request body: UpdateRiskThresholds with optional fields
 pub async fn set_thresholds(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     State(state): State<AppState>,
     Json(request): Json<UpdateRiskThresholds>,
 ) -> Result<Json<RiskThresholdSettings>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     info!("POST /api/risk/portfolios/{}/thresholds - Updating risk thresholds", portfolio_id);
 
     let settings = crate::db::risk_threshold_queries::upsert_thresholds(&state.pool, portfolio_id, &request)
@@ -1303,10 +1321,14 @@ async fn get_cached_correlations(
 ///
 /// Example: GET /api/risk/portfolios/{uuid}/correlations?days=90
 pub async fn get_portfolio_correlations(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<RiskQueryParams>,
     State(state): State<AppState>,
 ) -> Result<Json<crate::models::risk::CorrelationMatrixWithStats>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     use crate::db::{holding_snapshot_queries, price_queries};
     use std::collections::HashMap;
     use std::time::Instant;
@@ -1607,9 +1629,13 @@ pub async fn get_portfolio_correlations(
 ///
 /// Example: POST /api/risk/portfolios/{uuid}/snapshot
 pub async fn create_portfolio_snapshot(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<RiskSnapshot>>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     info!(
         "POST /api/risk/portfolios/{}/snapshot - Creating risk snapshots",
         portfolio_id
@@ -1647,10 +1673,14 @@ pub async fn create_portfolio_snapshot(
 ///
 /// Example: GET /api/risk/portfolios/{uuid}/history?days=180&ticker=AAPL
 pub async fn get_risk_history(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<RiskHistoryParams>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<RiskSnapshot>>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     info!(
         "GET /api/risk/portfolios/{}/history - Fetching risk history (days={}, ticker={:?})",
         portfolio_id, params.days, params.ticker
@@ -1684,10 +1714,14 @@ pub async fn get_risk_history(
 ///
 /// Example: GET /api/risk/portfolios/{uuid}/alerts?days=30&threshold=15.0
 pub async fn get_risk_alerts(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<AlertQueryParams>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<RiskAlert>>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     info!(
         "GET /api/risk/portfolios/{}/alerts - Detecting risk increases (days={}, threshold={}%)",
         portfolio_id, params.days, params.threshold
@@ -1720,10 +1754,14 @@ pub async fn get_risk_alerts(
 ///
 /// Returns CSV file with portfolio summary and position-level risk metrics
 pub async fn export_portfolio_risk_csv(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<RiskQueryParams>,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     info!(
         "GET /api/risk/portfolios/{}/export/csv - Exporting risk data to CSV",
         portfolio_id
@@ -1901,10 +1939,14 @@ pub async fn export_portfolio_risk_csv(
 ///
 /// Example: GET /api/risk/portfolios/{uuid}/narrative?time_period=30d
 pub async fn get_portfolio_narrative(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<GenerateNarrativeRequest>,
     State(state): State<AppState>,
 ) -> Result<Json<PortfolioNarrative>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     use crate::db::holding_snapshot_queries;
     use std::collections::HashMap;
 

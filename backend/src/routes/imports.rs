@@ -6,7 +6,9 @@ use tracing::{info, error};
 use uuid::Uuid;
 use std::path::PathBuf;
 
+use crate::db::portfolio_queries;
 use crate::errors::AppError;
+use crate::middleware::auth::AuthUser;
 use crate::services::{csv_import_service, activity_import_service};
 use crate::state::AppState;
 
@@ -133,10 +135,15 @@ fn extract_activity_date_from_filename(filename: &str) -> Option<String> {
 
 pub async fn import_csv(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Json(data): Json<ImportRequest>,
 ) -> Result<Json<ImportResponse>, AppError> {
     info!("POST /portfolios/{}/import - Importing CSV file: {}", portfolio_id, data.file_path);
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await
+        .map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
 
     let file_path = PathBuf::from(&data.file_path);
 

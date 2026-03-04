@@ -3,7 +3,9 @@ use axum::{Json, Router};
 use axum::routing::get;
 use serde::Deserialize;
 use uuid::Uuid;
+use crate::db::portfolio_queries;
 use crate::errors::AppError;
+use crate::middleware::auth::AuthUser;
 use crate::models::{ForecastMethod, PortfolioForecast};
 use crate::services;
 use crate::state::AppState;
@@ -21,19 +23,27 @@ struct ForecastQuery {
 }
 
 async fn get_analytics(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<crate::models::AnalyticsResponse>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     services::analytics_service::get_analytics(&state.pool, portfolio_id)
         .await
         .map(Json)
 }
 
 async fn get_portfolio_forecast(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     Query(params): Query<ForecastQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<PortfolioForecast>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     let days_ahead = params.days.unwrap_or(30).min(7300); // Cap at 20 years (7300 days)
 
     let method = params.method.as_ref().and_then(|m| match m.as_str() {

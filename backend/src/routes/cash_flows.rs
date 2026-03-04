@@ -4,8 +4,9 @@ use axum::routing::{get, post};
 use tracing::{info, error};
 use uuid::Uuid;
 
-use crate::db::cash_flow_queries;
+use crate::db::{account_queries, cash_flow_queries};
 use crate::errors::AppError;
+use crate::middleware::auth::AuthUser;
 use crate::models::{CashFlow, CreateCashFlow};
 use crate::state::AppState;
 
@@ -17,11 +18,17 @@ pub fn router() -> Router<AppState> {
 
 pub async fn create_cash_flow(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(account_id): Path<Uuid>,
     Json(data): Json<CreateCashFlow>,
 ) -> Result<Json<CashFlow>, AppError> {
     info!("POST /accounts/{}/cash-flows - Creating cash flow", account_id);
-
+    if !account_queries::belongs_to_user(&state.pool, account_id, user_id)
+        .await
+        .map_err(AppError::Db)?
+    {
+        return Err(AppError::NotFound(format!("Account {} not found", account_id)));
+    }
     let cash_flow = cash_flow_queries::create(&state.pool, account_id, data)
         .await
         .map_err(|e| {
@@ -29,7 +36,6 @@ pub async fn create_cash_flow(
             AppError::Db(e)
         })?;
 
-    // Update account totals
     if let Err(e) = cash_flow_queries::update_account_totals(&state.pool, account_id).await {
         error!("Failed to update account totals: {}", e);
     }
@@ -39,10 +45,16 @@ pub async fn create_cash_flow(
 
 pub async fn list_cash_flows(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(account_id): Path<Uuid>,
 ) -> Result<Json<Vec<CashFlow>>, AppError> {
     info!("GET /accounts/{}/cash-flows - Listing cash flows", account_id);
-
+    if !account_queries::belongs_to_user(&state.pool, account_id, user_id)
+        .await
+        .map_err(AppError::Db)?
+    {
+        return Err(AppError::NotFound(format!("Account {} not found", account_id)));
+    }
     let cash_flows = cash_flow_queries::fetch_by_account(&state.pool, account_id)
         .await
         .map_err(|e| {

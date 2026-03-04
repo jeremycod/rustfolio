@@ -11,6 +11,7 @@ use crate::auth;
 use crate::db::auth_queries;
 use crate::errors::AppError;
 use crate::middleware::auth::AuthUser;
+use crate::services::notification_service;
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -73,8 +74,7 @@ struct UserResponse {
 }
 
 #[derive(Debug, Serialize)]
-struct ResetTokenResponse {
-    reset_token: String,
+struct MessageResponse {
     message: String,
 }
 
@@ -282,26 +282,26 @@ async fn request_password_reset(
 ) -> Result<impl IntoResponse, AppError> {
     let email = req.email.trim().to_lowercase();
 
-    // Look up the user — return a generic response regardless to prevent email enumeration
+    // Always return the same generic response to prevent email enumeration.
+    // Any error during token generation or sending is logged but not surfaced.
+    let generic = Json(MessageResponse {
+        message: "If that email is registered you will receive a reset token shortly.".into(),
+    });
+
     let user = match auth_queries::get_user_by_email(&state.pool, &email).await? {
         Some(u) if u.password_hash.is_some() => u,
-        _ => {
-            return Ok(Json(ResetTokenResponse {
-                reset_token: String::new(),
-                message: "If this email is registered, a reset token has been generated.".into(),
-            }));
-        }
+        _ => return Ok(generic),
     };
 
     let token = uuid::Uuid::new_v4().to_string();
     auth_queries::create_password_reset_token(&state.pool, user.id, &token).await?;
 
-    tracing::info!("Password reset token for {}: {}", email, token);
+    // Send token via email only — it is never included in the HTTP response.
+    if let Err(e) = notification_service::send_password_reset_email(&user.email, &token).await {
+        tracing::error!("Failed to send password reset email to {}: {}", email, e);
+    }
 
-    Ok(Json(ResetTokenResponse {
-        reset_token: token,
-        message: "Reset token generated. Use it within 1 hour.".into(),
-    }))
+    Ok(generic)
 }
 
 async fn reset_password(

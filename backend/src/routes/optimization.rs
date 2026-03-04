@@ -4,7 +4,9 @@ use axum::routing::get;
 use tracing::{error, info};
 use uuid::Uuid;
 
+use crate::db::portfolio_queries;
 use crate::errors::AppError;
+use crate::middleware::auth::AuthUser;
 use crate::models::{OptimizationAnalysis, OptimizationRecommendation, CurrentMetrics, AnalysisSummary, PortfolioHealth, Severity};
 use crate::state::AppState;
 use bigdecimal::ToPrimitive;
@@ -22,9 +24,13 @@ pub fn router() -> Router<AppState> {
 /// Example: GET /api/optimization/portfolios/{uuid}
 #[axum::debug_handler]
 pub async fn get_portfolio_optimization(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<OptimizationAnalysis>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     info!(
         "GET /api/optimization/portfolios/{} - Fetching cached optimization",
         portfolio_id
@@ -301,9 +307,13 @@ pub async fn get_portfolio_optimization(
 /// Manually trigger optimization calculation for a portfolio
 #[axum::debug_handler]
 pub async fn generate_portfolio_optimization(
+    AuthUser(user_id): AuthUser,
     Path(portfolio_id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await.map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
     info!(
         "POST /api/optimization/portfolios/{}/generate - Manual optimization trigger",
         portfolio_id

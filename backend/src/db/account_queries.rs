@@ -2,6 +2,21 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use crate::models::{Account, CreateAccount};
 
+pub async fn belongs_to_user(pool: &PgPool, account_id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
+    let result: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(
+            SELECT 1 FROM accounts a
+            JOIN portfolios p ON a.portfolio_id = p.id
+            WHERE a.id = $1 AND p.user_id = $2
+         )"
+    )
+    .bind(account_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(result.0)
+}
+
 pub async fn fetch_all(pool: &PgPool, portfolio_id: Uuid) -> Result<Vec<Account>, sqlx::Error> {
     sqlx::query_as::<_, Account>(
         "SELECT id, portfolio_id, account_number, account_nickname, client_id, client_name, created_at

@@ -67,11 +67,12 @@ pub async fn get_portfolio(
 
 pub async fn update_portfolio(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(id): Path<Uuid>,
     Json(data): Json<UpdatePortfolio>,
 ) -> Result<Json<Portfolio>, AppError> {
     info!("PUT /portfolios/{} - Updating portfolio", id);
-    let portfolio = services::portfolio_service::update(&state.pool, id, data)
+    let portfolio = services::portfolio_service::update(&state.pool, id, user_id, data)
         .await
         .map_err(|e| {
             error!("Failed to update portfolio {}: {}", id, e);
@@ -82,11 +83,11 @@ pub async fn update_portfolio(
 
 pub async fn delete_portfolio(
     State(state): State<AppState>,
-    AuthUser(_user_id): AuthUser,
+    AuthUser(user_id): AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<()>, AppError> {
     info!("DELETE /portfolios/{} - Deleting portfolio", id);
-    match services::portfolio_service::delete(&state.pool, id).await {
+    match services::portfolio_service::delete(&state.pool, id, user_id).await {
         Ok(0) => {
             error!("Portfolio {} not found for deletion", id);
             Err(AppError::NotFound(format!("Portfolio {} not found", id)))
@@ -101,12 +102,13 @@ pub async fn delete_portfolio(
 
 pub async fn get_portfolio_latest_holdings(
     State(state): State<AppState>,
-    AuthUser(_user_id): AuthUser,
+    AuthUser(user_id): AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<LatestAccountHolding>>, AppError> {
     use crate::db::holding_snapshot_queries;
 
     info!("GET /portfolios/{}/latest-holdings - Fetching latest holdings", id);
+    services::portfolio_service::fetch_one(&state.pool, id, user_id).await?;
     let holdings = holding_snapshot_queries::fetch_portfolio_latest_holdings(&state.pool, id)
         .await
         .map_err(|e| {
