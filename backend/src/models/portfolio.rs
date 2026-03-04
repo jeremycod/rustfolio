@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use uuid::Uuid;
 
 // Represents a logical grouping of investments (e.g., "Long-term", "Retirement", "Speculative").
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Portfolio {
-    pub id: uuid::Uuid,
+    pub id: Uuid,
     pub name: String,
-    pub created_at: chrono::DateTime<chrono::Utc>
+    #[serde(skip_serializing)]
+    pub user_id: Uuid,
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,11 +23,12 @@ pub struct UpdatePortfolio {
 }
 
 impl Portfolio {
-    pub(crate) fn new(name: String) -> Self {
+    pub(crate) fn new(name: String, user_id: Uuid) -> Self {
         Self {
-            id: uuid::Uuid::new_v4(),
+            id: Uuid::new_v4(),
             name,
-            created_at: chrono::Utc::now()
+            user_id,
+            created_at: chrono::Utc::now(),
         }
     }
 }

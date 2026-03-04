@@ -5,11 +5,11 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
-use sqlx::PgPool;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::db::{alert_queries, financial_planning_queries};
+use crate::db::financial_planning_queries;
+use crate::middleware::auth::AuthUser;
 use crate::models::financial_planning::*;
 use crate::services::financial_snapshot_service;
 use crate::state::AppState;
@@ -78,29 +78,14 @@ pub fn router() -> Router<AppState> {
 }
 
 // ==============================================================================
-// Helper: get default user ID
-// ==============================================================================
-
-async fn get_default_user_id(pool: &PgPool) -> Result<Uuid, (StatusCode, String)> {
-    let default_uuid = Uuid::parse_str("00000000-0000-0000-0000-000000000001")
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    alert_queries::get_user(pool, default_uuid)
-        .await
-        .map_err(|e| (StatusCode::UNAUTHORIZED, e.to_string()))?;
-
-    Ok(default_uuid)
-}
-
-// ==============================================================================
 // Survey Handlers
 // ==============================================================================
 
 async fn create_survey(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
-    let user_id = get_default_user_id(pool).await?;
 
     info!("Creating new financial survey for user {}", user_id);
 
@@ -113,9 +98,9 @@ async fn create_survey(
 
 async fn list_surveys(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
-    let user_id = get_default_user_id(pool).await?;
 
     let surveys = financial_planning_queries::get_surveys_for_user(pool, user_id)
         .await
@@ -623,9 +608,9 @@ async fn unlink_asset(
 
 async fn get_linkable_accounts(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
-    let user_id = get_default_user_id(pool).await?;
 
     let accounts = financial_planning_queries::get_linkable_accounts(pool, user_id)
         .await

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::State,
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post, put},
@@ -8,9 +8,9 @@ use axum::{
 };
 use serde_json::json;
 use tracing::info;
-use uuid::Uuid;
 
 use crate::errors::AppError;
+use crate::middleware::auth::AuthUser;
 use crate::models::{RiskPreferencesResponse, UpdateRiskPreferences};
 use crate::services::user_preference_service;
 use crate::state::AppState;
@@ -18,19 +18,18 @@ use crate::state::AppState;
 /// Create the preferences router
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/users/:user_id/preferences", get(get_preferences))
-        .route("/users/:user_id/preferences", put(update_preferences))
-        .route("/users/:user_id/preferences/reset", post(reset_preferences))
-        .route("/users/:user_id/risk-profile", get(get_risk_profile))
+        .route("/users/me/preferences", get(get_preferences))
+        .route("/users/me/preferences", put(update_preferences))
+        .route("/users/me/preferences/reset", post(reset_preferences))
+        .route("/users/me/risk-profile", get(get_risk_profile))
 }
 
-/// GET /api/users/:user_id/preferences
-/// Get user risk preferences (returns defaults if not set)
+/// GET /api/users/me/preferences
 pub async fn get_preferences(
     State(state): State<AppState>,
-    Path(user_id): Path<Uuid>,
+    AuthUser(user_id): AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
-    info!("GET /api/users/{}/preferences", user_id);
+    info!("GET /api/users/me/preferences for user {}", user_id);
 
     let preferences = user_preference_service::get_user_preferences(&state.pool, user_id).await?;
 
@@ -39,14 +38,13 @@ pub async fn get_preferences(
     Ok((StatusCode::OK, Json(response)))
 }
 
-/// PUT /api/users/:user_id/preferences
-/// Update user risk preferences
+/// PUT /api/users/me/preferences
 pub async fn update_preferences(
     State(state): State<AppState>,
-    Path(user_id): Path<Uuid>,
+    AuthUser(user_id): AuthUser,
     Json(update): Json<UpdateRiskPreferences>,
 ) -> Result<impl IntoResponse, AppError> {
-    info!("PUT /api/users/{}/preferences", user_id);
+    info!("PUT /api/users/me/preferences for user {}", user_id);
 
     let preferences =
         user_preference_service::update_user_preferences(&state.pool, user_id, update).await?;
@@ -56,13 +54,12 @@ pub async fn update_preferences(
     Ok((StatusCode::OK, Json(response)))
 }
 
-/// POST /api/users/:user_id/preferences/reset
-/// Reset user preferences to defaults
+/// POST /api/users/me/preferences/reset
 pub async fn reset_preferences(
     State(state): State<AppState>,
-    Path(user_id): Path<Uuid>,
+    AuthUser(user_id): AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
-    info!("POST /api/users/{}/preferences/reset", user_id);
+    info!("POST /api/users/me/preferences/reset for user {}", user_id);
 
     let preferences =
         user_preference_service::reset_user_preferences(&state.pool, user_id).await?;
@@ -72,13 +69,12 @@ pub async fn reset_preferences(
     Ok((StatusCode::OK, Json(response)))
 }
 
-/// GET /api/users/:user_id/risk-profile
-/// Get a human-readable description of the user's risk profile
+/// GET /api/users/me/risk-profile
 pub async fn get_risk_profile(
     State(state): State<AppState>,
-    Path(user_id): Path<Uuid>,
+    AuthUser(user_id): AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
-    info!("GET /api/users/{}/risk-profile", user_id);
+    info!("GET /api/users/me/risk-profile for user {}", user_id);
 
     let preferences = user_preference_service::get_user_preferences(&state.pool, user_id).await?;
 

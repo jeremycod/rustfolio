@@ -16,6 +16,8 @@ import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { RollingBetaPage } from "./components/RollingBetaPage";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { usePreferences } from "./contexts/PreferencesContext";
+import { useAuth } from "./contexts/AuthContext";
+import { LoginPage } from "./components/LoginPage";
 import NotificationsPage from "./components/NotificationsPage";
 import AlertRulesPage from "./components/AlertRulesPage";
 import AlertHistoryPage from "./components/AlertHistoryPage";
@@ -35,6 +37,10 @@ import { FactorPortfolioPage } from "./components/FactorPortfolioPage";
 import { FinancialPlanningPage } from "./components/FinancialPlanning/FinancialPlanningPage";
 
 export default function App() {
+    const { user, isLoading } = useAuth();
+    if (isLoading) return null;
+    if (!user) return <LoginPage />;
+
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState('dashboard');
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);

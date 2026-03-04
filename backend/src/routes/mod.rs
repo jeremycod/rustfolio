@@ -21,4 +21,5 @@ pub mod signals;
 pub mod recommendations;
 pub mod watchlists;
 pub mod financial_planning;
+pub mod auth;
 

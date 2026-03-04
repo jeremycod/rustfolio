@@ -249,7 +249,7 @@ pub async fn get_long_term_guidance(
     );
 
     // Check that the portfolio exists
-    let portfolio = crate::db::portfolio_queries::fetch_one(&state.pool, portfolio_id)
+    let portfolio = crate::db::portfolio_queries::fetch_one_unchecked(&state.pool, portfolio_id)
         .await
         .map_err(|e| {
             error!("Failed to fetch portfolio {}: {}", portfolio_id, e);

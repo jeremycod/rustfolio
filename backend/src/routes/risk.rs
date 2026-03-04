@@ -1734,7 +1734,7 @@ pub async fn export_portfolio_risk_csv(
     use std::collections::HashMap;
 
     // Fetch portfolio name
-    let portfolio = portfolio_queries::fetch_one(&state.pool, portfolio_id)
+    let portfolio = portfolio_queries::fetch_one_unchecked(&state.pool, portfolio_id)
         .await
         .map_err(|e| {
             error!("Failed to fetch portfolio: {}", e);

@@ -10,7 +10,8 @@ use sqlx::PgPool;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db::{alert_queries, watchlist_queries, price_queries};
+use crate::db::{watchlist_queries, price_queries};
+use crate::middleware::auth::AuthUser;
 use crate::models::watchlist::*;
 use crate::models::index_templates::{self, CreateWatchlistFromTemplateRequest, CreateWatchlistFromTemplateResponse, IndexTemplateListItem};
 use crate::state::AppState;
@@ -89,6 +90,7 @@ async fn get_template(
 
 async fn create_from_template(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Json(req): Json<CreateWatchlistFromTemplateRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
@@ -98,9 +100,6 @@ async fn create_from_template(
     // Get the template
     let template = index_templates::get_template_by_id(&req.template_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Template '{}' not found", req.template_id)))?;
-
-    // Get user ID
-    let user_id = get_default_user_id(pool).await?;
 
     // Determine watchlist name
     let watchlist_name = req.custom_name.unwrap_or_else(|| template.name.clone());
@@ -174,10 +173,10 @@ async fn create_from_template(
 
 async fn create_watchlist(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Json(req): Json<CreateWatchlistRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
-    let user_id = get_default_user_id(pool).await?;
 
     let watchlist = watchlist_queries::create_watchlist(
         pool,
@@ -208,9 +207,9 @@ async fn create_watchlist(
 
 async fn list_watchlists(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
-    let user_id = get_default_user_id(pool).await?;
 
     let watchlists = watchlist_queries::get_watchlists_for_user(pool, user_id)
         .await
@@ -318,11 +317,11 @@ async fn get_watchlist(
 
 async fn update_watchlist(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateWatchlistRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
-    let user_id = get_default_user_id(pool).await?;
 
     let watchlist = watchlist_queries::update_watchlist(
         pool,
@@ -354,10 +353,10 @@ async fn update_watchlist(
 
 async fn delete_watchlist(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
-    let user_id = get_default_user_id(pool).await?;
 
     watchlist_queries::delete_watchlist(pool, id, user_id)
         .await
@@ -831,10 +830,10 @@ async fn delete_threshold(
 
 async fn get_alerts(
     State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
     Query(params): Query<PaginationParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = &state.pool;
-    let user_id = get_default_user_id(pool).await?;
 
     let alerts = watchlist_queries::get_watchlist_alerts(pool, user_id, params.limit, params.offset)
         .await
@@ -879,17 +878,6 @@ async fn mark_alert_read(
 // ==============================================================================
 // Helper Functions
 // ==============================================================================
-
-async fn get_default_user_id(pool: &PgPool) -> Result<Uuid, (StatusCode, String)> {
-    let default_uuid = Uuid::parse_str("00000000-0000-0000-0000-000000000001")
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    alert_queries::get_user(pool, default_uuid)
-        .await
-        .map_err(|e| (StatusCode::UNAUTHORIZED, e.to_string()))?;
-
-    Ok(default_uuid)
-}
 
 async fn get_current_price_data(pool: &PgPool, item: &WatchlistItem) -> (Option<f64>, Option<f64>) {
     let current_price = match price_queries::fetch_latest(pool, &item.ticker).await {

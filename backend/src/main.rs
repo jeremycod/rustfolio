@@ -11,6 +11,8 @@ mod external;
 mod state;
 mod logging;
 mod jobs;
+mod auth;
+mod middleware;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -42,6 +44,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(10)
         .connect(&database_url)
         .await?;
+
+    // Run pending migrations automatically on startup
+    sqlx::migrate!("./migrations").run(&pool).await?;
+    tracing::info!("✅ Database migrations applied");
 
     // Select price provider based on PRICE_PROVIDER env var (defaults to multi)
     let provider_name = std::env::var("PRICE_PROVIDER")
@@ -129,6 +135,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rate_limiter = Arc::new(RateLimiter::new(3, 8));
     tracing::info!("⏱️  Rate limiter initialized: 3 concurrent, 8 requests/min");
 
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "change-me-in-production-use-a-long-random-secret".to_string());
+
     let state = AppState {
         pool: pool.clone(),
         price_provider: provider.clone(),
@@ -137,6 +146,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         risk_free_rate,
         llm_service,
         news_service,
+        jwt_secret,
     };
 
     // Initialize and start job scheduler

@@ -107,6 +107,31 @@ import type {
     UpdateHouseholdExpenseRequest,
 } from "../types";
 
+export interface AuthUser {
+    id: string;
+    email: string;
+    name?: string;
+}
+
+export async function register(email: string, password: string, name?: string): Promise<AuthUser> {
+    const { data } = await api.post<AuthUser>('/api/auth/register', { email, password, name });
+    return data;
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+    const { data } = await api.post<AuthUser>('/api/auth/login', { email, password });
+    return data;
+}
+
+export async function logout(): Promise<void> {
+    await api.post('/api/auth/logout');
+}
+
+export async function getMe(): Promise<AuthUser> {
+    const { data } = await api.get<AuthUser>('/api/auth/me');
+    return data;
+}
+
 export async function listPortfolios(): Promise<Portfolio[]> {
     const res = await api.get("/api/portfolios");
     return res.data;
@@ -885,26 +910,26 @@ export async function getSentimentForecast(
 }
 
 // Phase 2: User Risk Preferences
-export async function getUserRiskPreferences(userId: string): Promise<RiskPreferences> {
-    const res = await api.get(`/api/users/${userId}/preferences`);
+export async function getUserRiskPreferences(_userId?: string): Promise<RiskPreferences> {
+    const res = await api.get(`/api/users/me/preferences`);
     return res.data;
 }
 
 export async function updateUserRiskPreferences(
-    userId: string,
+    _userId: string | undefined,
     preferences: Partial<RiskPreferences>
 ): Promise<RiskPreferences> {
-    const res = await api.put(`/api/users/${userId}/preferences`, preferences);
+    const res = await api.put(`/api/users/me/preferences`, preferences);
     return res.data;
 }
 
-export async function resetUserRiskPreferences(userId: string): Promise<RiskPreferences> {
-    const res = await api.post(`/api/users/${userId}/preferences/reset`);
+export async function resetUserRiskPreferences(_userId?: string): Promise<RiskPreferences> {
+    const res = await api.post(`/api/users/me/preferences/reset`);
     return res.data;
 }
 
-export async function getUserRiskProfile(userId: string): Promise<RiskProfile> {
-    const res = await api.get(`/api/users/${userId}/risk-profile`);
+export async function getUserRiskProfile(_userId?: string): Promise<RiskProfile> {
+    const res = await api.get(`/api/users/me/risk-profile`);
     return res.data;
 }
 

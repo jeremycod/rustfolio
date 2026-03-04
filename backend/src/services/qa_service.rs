@@ -15,7 +15,7 @@ pub async fn build_portfolio_context(
     info!("Building Q&A context for portfolio {}", portfolio_id);
 
     // 1. Get portfolio basic info
-    let portfolio = crate::db::portfolio_queries::fetch_one(pool, portfolio_id)
+    let portfolio = crate::db::portfolio_queries::fetch_one_unchecked(pool, portfolio_id)
         .await
         .map_err(AppError::Db)?
         .ok_or_else(|| AppError::External("Portfolio not found".to_string()))?;

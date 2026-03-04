@@ -196,6 +196,30 @@ The application will be available at:
 - **[Phase 3 Enhancements](docs/PHASE3_ENHANCEMENTS.md)** - Recent feature additions
 - **[Portfolio Optimization Spec](docs/PORTFOLIO_OPTIMIZATION_SPEC.md)** - Optimization implementation details
 
+### 📖 Tutorial Series
+
+1. **[Dashboard Overview](docs/01-dashboard.md)** - Main dashboard and navigation
+2. **[Account Management](docs/02-accounts.md)** - Setting up brokerage accounts
+3. **[Portfolio Basics](docs/03-portfolio.md)** - Creating and managing portfolios
+4. **[Analytics Overview](docs/04-analytics.md)** - Understanding portfolio analytics
+5. **[Portfolio Risk](docs/05-portfolio-risk.md)** - Risk assessment and metrics
+6. **[Position Risk Analysis](docs/06-position-risk-analysis.md)** - Individual position risk
+7. **[Risk Comparison](docs/07-risk-comparison.md)** - Comparing risk across assets
+8. **[Correlations](docs/08-correlations.md)** - Correlation analysis and heatmaps
+9. **[Rolling Beta](docs/09-rolling-beta.md)** - Beta analysis over time
+10. **[CVaR & Tail Risk](docs/10-cvar-tail-risk.md)** - Advanced risk metrics
+11. **[Downside Risk](docs/11-downside-risk.md)** - Downside protection analysis
+12. **[Market Regime](docs/12-market-regime.md)** - Market condition analysis
+13. **[Volatility Forecast](docs/13-volatility-forecast.md)** - Predicting volatility
+14. **[Trading Signals](docs/14-trading-signals.md)** - Technical trading indicators
+15. **[Sentiment Forecast](docs/15-sentiment-forecast.md)** - News and sentiment analysis
+16. **[Stock Screener](docs/16-stock-screener.md)** - Finding investment opportunities
+17. **[Watchlists](docs/17-watchlists.md)** - Tracking potential investments
+18. **[Long-term Investment Guidance](docs/18-long-term-investment-guidance.md)** - Strategic planning
+19. **[Factor Portfolio Builder](docs/19-factor-portfolio-builder.md)** - Factor-based investing
+20. **[Notifications & Alerts](docs/21-notifications-alerts.md)** - Alert system and notifications
+21. **[Financial Planning](docs/22-financial-planning.md)** - Retirement and goal planning
+
 ## 🛣 Roadmap
 
 ### Completed ✅

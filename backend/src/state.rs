@@ -15,4 +15,5 @@ pub struct AppState {
     pub risk_free_rate: f64, // Annual risk-free rate (e.g., 0.045 for 4.5%)
     pub llm_service: Arc<LlmService>,
     pub news_service: Arc<NewsService>,
+    pub jwt_secret: String,
 }
