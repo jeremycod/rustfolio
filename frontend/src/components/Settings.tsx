@@ -29,6 +29,7 @@ import { RiskThresholdSettings } from './RiskThresholdSettings';
 import UserSettingsDialog from './UserSettingsDialog';
 import AIBadge from './AIBadge';
 import { usePreferences } from '../contexts/PreferencesContext';
+import { useAuth } from '../contexts/AuthContext';
 import NotificationPreferencesSection from './NotificationPreferencesSection';
 import type { Portfolio } from '../types';
 
@@ -42,7 +43,8 @@ export function Settings() {
   const [userSettingsDialogOpen, setUserSettingsDialogOpen] = useState(false);
 
   const queryClient = useQueryClient();
-  const userId = '00000000-0000-0000-0000-000000000001';
+  const { user } = useAuth();
+  const userId = user!.id;
 
   const { data: preferences } = useQuery({
     queryKey: ['userPreferences', userId],

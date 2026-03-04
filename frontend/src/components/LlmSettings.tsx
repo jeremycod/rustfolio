@@ -23,13 +23,13 @@ import {
 } from '../lib/endpoints';
 import ConsentDialog from './ConsentDialog';
 import AIBadge from './AIBadge';
+import { useAuth } from '../contexts/AuthContext';
 import type { UpdateUserPreferences } from '../types';
-
-// Demo user ID - replace with actual auth when implemented
-const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 export default function LlmSettings() {
     const queryClient = useQueryClient();
+    const { user } = useAuth();
+    const DEMO_USER_ID = user!.id;
     const [consentDialogOpen, setConsentDialogOpen] = useState(false);
     const [narrativeCacheHours, setNarrativeCacheHours] = useState(24);
     const [hasChanges, setHasChanges] = useState(false);

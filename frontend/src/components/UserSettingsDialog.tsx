@@ -30,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getUserPreferences, updateUserPreferences, getLlmUsageStats } from '../lib/endpoints';
+import { useAuth } from '../contexts/AuthContext';
 import type { UpdateUserPreferences } from '../types';
 
 interface TabPanelProps {
@@ -57,9 +58,8 @@ export default function UserSettingsDialog({ open, onClose }: Props) {
   const [narrativeCacheHours, setNarrativeCacheHours] = useState(24);
   const [hasChanges, setHasChanges] = useState(false);
   const queryClient = useQueryClient();
-
-  // Use demo user ID for now
-  const userId = '00000000-0000-0000-0000-000000000001';
+  const { user } = useAuth();
+  const userId = user!.id;
 
   // Fetch user preferences
   const { data: preferences, isLoading: prefsLoading } = useQuery({

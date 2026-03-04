@@ -50,6 +50,11 @@ export default function App() {
     const queryClient = useQueryClient();
     const { autoRefresh } = usePreferences();
 
+    // Clear stale cache from any previous user session on mount
+    useEffect(() => {
+        queryClient.clear();
+    }, []);
+
     const portfoliosQ = useQuery({
         queryKey: ["portfolios"],
         queryFn: listPortfolios,
