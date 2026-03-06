@@ -41,7 +41,10 @@ export default function App() {
     const { user, isLoading } = useAuth();
     if (isLoading) return null;
     if (!user) return <LoginPage />;
+    return <AuthenticatedApp />;
+}
 
+function AuthenticatedApp() {
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState('dashboard');
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);

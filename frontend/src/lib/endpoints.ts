@@ -238,8 +238,32 @@ export async function listAccounts(portfolioId: string): Promise<Account[]> {
     return res.data;
 }
 
+export async function createAccount(portfolioId: string, data: {
+    account_number: string;
+    account_nickname: string;
+    client_id?: string;
+    client_name?: string;
+}): Promise<Account> {
+    const res = await api.post(`/api/portfolios/${portfolioId}/accounts`, data);
+    return res.data;
+}
+
 export async function getAccount(accountId: string): Promise<Account> {
     const res = await api.get(`/api/accounts/${accountId}`);
+    return res.data;
+}
+
+export async function addHolding(accountId: string, data: {
+    ticker: string;
+    holding_name?: string;
+    asset_category?: string;
+    industry?: string;
+    quantity: number;
+    price: number;
+    average_cost: number;
+    snapshot_date?: string;
+}): Promise<import('../types').HoldingSnapshot> {
+    const res = await api.post(`/api/accounts/${accountId}/holdings`, data);
     return res.data;
 }
 
@@ -266,6 +290,20 @@ export async function listCsvFiles(): Promise<CsvFileInfo[]> {
 
 export async function importCSV(portfolioId: string, filePath: string): Promise<ImportResponse> {
     const res = await api.post(`/api/portfolios/${portfolioId}/import`, { file_path: filePath });
+    return res.data;
+}
+
+export async function uploadImportCSV(
+    portfolioId: string,
+    data: {
+        filename: string;
+        content: string;
+        format: 'rj_holdings' | 'rj_activities';
+        account_id?: string;
+        snapshot_date?: string;
+    }
+): Promise<ImportResponse> {
+    const res = await api.post(`/api/portfolios/${portfolioId}/import/upload`, data);
     return res.data;
 }
 

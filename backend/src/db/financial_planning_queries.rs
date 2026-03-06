@@ -99,7 +99,7 @@ pub async fn upsert_personal_info(
             employment_status, dependents, contact_email,
             has_spouse, spouse_name, spouse_birth_year, spouse_employment_status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, FALSE), $9, $10, $11)
         ON CONFLICT (survey_id)
         DO UPDATE SET
             full_name = COALESCE($2, survey_personal_info.full_name),

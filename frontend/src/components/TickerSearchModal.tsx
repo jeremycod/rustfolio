@@ -20,7 +20,7 @@ import type { TickerMatch } from '../types';
 interface TickerSearchModalProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (ticker: string) => void;
+  onSelect: (symbol: string, name: string) => void;
 }
 
 export function TickerSearchModal({ open, onClose, onSelect }: TickerSearchModalProps) {
@@ -33,7 +33,7 @@ export function TickerSearchModal({ open, onClose, onSelect }: TickerSearchModal
   });
 
   const handleSelect = (ticker: TickerMatch) => {
-    onSelect(ticker.symbol);
+    onSelect(ticker.symbol, ticker.name);
     onClose();
     setSearchTerm('');
   };

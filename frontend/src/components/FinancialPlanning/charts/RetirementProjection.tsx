@@ -498,6 +498,9 @@ export function RetirementProjectionChart({
                                     </TableCell>
                                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                                         +{formatCurrency(goalBasedMonthlySavings)}/mo
+                                        <Typography variant="caption" display="block" color="text.secondary">
+                                            {formatCurrency(goalBasedMonthlySavings * 12)}/yr
+                                        </Typography>
                                     </TableCell>
                                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                                         {formatCurrency(finalGoal)}
@@ -564,6 +567,9 @@ export function RetirementProjectionChart({
                                         </TableCell>
                                         <TableCell align="right">
                                             +{formatCurrency(s.monthlyExtra)}/mo
+                                            <Typography variant="caption" display="block" color="text.secondary">
+                                                {formatCurrency(s.monthlyExtra * 12)}/yr
+                                            </Typography>
                                         </TableCell>
                                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                                             {formatCurrency(total)}

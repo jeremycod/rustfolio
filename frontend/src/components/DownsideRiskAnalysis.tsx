@@ -539,7 +539,7 @@ export function DownsideRiskAnalysis({ portfolioId: initialPortfolioId, onTicker
           <Typography variant="body1" gutterBottom>
             <strong>Failed to load downside risk data</strong>
           </Typography>
-          <Typography variant="body2">
+          <Typography variant="body2" component="div">
             {(() => {
               const error = downsideRiskQ.error as any;
               const errorMessage = error?.response?.data || error?.message || 'Unknown error';
@@ -551,15 +551,16 @@ export function DownsideRiskAnalysis({ portfolioId: initialPortfolioId, onTicker
                     <Typography variant="body2" paragraph>
                       {errorMessage}
                     </Typography>
-                    <Typography variant="body2">
-                      <strong>To fix this:</strong>
-                    </Typography>
-                    <Typography variant="body2" component="ul" sx={{ pl: 2 }}>
-                      <li>Go to Admin → Jobs</li>
-                      <li>Find "populate_downside_risk_cache"</li>
-                      <li>Click "Trigger Now"</li>
-                      <li>Wait 2-5 minutes, then refresh this page</li>
-                    </Typography>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="small"
+                      startIcon={<Refresh />}
+                      onClick={handleForceRefresh}
+                      sx={{ mt: 1 }}
+                    >
+                      Calculate Now
+                    </Button>
                   </Box>
                 );
               }

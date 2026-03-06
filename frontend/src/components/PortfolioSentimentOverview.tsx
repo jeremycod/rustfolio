@@ -37,7 +37,7 @@ export function PortfolioSentimentOverview({ portfolioId }: PortfolioSentimentOv
         queryKey: ['portfolio-sentiment', portfolioId],
         queryFn: () => getPortfolioSentiment(portfolioId),
         staleTime: 1000 * 60 * 60 * 6, // 6 hours
-        retry: 1,
+        retry: 0,
     });
 
     if (sentimentQuery.isLoading) {

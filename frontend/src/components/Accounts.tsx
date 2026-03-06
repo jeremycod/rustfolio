@@ -17,16 +17,16 @@ import {
   DialogActions,
   LinearProgress,
   Chip,
-  CircularProgress,
+  TextField,
 } from '@mui/material';
-import { Upload, Refresh, TrendingUp, TrendingDown, CalendarToday } from '@mui/icons-material';
+import { Upload, Refresh, TrendingUp, TrendingDown, AddCircle } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   listPortfolios,
   listAccounts,
-  importCSV,
-  listCsvFiles,
+  uploadImportCSV,
   getLatestHoldings,
+  createAccount,
 } from '../lib/endpoints';
 import type { Account } from '../types';
 import { formatCurrency, formatPercentage } from '../lib/formatters';
@@ -37,10 +37,39 @@ interface AccountsProps {
   onAccountSelect?: (accountId: string) => void;
 }
 
+function extractDateFromHoldingsFilename(filename: string): string | null {
+  // AccountsHoldings-YYYYMMDD.csv → "YYYY-MM-DD"
+  const parts = filename.split('-');
+  if (parts.length >= 2) {
+    const datePart = parts[1].replace('.csv', '');
+    if (datePart.length === 8 && /^\d{8}$/.test(datePart)) {
+      return `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
+    }
+  }
+  return null;
+}
+
+function extractAccountFromActivitiesFilename(filename: string): string | null {
+  // AccountActivities-{account_number}-YYYYMMDD.csv → account_number
+  const parts = filename.split('-');
+  if (parts.length >= 3) {
+    return parts[1];
+  }
+  return null;
+}
+
 export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSelect }: AccountsProps) {
   const qc = useQueryClient();
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [selectedFilePath, setSelectedFilePath] = useState('');
+  const [importFormat, setImportFormat] = useState<'rj_holdings' | 'rj_activities' | ''>('');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importSnapshotDate, setImportSnapshotDate] = useState(new Date().toISOString().slice(0, 10));
+  const [importAccountId, setImportAccountId] = useState('');
+  const [detectedAccountNumber, setDetectedAccountNumber] = useState('');
+  const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false);
+  const [newAccountNumber, setNewAccountNumber] = useState('');
+  const [newAccountNickname, setNewAccountNickname] = useState('');
+  const [newClientName, setNewClientName] = useState('');
 
   const portfoliosQ = useQuery({
     queryKey: ['portfolios'],
@@ -51,12 +80,6 @@ export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSele
     queryKey: ['accounts', selectedPortfolioId],
     queryFn: () => listAccounts(selectedPortfolioId!),
     enabled: !!selectedPortfolioId,
-  });
-
-  const csvFilesQ = useQuery({
-    queryKey: ['csvFiles'],
-    queryFn: listCsvFiles,
-    enabled: isImportModalOpen,
   });
 
   // Fetch holdings for all accounts
@@ -80,24 +103,66 @@ export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSele
     enabled: !!selectedPortfolioId && !!accountsQ.data && accountsQ.data.length > 0,
   });
 
-  const importM = useMutation({
-    mutationFn: ({ portfolioId, path }: { portfolioId: string; path: string }) =>
-      importCSV(portfolioId, path),
-    onSuccess: async (data) => {
-      await qc.invalidateQueries({ queryKey: ['accounts', selectedPortfolioId] });
-      await qc.invalidateQueries({ queryKey: ['allAccountHoldings', selectedPortfolioId] });
-      setIsImportModalOpen(false);
-      setSelectedFilePath('');
+  const resetImportState = () => {
+    setImportFormat('');
+    setImportFile(null);
+    setImportSnapshotDate(new Date().toISOString().slice(0, 10));
+    setImportAccountId('');
+    setDetectedAccountNumber('');
+  };
 
-      // Different message for activities vs holdings
+  const handleFormatChange = (newFormat: 'rj_holdings' | 'rj_activities') => {
+    setImportFormat(newFormat);
+    setImportFile(null);
+    setImportSnapshotDate(new Date().toISOString().slice(0, 10));
+    setImportAccountId('');
+    setDetectedAccountNumber('');
+  };
+
+  const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setImportFile(file);
+    if (!file) return;
+
+    if (importFormat === 'rj_holdings') {
+      const date = extractDateFromHoldingsFilename(file.name);
+      if (date) setImportSnapshotDate(date);
+    } else if (importFormat === 'rj_activities') {
+      const accountNum = extractAccountFromActivitiesFilename(file.name);
+      setDetectedAccountNumber(accountNum || '');
+      if (accountNum && accountsQ.data) {
+        const match = accountsQ.data.find((a: Account) => a.account_number === accountNum);
+        setImportAccountId(match ? match.id : '');
+      } else {
+        setImportAccountId('');
+      }
+    }
+  };
+
+  const uploadImportM = useMutation({
+    mutationFn: async () => {
+      if (!importFile || !selectedPortfolioId || !importFormat) {
+        throw new Error('Missing required fields');
+      }
+      const content = await importFile.text();
+      return uploadImportCSV(selectedPortfolioId, {
+        filename: importFile.name,
+        content,
+        format: importFormat,
+        account_id: importFormat === 'rj_activities' ? importAccountId || undefined : undefined,
+        snapshot_date: importFormat === 'rj_holdings' ? importSnapshotDate : undefined,
+      });
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['accounts', selectedPortfolioId] });
+      qc.invalidateQueries({ queryKey: ['allAccountHoldings', selectedPortfolioId] });
+      setIsImportModalOpen(false);
+      resetImportState();
+
       const isActivities = data.snapshot_date === 'N/A';
       const message = isActivities
-        ? `Transaction import successful!\n\nTransactions imported: ${data.transactions_detected}\n\n${
-            data.errors.length > 0 ? `Errors:\n${data.errors.join('\n')}` : 'No errors'
-          }`
-        : `Holdings import successful!\n\nAccounts created: ${data.accounts_created}\nHoldings created: ${data.holdings_created}\nTransactions detected: ${data.transactions_detected}\nSnapshot date: ${data.snapshot_date}\n\n${
-            data.errors.length > 0 ? `Errors:\n${data.errors.join('\n')}` : 'No errors'
-          }`;
+        ? `Transaction import successful!\n\nTransactions imported: ${data.transactions_detected}\n\n${data.errors.length > 0 ? `Errors:\n${data.errors.join('\n')}` : 'No errors'}`
+        : `Holdings import successful!\n\nAccounts created: ${data.accounts_created}\nHoldings created: ${data.holdings_created}\nTransactions detected: ${data.transactions_detected}\nSnapshot date: ${data.snapshot_date}\n\n${data.errors.length > 0 ? `Errors:\n${data.errors.join('\n')}` : 'No errors'}`;
       alert(message);
     },
     onError: (error: any) => {
@@ -105,15 +170,34 @@ export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSele
     },
   });
 
-  const handleImport = () => {
-    if (selectedFilePath && selectedPortfolioId) {
-      importM.mutate({ portfolioId: selectedPortfolioId, path: selectedFilePath });
+  const createAccountM = useMutation({
+    mutationFn: (data: { account_number: string; account_nickname: string; client_name?: string }) =>
+      createAccount(selectedPortfolioId!, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts', selectedPortfolioId] });
+      setIsCreateAccountOpen(false);
+      setNewAccountNumber('');
+      setNewAccountNickname('');
+      setNewClientName('');
+    },
+    onError: (error: any) => {
+      alert(`Failed to create account: ${error.response?.data || error.message}`);
+    },
+  });
+
+  const handleCreateAccount = () => {
+    if (newAccountNumber.trim() && newAccountNickname.trim() && selectedPortfolioId) {
+      createAccountM.mutate({
+        account_number: newAccountNumber.trim(),
+        account_nickname: newAccountNickname.trim(),
+        client_name: newClientName.trim() || undefined,
+      });
     }
   };
 
   const handleOpenImportModal = () => {
     setIsImportModalOpen(true);
-    setSelectedFilePath('');
+    resetImportState();
   };
 
   // Calculate account summaries
@@ -196,6 +280,15 @@ export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSele
 
         <Button
           variant="contained"
+          startIcon={<AddCircle />}
+          onClick={() => setIsCreateAccountOpen(true)}
+          disabled={!selectedPortfolioId}
+        >
+          Add Account
+        </Button>
+
+        <Button
+          variant="outlined"
           startIcon={<Upload />}
           onClick={handleOpenImportModal}
           disabled={!selectedPortfolioId}
@@ -340,84 +433,162 @@ export function Accounts({ selectedPortfolioId, onPortfolioChange, onAccountSele
       {/* Empty State */}
       {selectedPortfolioId && accountsQ.data && accountsQ.data.length === 0 && (
         <Alert severity="info" sx={{ mt: 3 }}>
-          No accounts found. Import a CSV file to get started.
+          No accounts found. Add an account manually or import a CSV file to get started.
         </Alert>
       )}
 
-      {/* Import CSV Modal */}
+      {/* Create Account Dialog */}
       <Dialog
-        open={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
+        open={isCreateAccountOpen}
+        onClose={() => setIsCreateAccountOpen(false)}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Import CSV File</DialogTitle>
-        <DialogContent>
-          <Alert severity="info" sx={{ mb: 3, mt: 1 }}>
-            <Typography variant="body2">
-              Select a CSV file from the backend/data directory.
-              <br />
-              <strong>Holdings files</strong>: Import account snapshots (AccountsHoldings-YYYYMMDD.csv)
-              <br />
-              <strong>Activities files</strong>: Import transactions (AccountActivities-ACCOUNT-YYYYMMDD.csv)
-            </Typography>
-          </Alert>
-
-          {csvFilesQ.isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : csvFilesQ.data && csvFilesQ.data.length > 0 ? (
-            <FormControl fullWidth>
-              <InputLabel>CSV File</InputLabel>
-              <Select
-                value={selectedFilePath}
-                onChange={(e) => setSelectedFilePath(e.target.value)}
-                label="CSV File"
-              >
-                {csvFilesQ.data.map((file) => (
-                  <MenuItem key={file.path} value={file.path}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <CalendarToday fontSize="small" color="action" />
-                      <Box sx={{ flex: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                          <Chip
-                            label={file.file_type === 'holdings' ? 'Holdings' : 'Activities'}
-                            size="small"
-                            color={file.file_type === 'holdings' ? 'primary' : 'secondary'}
-                            sx={{ height: 20, fontSize: '0.7rem' }}
-                          />
-                          <Typography variant="body2">{file.name}</Typography>
-                        </Box>
-                        {file.date && (
-                          <Typography variant="caption" color="textSecondary">
-                            Date: {file.date}
-                          </Typography>
-                        )}
-                      </Box>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          ) : (
-            <Alert severity="warning">
-              No CSV files found in the backend/data directory. Please add CSV files with formats:
-              <br />
-              - AccountsHoldings-YYYYMMDD.csv (for holdings snapshots)
-              <br />
-              - AccountActivities-ACCOUNT-YYYYMMDD.csv (for transaction records)
-            </Alert>
-          )}
+        <DialogTitle>Add Account</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+          <TextField
+            label="Account Number"
+            value={newAccountNumber}
+            onChange={(e) => setNewAccountNumber(e.target.value)}
+            fullWidth
+            required
+            placeholder="e.g. RRSP-1234"
+          />
+          <TextField
+            label="Account Nickname"
+            value={newAccountNickname}
+            onChange={(e) => setNewAccountNickname(e.target.value)}
+            fullWidth
+            required
+            placeholder="e.g. My RRSP"
+          />
+          <TextField
+            label="Client Name (optional)"
+            value={newClientName}
+            onChange={(e) => setNewClientName(e.target.value)}
+            fullWidth
+            placeholder="e.g. John Doe"
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsImportModalOpen(false)}>Cancel</Button>
+          <Button onClick={() => setIsCreateAccountOpen(false)}>Cancel</Button>
           <Button
-            onClick={handleImport}
+            onClick={handleCreateAccount}
             variant="contained"
-            disabled={!selectedFilePath || importM.isPending}
+            disabled={!newAccountNumber.trim() || !newAccountNickname.trim() || createAccountM.isPending}
           >
-            {importM.isPending ? 'Importing...' : 'Import'}
+            {createAccountM.isPending ? 'Creating...' : 'Create Account'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Import CSV Modal */}
+      <Dialog open={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Import CSV</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
+
+          {/* Step 1: Format */}
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>Format</Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant={importFormat === 'rj_holdings' ? 'contained' : 'outlined'}
+                onClick={() => handleFormatChange('rj_holdings')}
+                size="small"
+              >
+                Raymond James — Holdings
+              </Button>
+              <Button
+                variant={importFormat === 'rj_activities' ? 'contained' : 'outlined'}
+                onClick={() => handleFormatChange('rj_activities')}
+                size="small"
+              >
+                Raymond James — Activities
+              </Button>
+            </Box>
+          </Box>
+
+          {/* Step 2: File picker (only show after format selected) */}
+          {importFormat && (
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>CSV File</Typography>
+              <Button variant="outlined" component="label" startIcon={<Upload />}>
+                {importFile ? importFile.name : 'Choose File'}
+                <input
+                  type="file"
+                  accept=".csv"
+                  hidden
+                  onChange={handleImportFileChange}
+                />
+              </Button>
+              {importFile && (
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  {(importFile.size / 1024).toFixed(1)} KB
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {/* Step 3: Holdings — snapshot date */}
+          {importFormat === 'rj_holdings' && importFile && (
+            <TextField
+              label="Snapshot Date"
+              type="date"
+              value={importSnapshotDate}
+              onChange={(e) => setImportSnapshotDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+              helperText="Date of this holdings snapshot (auto-detected from filename)"
+            />
+          )}
+
+          {/* Step 3: Activities — account picker */}
+          {importFormat === 'rj_activities' && importFile && (
+            <Box>
+              <FormControl fullWidth>
+                <InputLabel>Account</InputLabel>
+                <Select
+                  value={importAccountId}
+                  onChange={(e) => setImportAccountId(e.target.value)}
+                  label="Account"
+                >
+                  {(accountsQ.data ?? []).map((a) => (
+                    <MenuItem key={a.id} value={a.id}>
+                      {a.account_nickname} ({a.account_number})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {detectedAccountNumber && (
+                <Typography variant="caption" color={importAccountId ? 'success.main' : 'warning.main'} sx={{ mt: 0.5, display: 'block' }}>
+                  {importAccountId
+                    ? `Detected from filename: ${detectedAccountNumber}`
+                    : `Could not find account "${detectedAccountNumber}" — please select manually`}
+                </Typography>
+              )}
+              {!detectedAccountNumber && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  Could not detect account from filename — please select manually
+                </Typography>
+              )}
+            </Box>
+          )}
+
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setIsImportModalOpen(false); resetImportState(); }}>Cancel</Button>
+          <Button
+            onClick={() => uploadImportM.mutate()}
+            variant="contained"
+            startIcon={<Upload />}
+            disabled={
+              !importFile ||
+              !importFormat ||
+              (importFormat === 'rj_activities' && !importAccountId) ||
+              uploadImportM.isPending
+            }
+          >
+            {uploadImportM.isPending ? 'Importing...' : 'Import'}
           </Button>
         </DialogActions>
       </Dialog>

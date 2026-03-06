@@ -17,9 +17,15 @@ import {
   Button,
   Grid,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  CircularProgress,
 } from '@mui/material';
-import { ArrowBack, TrendingUp, TrendingDown } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
+import { ArrowBack, TrendingUp, TrendingDown, AddCircle, Search } from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LineChart,
   Line,
@@ -37,12 +43,15 @@ import {
   getAccountTransactions,
   getAccountTruePerformance,
   getAccountActivity,
+  addHolding,
+  getLatestPrice,
 } from '../lib/endpoints';
 import { formatCurrency, formatNumber, formatPercentage } from '../lib/formatters';
 import { TickerChip } from './TickerChip';
 import { RiskMetricsPanel } from './RiskMetricsPanel';
 import { AssetTypeChip } from './AssetTypeChip';
 import { AssetTypeLegend } from './AssetTypeLegend';
+import { TickerSearchModal } from './TickerSearchModal';
 
 interface AccountDetailProps {
   accountId: string;
@@ -52,6 +61,16 @@ interface AccountDetailProps {
 
 export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDetailProps) {
   const [activeTab, setActiveTab] = useState(0);
+  const [isAddHoldingOpen, setIsAddHoldingOpen] = useState(false);
+  const [isTickerSearchOpen, setIsTickerSearchOpen] = useState(false);
+  const [holdingTicker, setHoldingTicker] = useState('');
+  const [holdingName, setHoldingName] = useState('');
+  const [holdingQuantity, setHoldingQuantity] = useState('');
+  const [holdingPrice, setHoldingPrice] = useState('');
+  const [holdingAvgCost, setHoldingAvgCost] = useState('');
+  const [holdingDate, setHoldingDate] = useState(new Date().toISOString().slice(0, 10));
+  const [isFetchingPrice, setIsFetchingPrice] = useState(false);
+  const qc = useQueryClient();
 
   const accountQ = useQuery({
     queryKey: ['account', accountId],
@@ -82,6 +101,62 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
     queryKey: ['truePerformance', accountId],
     queryFn: () => getAccountTruePerformance(accountId),
   });
+
+  const addHoldingM = useMutation({
+    mutationFn: (data: Parameters<typeof addHolding>[1]) => addHolding(accountId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['holdings', accountId] });
+      qc.invalidateQueries({ queryKey: ['accountHistory', accountId] });
+      qc.invalidateQueries({ queryKey: ['allAccountHoldings'] });
+      setIsAddHoldingOpen(false);
+      setHoldingTicker('');
+      setHoldingName('');
+      setHoldingQuantity('');
+      setHoldingPrice('');
+      setHoldingAvgCost('');
+      setHoldingDate(new Date().toISOString().slice(0, 10));
+      setIsFetchingPrice(false);
+    },
+    onError: (error: any) => {
+      alert(`Failed to add holding: ${error.response?.data || error.message}`);
+    },
+  });
+
+  const fetchAndSetPrice = async (ticker: string) => {
+    if (!ticker) return;
+    setIsFetchingPrice(true);
+    try {
+      const pricePoint = await getLatestPrice(ticker);
+      const price = parseFloat(pricePoint.close_price).toFixed(2);
+      setHoldingPrice(price);
+      setHoldingAvgCost(price);
+    } catch {
+      // price unavailable — leave fields as-is
+    } finally {
+      setIsFetchingPrice(false);
+    }
+  };
+
+  const handleTickerSelect = (symbol: string, name: string) => {
+    setHoldingTicker(symbol);
+    if (!holdingName) setHoldingName(name);
+    fetchAndSetPrice(symbol);
+  };
+
+  const handleAddHolding = () => {
+    const qty = parseFloat(holdingQuantity);
+    const price = parseFloat(holdingPrice);
+    const avgCost = parseFloat(holdingAvgCost);
+    if (!holdingTicker.trim() || isNaN(qty) || isNaN(price) || isNaN(avgCost)) return;
+    addHoldingM.mutate({
+      ticker: holdingTicker.trim().toUpperCase(),
+      holding_name: holdingName.trim() || undefined,
+      quantity: qty,
+      price,
+      average_cost: avgCost,
+      snapshot_date: holdingDate,
+    });
+  };
 
   // Calculate totals from holdings
   const totals = useMemo(() => {
@@ -215,6 +290,16 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
       {/* Holdings Tab */}
       {activeTab === 0 && (
         <>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+            <Button
+              variant="contained"
+              startIcon={<AddCircle />}
+              onClick={() => setIsAddHoldingOpen(true)}
+              size="small"
+            >
+              Add Holding
+            </Button>
+          </Box>
           {holdingsQ.data && holdingsQ.data.length > 0 && <AssetTypeLegend />}
           <TableContainer component={Paper}>
           <Table>
@@ -541,6 +626,101 @@ export function AccountDetail({ accountId, onBack, onTickerNavigate }: AccountDe
           )}
         </Box>
       )}
+
+      {/* Ticker Search Modal */}
+      <TickerSearchModal
+        open={isTickerSearchOpen}
+        onClose={() => setIsTickerSearchOpen(false)}
+        onSelect={handleTickerSelect}
+      />
+
+      {/* Add Holding Dialog */}
+      <Dialog open={isAddHoldingOpen} onClose={() => setIsAddHoldingOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Holding</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextField
+              label="Ticker Symbol"
+              value={holdingTicker}
+              onChange={(e) => setHoldingTicker(e.target.value.toUpperCase())}
+              onBlur={(e) => fetchAndSetPrice(e.target.value.toUpperCase())}
+              fullWidth
+              required
+              placeholder="e.g. AAPL"
+            />
+            <Button
+              variant="outlined"
+              startIcon={<Search />}
+              onClick={() => setIsTickerSearchOpen(true)}
+              sx={{ minWidth: 'auto', px: 2, flexShrink: 0 }}
+            >
+              Search
+            </Button>
+          </Box>
+          <TextField
+            label="Holding Name (optional)"
+            value={holdingName}
+            onChange={(e) => setHoldingName(e.target.value)}
+            fullWidth
+            placeholder="e.g. Apple Inc."
+          />
+          <TextField
+            label="Quantity"
+            value={holdingQuantity}
+            onChange={(e) => setHoldingQuantity(e.target.value)}
+            fullWidth
+            required
+            type="number"
+            placeholder="e.g. 100"
+          />
+          <TextField
+            label="Current Price"
+            value={holdingPrice}
+            onChange={(e) => setHoldingPrice(e.target.value)}
+            fullWidth
+            required
+            type="number"
+            placeholder="Fetched automatically"
+            InputProps={{
+              endAdornment: isFetchingPrice ? <CircularProgress size={18} /> : undefined,
+            }}
+          />
+          <TextField
+            label="Average Cost Per Share"
+            value={holdingAvgCost}
+            onChange={(e) => setHoldingAvgCost(e.target.value)}
+            fullWidth
+            required
+            type="number"
+            placeholder="e.g. 120.00"
+            helperText="What you paid per share — used to calculate gain/loss. Defaults to current price."
+          />
+          <TextField
+            label="Snapshot Date"
+            value={holdingDate}
+            onChange={(e) => setHoldingDate(e.target.value)}
+            fullWidth
+            type="date"
+            InputLabelProps={{ shrink: true }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsAddHoldingOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleAddHolding}
+            variant="contained"
+            disabled={
+              !holdingTicker.trim() ||
+              !holdingQuantity ||
+              !holdingPrice ||
+              !holdingAvgCost ||
+              addHoldingM.isPending
+            }
+          >
+            {addHoldingM.isPending ? 'Adding...' : 'Add Holding'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

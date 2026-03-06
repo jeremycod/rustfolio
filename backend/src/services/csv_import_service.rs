@@ -85,24 +85,15 @@ fn extract_date_from_filename(filename: &str) -> Result<NaiveDate> {
         .with_context(|| format!("Failed to parse date from filename: {}", filename))
 }
 
-pub async fn import_csv_file(
+pub async fn import_csv_content(
     pool: &PgPool,
     portfolio_id: Uuid,
-    file_path: &Path,
+    content: &str,
+    snapshot_date: NaiveDate,
 ) -> Result<ImportResult> {
-    let filename = file_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .context("Invalid filename")?;
-
-    let snapshot_date = extract_date_from_filename(filename)?;
-
-    let file_content = std::fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read file: {:?}", file_path))?;
-
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
-        .from_reader(file_content.as_bytes());
+        .from_reader(content.as_bytes());
 
     let mut accounts_created = 0;
     let mut holdings_created = 0;
@@ -159,6 +150,24 @@ pub async fn import_csv_file(
         errors,
         snapshot_date,
     })
+}
+
+pub async fn import_csv_file(
+    pool: &PgPool,
+    portfolio_id: Uuid,
+    file_path: &Path,
+) -> Result<ImportResult> {
+    let filename = file_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .context("Invalid filename")?;
+
+    let snapshot_date = extract_date_from_filename(filename)?;
+
+    let file_content = std::fs::read_to_string(file_path)
+        .with_context(|| format!("Failed to read file: {:?}", file_path))?;
+
+    import_csv_content(pool, portfolio_id, &file_content, snapshot_date).await
 }
 
 async fn process_row(

@@ -1,6 +1,7 @@
 use axum::extract::{Path, State};
 use axum::{Json, Router};
 use axum::routing::{get, post};
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 use uuid::Uuid;
@@ -15,12 +16,22 @@ use crate::state::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/portfolios/:portfolio_id/import", post(import_csv))
+        .route("/portfolios/:portfolio_id/import/upload", post(upload_import))
         .route("/import/files", get(list_csv_files))
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ImportRequest {
     pub file_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UploadImportRequest {
+    pub filename: String,
+    pub content: String,
+    pub format: String,
+    pub account_id: Option<Uuid>,
+    pub snapshot_date: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -131,6 +142,95 @@ fn extract_activity_date_from_filename(filename: &str) -> Option<String> {
         }
     }
     None
+}
+
+pub async fn upload_import(
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Path(portfolio_id): Path<Uuid>,
+    Json(data): Json<UploadImportRequest>,
+) -> Result<Json<ImportResponse>, AppError> {
+    info!(
+        "POST /portfolios/{}/import/upload - Uploading CSV: {} (format: {})",
+        portfolio_id, data.filename, data.format
+    );
+
+    // Validate portfolio ownership
+    portfolio_queries::fetch_one(&state.pool, portfolio_id, user_id)
+        .await
+        .map_err(AppError::Db)?
+        .ok_or_else(|| AppError::NotFound(format!("Portfolio {} not found", portfolio_id)))?;
+
+    match data.format.as_str() {
+        "rj_activities" => {
+            let account_id = data.account_id.ok_or_else(|| {
+                AppError::Validation("account_id is required for rj_activities format".to_string())
+            })?;
+
+            let result = activity_import_service::import_activities_content(
+                &state.pool,
+                account_id,
+                &data.content,
+            )
+            .await
+            .map_err(|e| {
+                error!("Failed to import activities content: {}", e);
+                AppError::Validation(format!("Failed to import activities: {}", e))
+            })?;
+
+            info!(
+                "Activity upload import completed: {} transactions imported, {} errors",
+                result.transactions_imported,
+                result.errors.len()
+            );
+
+            Ok(Json(ImportResponse {
+                accounts_created: 0,
+                holdings_created: 0,
+                transactions_detected: result.transactions_imported,
+                errors: result.errors,
+                snapshot_date: "N/A".to_string(),
+            }))
+        }
+        "rj_holdings" => {
+            let snapshot_date = if let Some(date_str) = data.snapshot_date {
+                chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").map_err(|e| {
+                    AppError::Validation(format!("Invalid snapshot_date format: {}", e))
+                })?
+            } else {
+                Local::now().date_naive()
+            };
+
+            let result = csv_import_service::import_csv_content(
+                &state.pool,
+                portfolio_id,
+                &data.content,
+                snapshot_date,
+            )
+            .await
+            .map_err(|e| {
+                error!("Failed to import holdings content: {}", e);
+                AppError::Validation(format!("Failed to import holdings: {}", e))
+            })?;
+
+            info!(
+                "Holdings upload import completed: {} accounts, {} holdings, {} transactions, {} errors",
+                result.accounts_created,
+                result.holdings_created,
+                result.transactions_detected,
+                result.errors.len()
+            );
+
+            Ok(Json(ImportResponse {
+                accounts_created: result.accounts_created,
+                holdings_created: result.holdings_created,
+                transactions_detected: result.transactions_detected,
+                errors: result.errors,
+                snapshot_date: result.snapshot_date.to_string(),
+            }))
+        }
+        _ => Err(AppError::Validation("Unknown format".to_string())),
+    }
 }
 
 pub async fn import_csv(

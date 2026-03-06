@@ -94,6 +94,49 @@ fn map_transaction_type(tran_type: &str) -> Option<TransactionType> {
     }
 }
 
+pub async fn import_activities_content(
+    pool: &PgPool,
+    account_id: Uuid,
+    content: &str,
+) -> Result<ActivityImportResult> {
+    let mut reader = ReaderBuilder::new()
+        .has_headers(true)
+        .from_reader(content.as_bytes());
+
+    let mut transactions_imported = 0;
+    let mut errors = Vec::new();
+
+    for (line_num, result) in reader.deserialize::<ActivityRow>().enumerate() {
+        match result {
+            Ok(row) => {
+                match process_activity_row(pool, account_id, row).await {
+                    Ok(imported) => {
+                        if imported {
+                            transactions_imported += 1;
+                        }
+                    }
+                    Err(e) => {
+                        errors.push(format!("Line {}: {}", line_num + 2, e));
+                    }
+                }
+            }
+            Err(e) => {
+                errors.push(format!("Line {}: Failed to parse CSV row: {}", line_num + 2, e));
+            }
+        }
+    }
+
+    info!(
+        "Activity import completed for account {}: {} transactions imported, {} errors",
+        account_id, transactions_imported, errors.len()
+    );
+
+    Ok(ActivityImportResult {
+        transactions_imported,
+        errors,
+    })
+}
+
 pub async fn import_activities_file(
     pool: &PgPool,
     portfolio_id: Uuid,
@@ -116,42 +159,7 @@ pub async fn import_activities_file(
     let file_content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read file: {:?}", file_path))?;
 
-    let mut reader = ReaderBuilder::new()
-        .has_headers(true)
-        .from_reader(file_content.as_bytes());
-
-    let mut transactions_imported = 0;
-    let mut errors = Vec::new();
-
-    for (line_num, result) in reader.deserialize::<ActivityRow>().enumerate() {
-        match result {
-            Ok(row) => {
-                match process_activity_row(pool, account.id, row).await {
-                    Ok(imported) => {
-                        if imported {
-                            transactions_imported += 1;
-                        }
-                    }
-                    Err(e) => {
-                        errors.push(format!("Line {}: {}", line_num + 2, e));
-                    }
-                }
-            }
-            Err(e) => {
-                errors.push(format!("Line {}: Failed to parse CSV row: {}", line_num + 2, e));
-            }
-        }
-    }
-
-    info!(
-        "Activity import completed for account {}: {} transactions imported, {} errors",
-        account_number, transactions_imported, errors.len()
-    );
-
-    Ok(ActivityImportResult {
-        transactions_imported,
-        errors,
-    })
+    import_activities_content(pool, account.id, &file_content).await
 }
 
 async fn process_activity_row(
